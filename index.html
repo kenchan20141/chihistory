@@ -16,26 +16,22 @@
             --info: #4682B4;
             --warning: #FFA500;
         }
-
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             font-family: 'Noto Serif TC', 'SimSun', '宋体', serif;
         }
-
         body {
             background: linear-gradient(135deg, #f5f5dc, #fff8e1);
             min-height: 100vh;
             padding: 20px;
             color: var(--dark);
         }
-
         .container {
             max-width: 1200px;
             margin: 0 auto;
         }
-
         header {
             text-align: center;
             padding: 2rem 0;
@@ -44,27 +40,23 @@
             margin-bottom: 2rem;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         }
-
         h1 {
             font-size: 2.5rem;
             color: var(--primary);
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
             margin-bottom: 0.5rem;
         }
-
         .subtitle {
             font-size: 1.2rem;
             color: var(--secondary);
             font-weight: bold;
         }
-
         .game-container {
             display: flex;
             gap: 20px;
             flex-wrap: wrap;
             justify-content: center;
         }
-
         .category-card {
             background: white;
             border-radius: 15px;
@@ -75,12 +67,10 @@
             transition: transform 0.3s ease;
             cursor: pointer;
         }
-
         .category-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
         }
-
         .category-header {
             display: flex;
             align-items: center;
@@ -88,26 +78,22 @@
             padding-bottom: 0.5rem;
             border-bottom: 2px solid var(--accent);
         }
-
         .category-icon {
             font-size: 2rem;
             margin-right: 10px;
             color: var(--accent);
         }
-
         .category-title {
             font-size: 1.5rem;
             font-weight: bold;
             color: var(--primary);
         }
-
         .measures-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 15px;
             margin-top: 1rem;
         }
-
         .measure-card {
             background: var(--light);
             border: 2px solid var(--secondary);
@@ -118,31 +104,26 @@
             position: relative;
             overflow: hidden;
         }
-
         .measure-card:hover {
             background: var(--secondary);
             color: white;
             transform: scale(1.02);
         }
-
         .measure-title {
             font-weight: bold;
             margin-bottom: 0.5rem;
             color: var(--primary);
         }
-
         .measure-content {
             font-size: 0.9rem;
             line-height: 1.4;
             margin-bottom: 0.5rem;
         }
-
         .measure-purpose {
             font-size: 0.85rem;
             color: var(--info);
             font-style: italic;
         }
-
         .modal {
             display: none;
             position: fixed;
@@ -156,12 +137,10 @@
             align-items: center;
             animation: fadeIn 0.3s ease;
         }
-
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
         }
-
         .modal-content {
             background: white;
             border-radius: 15px;
@@ -174,12 +153,10 @@
             position: relative;
             animation: slideIn 0.4s ease;
         }
-
         @keyframes slideIn {
             from { transform: translateY(50px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
-
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -188,13 +165,11 @@
             padding-bottom: 0.5rem;
             border-bottom: 2px solid var(--accent);
         }
-
         .modal-title {
             font-size: 1.5rem;
             color: var(--primary);
             font-weight: bold;
         }
-
         .close-btn {
             background: none;
             border: none;
@@ -203,64 +178,53 @@
             color: var(--danger);
             transition: transform 0.2s ease;
         }
-
         .close-btn:hover {
             transform: rotate(90deg);
         }
-
         .modal-body {
             line-height: 1.6;
         }
-
         .detail-table {
             width: 100%;
             border-collapse: collapse;
             margin: 1rem 0;
         }
-
         .detail-table th,
         .detail-table td {
             padding: 0.75rem;
             text-align: left;
             border: 1px solid #ddd;
         }
-
         .detail-table th {
             background: var(--secondary);
             color: white;
             font-weight: bold;
         }
-
         .detail-table tr:nth-child(even) {
             background: #fafafa;
         }
-
         .quiz-section {
             margin-top: 2rem;
             padding-top: 1rem;
             border-top: 2px solid var(--accent);
         }
-
         .quiz-title {
             font-size: 1.2rem;
             margin-bottom: 1rem;
             color: var(--primary);
         }
-
         .quiz-question {
             margin-bottom: 1rem;
             padding: 1rem;
             background: var(--light);
             border-radius: 10px;
         }
-
         .quiz-options {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin-top: 1rem;
         }
-
         .quiz-option {
             padding: 0.75rem;
             background: white;
@@ -269,48 +233,40 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-
         .quiz-option:hover {
             background: var(--secondary);
             color: white;
             border-color: var(--accent);
         }
-
         .quiz-option.selected {
             background: var(--accent);
             border-color: var(--primary);
             color: var(--dark);
         }
-
         .quiz-option.correct {
             background: var(--success);
             color: white;
             border-color: var(--success);
         }
-
         .quiz-option.incorrect {
             background: var(--danger);
             color: white;
             border-color: var(--danger);
         }
-
         .feedback {
             margin-top: 1rem;
             padding: 1rem;
             border-radius: 8px;
             display: none;
         }
-
         .feedback.correct {
             background: var(--success);
             color: white;
         }
-
         .feedback.incorrect {
             background: var(--danger);
             color: white;
         }
-
         .btn {
             padding: 0.75rem 1.5rem;
             border: none;
@@ -320,27 +276,22 @@
             transition: all 0.3s ease;
             margin-top: 1rem;
         }
-
         .btn-primary {
             background: var(--primary);
             color: white;
         }
-
         .btn-primary:hover {
             background: var(--secondary);
             transform: translateY(-2px);
         }
-
         .btn-success {
             background: var(--success);
             color: white;
         }
-
         .btn-success:hover {
             background: #2E8B57;
             transform: translateY(-2px);
         }
-
         .progress-bar {
             width: 100%;
             height: 10px;
@@ -349,14 +300,12 @@
             margin: 1rem 0;
             overflow: hidden;
         }
-
         .progress {
             height: 100%;
             background: var(--accent);
             width: 0%;
             transition: width 0.5s ease;
         }
-
         .score-display {
             text-align: center;
             font-size: 1.2rem;
@@ -364,7 +313,6 @@
             font-weight: bold;
             color: var(--primary);
         }
-
         .achievement {
             display: flex;
             align-items: center;
@@ -375,26 +323,22 @@
             border-radius: 15px;
             border: 2px dashed var(--accent);
         }
-
         .achievement-icon {
             font-size: 2rem;
             margin-right: 10px;
             color: var(--accent);
         }
-
         .achievement-text {
             font-size: 1.1rem;
             font-weight: bold;
             color: var(--primary);
         }
-
         .nav-buttons {
             display: flex;
             justify-content: center;
             gap: 10px;
             margin-top: 2rem;
         }
-
         .nav-btn {
             padding: 0.5rem 1rem;
             background: var(--light);
@@ -403,33 +347,27 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
-
         .nav-btn:hover {
             background: var(--secondary);
             color: white;
         }
-
         .active-category {
             border: 2px solid var(--accent);
             box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
         }
-
         .highlight {
             background: yellow;
             padding: 2px 4px;
             border-radius: 3px;
         }
-
         .animated {
             animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
-
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-
         .firework {
             position: fixed;
             top: 50%;
@@ -439,17 +377,14 @@
             z-index: 9999;
             opacity: 0;
         }
-
         .firework.show {
             opacity: 1;
             animation: fireworkExplode 1s ease-out forwards;
         }
-
         @keyframes fireworkExplode {
             0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
             100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
         }
-
         .confetti {
             position: fixed;
             top: 0;
@@ -460,11 +395,9 @@
             z-index: 9998;
             display: none;
         }
-
         .confetti.show {
             display: block;
         }
-
         .confetti-piece {
             position: absolute;
             width: 10px;
@@ -473,104 +406,85 @@
             border-radius: 50%;
             animation: confettiFall 3s linear forwards;
         }
-
         @keyframes confettiFall {
             0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
             100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
         }
-
         /* 响应式设计 */
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
             }
-            
             .category-card {
                 width: 100%;
             }
-            
             .measures-grid {
                 grid-template-columns: 1fr;
             }
-            
             .quiz-options {
                 grid-template-columns: 1fr;
             }
-            
             h1 {
                 font-size: 2rem;
             }
-            
             .modal-content {
                 width: 95%;
                 padding: 1rem;
             }
         }
-
         /* 动画效果 */
         .fade-in {
             animation: fadeIn 0.5s ease;
         }
-
         .slide-up {
             animation: slideUp 0.5s ease;
         }
-
         @keyframes slideUp {
             from { transform: translateY(30px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
-
         .bounce {
             animation: bounce 0.5s ease;
         }
-
         @keyframes bounce {
             0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
             40% { transform: translateY(-30px); }
             60% { transform: translateY(-15px); }
         }
-
         /* 额外的装饰元素 */
         .decoration {
             position: absolute;
             z-index: -1;
             opacity: 0.1;
         }
-
         .decoration-1 {
             top: 10%;
             right: 5%;
             font-size: 4rem;
             transform: rotate(45deg);
         }
-
         .decoration-2 {
             bottom: 10%;
             left: 5%;
             font-size: 3rem;
             transform: rotate(-30deg);
         }
-
         .decoration-3 {
             top: 50%;
             left: 5%;
             font-size: 2rem;
             transform: rotate(90deg);
         }
-
         .decoration-4 {
             bottom: 20%;
             right: 10%;
             font-size: 2.5rem;
             transform: rotate(-45deg);
         }
-
         /* 卡片翻转动画 */
         .card-flip {
             perspective: 1000px;
         }
-
         .card-inner {
             position: relative;
             width: 100%;
@@ -578,7 +492,6 @@
             transition: transform 0.6s;
             transform-style: preserve-3d;
         }
-
         .card-front, .card-back {
             position: absolute;
             width: 100%;
@@ -588,13 +501,11 @@
             padding: 1rem;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
-
         .card-front {
             background: var(--light);
             border: 2px solid var(--secondary);
             z-index: 2;
         }
-
         .card-back {
             background: var(--secondary);
             color: white;
@@ -604,21 +515,17 @@
             justify-content: center;
             align-items: center;
         }
-
         .card-flip:hover .card-inner {
             transform: rotateY(180deg);
         }
-
         /* 进度条动画 */
         .progress-animated {
             animation: progressFill 2s ease-out;
         }
-
         @keyframes progressFill {
             from { width: 0%; }
             to { width: 100%; }
         }
-
         /* 成就徽章样式 */
         .achievement-badge {
             width: 80px;
@@ -633,7 +540,6 @@
             color: var(--dark);
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
         }
-
         /* 游戏结束界面 */
         .game-over {
             display: none;
@@ -644,27 +550,23 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             animation: fadeIn 0.5s ease;
         }
-
         .game-over h2 {
             font-size: 2.5rem;
             color: var(--primary);
             margin-bottom: 1rem;
         }
-
         .final-score {
             font-size: 3rem;
             font-weight: bold;
             color: var(--accent);
             margin: 1rem 0;
         }
-
         .congratulations {
             font-size: 1.5rem;
             color: var(--success);
             margin: 1rem 0;
             animation: pulse 1s ease-in-out infinite;
         }
-
         .restart-btn {
             margin-top: 2rem;
             padding: 1rem 2rem;
@@ -676,12 +578,10 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
-
         .restart-btn:hover {
             background: var(--secondary);
             transform: scale(1.05);
         }
-
         /* 答题正确/错误音效提示 */
         .sound-effect {
             position: fixed;
@@ -695,50 +595,40 @@
             transition: opacity 0.3s ease;
             z-index: 9999;
         }
-
         .sound-effect.show {
             opacity: 1;
         }
-
         .sound-correct {
             background: var(--success);
             color: white;
         }
-
         .sound-incorrect {
             background: var(--danger);
             color: white;
         }
-
         /* 移动端优化 */
         @media (max-width: 480px) {
             .container {
                 padding: 5px;
             }
-            
             .category-card {
                 padding: 1rem;
             }
-            
             .measure-card {
                 padding: 0.75rem;
             }
-            
             .modal-content {
                 padding: 1rem;
                 width: 98%;
             }
-            
             .quiz-options {
                 grid-template-columns: 1fr;
             }
-            
             .btn {
                 padding: 0.5rem 1rem;
                 font-size: 0.9rem;
             }
         }
-        
         /* 综合测验界面 */
         .comprehensive-quiz {
             display: none;
@@ -749,12 +639,10 @@
             margin: 2rem auto;
             max-width: 800px;
         }
-        
         .quiz-header {
             text-align: center;
             margin-bottom: 2rem;
         }
-        
         .quiz-question-display {
             background: var(--light);
             padding: 1.5rem;
@@ -763,14 +651,12 @@
             font-size: 1.1rem;
             line-height: 1.5;
         }
-        
         .quiz-answer-options {
             display: grid;
             grid-template-columns: 1fr;
             gap: 10px;
             margin-bottom: 1.5rem;
         }
-        
         .quiz-answer-option {
             padding: 1rem;
             background: white;
@@ -779,31 +665,36 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        
         .quiz-answer-option:hover {
             background: var(--secondary);
             color: white;
             border-color: var(--accent);
         }
-        
         .quiz-answer-option.selected {
             background: var(--accent);
             border-color: var(--primary);
             color: var(--dark);
         }
-        
+        .quiz-answer-option.correct {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+        .quiz-answer-option.incorrect {
+            background: var(--danger);
+            color: white;
+            border-color: var(--danger);
+        }
         .quiz-controls {
             display: flex;
             justify-content: space-between;
             margin-top: 1.5rem;
         }
-        
         .quiz-progress {
             font-size: 1rem;
             color: var(--primary);
             font-weight: bold;
         }
-        
         .quiz-nav-btn {
             padding: 0.75rem 1.5rem;
             border: none;
@@ -812,34 +703,27 @@
             font-weight: bold;
             transition: all 0.3s ease;
         }
-        
         .quiz-prev-btn {
             background: var(--info);
             color: white;
         }
-        
         .quiz-prev-btn:hover {
             background: #36648B;
         }
-        
         .quiz-next-btn {
             background: var(--primary);
             color: white;
         }
-        
         .quiz-next-btn:hover {
             background: var(--secondary);
         }
-        
         .quiz-submit-btn {
             background: var(--success);
             color: white;
         }
-        
         .quiz-submit-btn:hover {
             background: #2E8B57;
         }
-        
         .comprehensive-result {
             display: none;
             text-align: center;
@@ -850,14 +734,12 @@
             margin: 2rem auto;
             max-width: 800px;
         }
-        
         .result-score {
             font-size: 2.5rem;
             font-weight: bold;
             color: var(--accent);
             margin: 1rem 0;
         }
-        
         .result-message {
             font-size: 1.2rem;
             margin: 1rem 0;
@@ -871,7 +753,6 @@
             <h1>王安石變法大挑戰</h1>
             <div class="subtitle">熟玩遊戲，記熟所有措施內容、目的與成效！</div>
         </header>
-
         <div class="game-container">
             <!-- 富國措施 -->
             <div class="category-card" data-category="富國措施">
@@ -912,7 +793,6 @@
                     </div>
                 </div>
             </div>
-
             <!-- 育才措施 -->
             <div class="category-card" data-category="育才措施">
                 <div class="category-header">
@@ -937,7 +817,6 @@
                     </div>
                 </div>
             </div>
-
             <!-- 強兵措施 -->
             <div class="category-card" data-category="強兵措施">
                 <div class="category-header">
@@ -973,25 +852,20 @@
                 </div>
             </div>
         </div>
-
         <div class="nav-buttons">
             <button class="nav-btn" id="showAllBtn">顯示全部措施</button>
             <button class="nav-btn" id="startQuizBtn">開始測驗</button>
             <button class="nav-btn" id="comprehensiveQuizBtn">綜合測驗</button>
             <button class="nav-btn" id="resetProgressBtn">重置進度</button>
         </div>
-
         <div class="score-display" id="scoreDisplay">已學習：0 / 14 項措施</div>
-        
         <div class="progress-bar">
             <div class="progress" id="progressBar"></div>
         </div>
-
         <div class="achievement" id="achievementDisplay" style="display: none;">
             <div class="achievement-badge">🏆</div>
             <div class="achievement-text">恭喜！你已掌握所有王安石變法措施！</div>
         </div>
-
         <!-- 模态框 -->
         <div class="modal" id="measureModal">
             <div class="modal-content">
@@ -1019,7 +893,6 @@
                 </div>
             </div>
         </div>
-
         <!-- 綜合測驗界面 -->
         <div class="comprehensive-quiz" id="comprehensiveQuiz">
             <div class="quiz-header">
@@ -1037,7 +910,6 @@
                 </div>
             </div>
         </div>
-
         <!-- 綜合測驗結果 -->
         <div class="comprehensive-result" id="comprehensiveResult">
             <h2>🎉 綜合測驗完成！ 🎉</h2>
@@ -1045,23 +917,18 @@
             <div class="result-message" id="resultMessage">你的表現非常出色！</div>
             <button class="restart-btn" id="backToMainBtn">返回主頁面</button>
         </div>
-
         <!-- 音效提示 -->
         <div class="sound-effect" id="soundEffect"></div>
-
         <!-- 煙火效果 -->
         <div class="firework" id="firework"></div>
-
         <!-- 彩帶效果 -->
         <div class="confetti" id="confetti"></div>
-
         <!-- 裝飾元素 -->
         <div class="decoration decoration-1">📜</div>
         <div class="decoration decoration-2">🖋️</div>
         <div class="decoration decoration-3">📚</div>
         <div class="decoration decoration-4">🏛️</div>
     </div>
-
     <script>
         // 王安石變法措施數據
         const measures = [
@@ -1150,13 +1017,11 @@
                 purpose: "節省養馬開支。"
             }
         ];
-
         // 遊戲狀態
         let learnedMeasures = new Set();
         let comprehensiveQuizAnswers = new Array(measures.length).fill(null);
         let currentQuestionIndex = 0;
         let comprehensiveQuizCompleted = false;
-
         // DOM元素
         const measureModal = document.getElementById('measureModal');
         const closeModal = document.getElementById('closeModal');
@@ -1185,13 +1050,11 @@
         const resultScore = document.getElementById('resultScore');
         const resultMessage = document.getElementById('resultMessage');
         const backToMainBtn = document.getElementById('backToMainBtn');
-
         // 初始化遊戲
         function initGame() {
             updateScoreDisplay();
             setupEventListeners();
         }
-
         // 設置事件監聽器
         function setupEventListeners() {
             // 點擊措施卡片
@@ -1201,7 +1064,6 @@
                     showMeasureDetails(measureName);
                 });
             });
-
             // 點擊類別卡片
             document.querySelectorAll('.category-card').forEach(card => {
                 card.addEventListener('click', () => {
@@ -1209,7 +1071,6 @@
                     showCategoryMeasures(category);
                 });
             });
-
             // 關閉模態框
             closeModal.addEventListener('click', closeMeasureModal);
             measureModal.addEventListener('click', (e) => {
@@ -1217,16 +1078,12 @@
                     closeMeasureModal();
                 }
             });
-
             // 顯示全部措施按鈕
             showAllBtn.addEventListener('click', showAllMeasures);
-
             // 綜合測驗按鈕
             comprehensiveQuizBtn.addEventListener('click', startComprehensiveQuiz);
-
             // 重置進度按鈕
             resetProgressBtn.addEventListener('click', resetProgress);
-
             // 返回主頁面按鈕
             backToMainBtn.addEventListener('click', () => {
                 comprehensiveResult.style.display = 'none';
@@ -1235,7 +1092,6 @@
                 currentQuestionIndex = 0;
                 comprehensiveQuizAnswers = new Array(measures.length).fill(null);
             });
-
             // 綜合測驗導航按鈕
             prevQuestionBtn.addEventListener('click', () => {
                 if (currentQuestionIndex > 0) {
@@ -1243,113 +1099,77 @@
                     renderComprehensiveQuestion();
                 }
             });
-
             nextQuestionBtn.addEventListener('click', () => {
                 if (currentQuestionIndex < measures.length - 1) {
                     currentQuestionIndex++;
                     renderComprehensiveQuestion();
                 } else {
-                    // 到達最後一題，顯示提交按鈕
                     submitQuizBtn.style.display = 'inline-block';
                     nextQuestionBtn.style.display = 'none';
                 }
             });
-
             submitQuizBtn.addEventListener('click', submitComprehensiveQuiz);
         }
-
         // 顯示措施詳情
         function showMeasureDetails(measureName) {
             const measure = measures.find(m => m.name === measureName);
             if (!measure) return;
-
-            // 更新模態框內容
             modalTitle.textContent = `【${measure.category}】${measure.name}`;
             modalMeasureName.textContent = measure.name;
             modalContent.textContent = measure.content;
             modalPurpose.textContent = measure.purpose;
-
-            // 顯示模態框
             measureModal.style.display = 'flex';
-            
-            // 如果這是第一次學習此措施，標記為已學習
             if (!learnedMeasures.has(measureName)) {
                 learnedMeasures.add(measureName);
                 updateScoreDisplay();
-                
-                // 播放學習成功音效
                 playSoundEffect('correct', '✅ 學習成功！已記錄此措施');
-                
-                // 如果所有措施都已學習，顯示成就
                 if (learnedMeasures.size === measures.length) {
                     showAchievement();
                 }
             }
         }
-
         // 開始綜合測驗
         function startComprehensiveQuiz() {
             if (learnedMeasures.size === 0) {
                 alert('請先學習至少一項措施再開始綜合測驗！');
                 return;
             }
-            
             comprehensiveQuiz.style.display = 'block';
             comprehensiveResult.style.display = 'none';
             currentQuestionIndex = 0;
             comprehensiveQuizCompleted = false;
             renderComprehensiveQuestion();
         }
-
         // 渲染綜合測驗問題
         function renderComprehensiveQuestion() {
             const measure = measures[currentQuestionIndex];
-            
-            // 隨機選擇問題類型（0: 內容, 1: 目的, 2: 類別）
             const questionType = Math.floor(Math.random() * 3);
-            
             let questionText, correctAnswer, options;
-            
             if (questionType === 0) {
-                // 內容問題
                 questionText = `【${measure.name}】的具體內容是什麼？`;
                 correctAnswer = measure.content;
-                
-                // 錯誤選項
                 const wrongContents = measures
                     .filter(m => m.name !== measure.name)
                     .map(m => m.content)
                     .slice(0, 3);
                 options = [correctAnswer, ...wrongContents];
             } else if (questionType === 1) {
-                // 目的問題
                 questionText = `【${measure.name}】的主要目的是什麼？`;
                 correctAnswer = measure.purpose;
-                
-                // 錯誤選項
                 const wrongPurposes = measures
                     .filter(m => m.name !== measure.name)
                     .map(m => m.purpose)
                     .slice(0, 3);
                 options = [correctAnswer, ...wrongPurposes];
             } else {
-                // 類別問題
                 questionText = `【${measure.name}】屬於哪一類措施？`;
                 correctAnswer = measure.category;
-                
-                // 錯誤選項
                 const otherCategories = ["富國措施", "育才措施", "強兵措施"]
                     .filter(cat => cat !== measure.category);
                 options = [correctAnswer, ...otherCategories];
             }
-            
-            // 打亂選項順序
             shuffleArray(options);
-            
-            // 顯示問題
             comprehensiveQuestion.textContent = questionText;
-            
-            // 顯示選項
             comprehensiveOptions.innerHTML = '';
             options.forEach((option, index) => {
                 const optionElement = document.createElement('div');
@@ -1357,32 +1177,40 @@
                 optionElement.textContent = option;
                 optionElement.dataset.index = index;
                 optionElement.dataset.correct = (option === correctAnswer) ? 'true' : 'false';
-                
-                // 恢復之前的選擇
                 if (comprehensiveQuizAnswers[currentQuestionIndex] === index) {
                     optionElement.classList.add('selected');
+                    // 立即顯示對錯
+                    if (option === correctAnswer) {
+                        optionElement.classList.add('correct');
+                    } else {
+                        optionElement.classList.add('incorrect');
+                    }
                 }
-                
                 optionElement.addEventListener('click', () => {
-                    // 清除所有選項的選中狀態
                     document.querySelectorAll('.quiz-answer-option').forEach(opt => {
-                        opt.classList.remove('selected');
+                        opt.classList.remove('selected', 'correct', 'incorrect');
                     });
-                    
-                    // 標記選中的選項
                     optionElement.classList.add('selected');
                     comprehensiveQuizAnswers[currentQuestionIndex] = index;
+                    // 立即顯示對錯
+                    if (option === correctAnswer) {
+                        optionElement.classList.add('correct');
+                        playSoundEffect('correct', '✅ 正確！');
+                    } else {
+                        optionElement.classList.add('incorrect');
+                        playSoundEffect('incorrect', '❌ 錯誤！');
+                        // 高亮正確答案
+                        document.querySelectorAll('.quiz-answer-option').forEach(opt => {
+                            if (opt.dataset.correct === 'true') {
+                                opt.classList.add('correct');
+                            }
+                        });
+                    }
                 });
-                
                 comprehensiveOptions.appendChild(optionElement);
             });
-            
-            // 更新進度顯示
             quizProgress.textContent = `第 ${currentQuestionIndex + 1} / ${measures.length} 題`;
-            
-            // 更新按鈕狀態
             prevQuestionBtn.disabled = (currentQuestionIndex === 0);
-            
             if (currentQuestionIndex === measures.length - 1) {
                 submitQuizBtn.style.display = 'inline-block';
                 nextQuestionBtn.style.display = 'none';
@@ -1391,32 +1219,23 @@
                 nextQuestionBtn.style.display = 'inline-block';
             }
         }
-
         // 提交綜合測驗
         function submitComprehensiveQuiz() {
             let correctCount = 0;
-            
             for (let i = 0; i < measures.length; i++) {
                 if (comprehensiveQuizAnswers[i] !== null) {
-                    const optionElements = comprehensiveOptions.querySelectorAll('.quiz-answer-option');
-                    const selectedOption = optionElements[comprehensiveQuizAnswers[i]];
+                    const optionElements = document.querySelectorAll('.quiz-answer-option');
+                    const selectedOption = optionElements.find(opt => opt.dataset.index == comprehensiveQuizAnswers[i]);
                     if (selectedOption && selectedOption.dataset.correct === 'true') {
                         correctCount++;
                     }
                 }
             }
-            
-            // 計算得分
             const score = correctCount;
             const total = measures.length;
-            
-            // 顯示結果
             comprehensiveQuiz.style.display = 'none';
             comprehensiveResult.style.display = 'block';
-            
             resultScore.textContent = `得分：${score} / ${total}`;
-            
-            // 根據得分顯示不同訊息
             if (score === total) {
                 resultMessage.textContent = '太厲害了！你完全掌握了王安石變法的所有措施！';
                 resultMessage.style.color = '#2E8B57';
@@ -1432,37 +1251,29 @@
                 resultMessage.textContent = '還有進步空間，建議多複習相關措施內容！';
                 resultMessage.style.color = '#B22222';
             }
-            
             comprehensiveQuizCompleted = true;
             playSoundEffect('correct', `測驗完成！得分：${score}/${total}`);
         }
-
         // 顯示特定類別的措施
         function showCategoryMeasures(category) {
-            // 高亮該類別卡片
             document.querySelectorAll('.category-card').forEach(card => {
                 card.classList.remove('active-category');
                 if (card.getAttribute('data-category') === category) {
                     card.classList.add('active-category');
                 }
             });
-            
-            // 滾動到該區域
             const categoryCard = document.querySelector(`.category-card[data-category="${category}"]`);
             if (categoryCard) {
                 categoryCard.scrollIntoView({ behavior: 'smooth' });
             }
         }
-
         // 顯示所有措施
         function showAllMeasures() {
             document.querySelectorAll('.category-card').forEach(card => {
                 card.classList.remove('active-category');
             });
-            
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-
         // 重置進度
         function resetProgress() {
             if (confirm('確定要重置所有學習進度嗎？')) {
@@ -1472,49 +1283,36 @@
                 playSoundEffect('incorrect', '🔄 進度已重置，重新開始學習吧！');
             }
         }
-
         // 更新分數顯示
         function updateScoreDisplay() {
             const totalMeasures = measures.length;
             const learnedCount = learnedMeasures.size;
             scoreDisplay.textContent = `已學習：${learnedCount} / ${totalMeasures} 項措施`;
-            
-            // 更新進度條
             const progressPercentage = (learnedCount / totalMeasures) * 100;
             progressBar.style.width = `${progressPercentage}%`;
             progressBar.classList.add('progress-animated');
-            
-            // 移除動畫類
             setTimeout(() => {
                 progressBar.classList.remove('progress-animated');
             }, 1000);
         }
-
         // 顯示成就
         function showAchievement() {
             achievementDisplay.style.display = 'flex';
             achievementDisplay.classList.add('bounce');
-            
-            // 播放成就音效
             playSoundEffect('correct', '🏆 恭喜！你已掌握所有王安石變法措施！');
-            
-            // 移除動畫類
             setTimeout(() => {
                 achievementDisplay.classList.remove('bounce');
             }, 1000);
         }
-
         // 播放音效提示
         function playSoundEffect(type, message) {
             soundEffect.textContent = message;
             soundEffect.className = `sound-effect ${type === 'correct' ? 'sound-correct' : 'sound-incorrect'}`;
             soundEffect.classList.add('show');
-            
             setTimeout(() => {
                 soundEffect.classList.remove('show');
             }, 3000);
         }
-
         // 顯示煙火效果
         function showFireworks() {
             firework.classList.add('show');
@@ -1522,12 +1320,10 @@
                 firework.classList.remove('show');
             }, 1000);
         }
-
         // 顯示彩帶效果
         function showConfetti() {
             confetti.innerHTML = '';
             confetti.classList.add('show');
-            
             for (let i = 0; i < 50; i++) {
                 const piece = document.createElement('div');
                 piece.className = 'confetti-piece';
@@ -1535,17 +1331,14 @@
                 piece.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
                 confetti.appendChild(piece);
             }
-            
             setTimeout(() => {
                 confetti.classList.remove('show');
             }, 3000);
         }
-
         // 關閉措施詳情模態框
         function closeMeasureModal() {
             measureModal.style.display = 'none';
         }
-
         // 陣列洗牌函數
         function shuffleArray(array) {
             for (let i = array.length - 1; i > 0; i--) {
@@ -1553,7 +1346,6 @@
                 [array[i], array[j]] = [array[j], array[i]];
             }
         }
-
         // 初始化遊戲
         document.addEventListener('DOMContentLoaded', initGame);
     </script>
