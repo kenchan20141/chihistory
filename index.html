@@ -3314,17 +3314,17 @@ function updateReferenceNumbers(textId) {
     }
     
     // 為選擇題特別格式化
-    if (questionType === '選擇') {
-        return selectedExamples.map(example => {
-            let formattedExample = `題目：${example.question}`;
-            if (example.options && example.options.length > 0) {
-                formattedExample += `\n選項：\n${example.options.join('\n')}`;
-            }
-            formattedExample += `\n答案：${example.answer_text || example.answer}`;
-            formattedExample += `\n答題步驟：${example.steps}`;
-            return formattedExample;
-        });
-    }
+if (questionType === '選擇') {
+    return selectedExamples.map(example => {
+        let formattedExample = `題目：${example.question}`;
+        if (example.options && example.options.length > 0) {
+            formattedExample += `\n選項：\n${example.options.join('\n')}`;
+        }
+        formattedExample += `\n答案：${example.answer_text || example.answer}`;
+        formattedExample += `\n答題步驟：${example.steps}`;
+        return formattedExample;
+    });
+}
     
     return selectedExamples.map(example => 
         `題目：${example.question}\n答案：${example.answer}\n答題步驟：${example.steps}`
