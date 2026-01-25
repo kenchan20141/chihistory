@@ -7247,11 +7247,7 @@ body.cat-hovering #live2d-canvas {
 
 
 // =======================================================
-// === Live2D 貓咪系統 (響應式不變形 + 手機穿透修復版) ===
-// =======================================================
-
-// =======================================================
-// === Live2D 貓咪系統 (響應式位置 + 點擊判定優化版) ===
+// === Live2D 貓咪系統 (雙擊互動 + 邊界限制 + 縮放兼容版) ===
 // =======================================================
 
 let app;
@@ -7262,24 +7258,24 @@ const CANVAS_ID = 'live2d-canvas';
 const MODEL_PATH_HIJIKI = 'live2d/hijiki/runtime/hijiki.model3.json';
 const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
 
-// 用於防手抖和長按判斷
-let isInteracting = false;
+// 互動狀態變數
+let isDragging = false;
 let startX = 0, startY = 0;
+let containerStartX = 0, containerStartY = 0;
+let lastTapTime = 0; // 用於判斷雙擊
 
 document.addEventListener('DOMContentLoaded', () => {
     const savedMode = localStorage.getItem('sansi_cat_mode');
     if (savedMode && savedMode !== 'none') {
-        // 延遲一點載入，確保螢幕尺寸已正確計算
-        setTimeout(() => selectCatMode(savedMode, false), 1000);
+        setTimeout(() => selectCatMode(savedMode, false), 500);
     }
     
-    // 初始化全域互動監聽
     initGlobalInteraction();
     
-    // ★ 新增：監聽螢幕旋轉/縮放，自動校正貓咪位置
+    // 監聽螢幕變化，自動把貓拉回螢幕內
     window.addEventListener('resize', () => {
         if (modelContainer && document.getElementById(CANVAS_ID).style.display !== 'none') {
-            repositionCats();
+            repositionCats(); 
         }
     });
 });
@@ -7302,7 +7298,7 @@ async function initLive2DApp() {
     app.stage.addChild(modelContainer);
 }
 
-// 2. 選擇模式 (修復手機版出生位置)
+// 2. 選擇模式 (修復：更小的預設比例)
 async function selectCatMode(mode, save = true) {
     if (save) {
         localStorage.setItem('sansi_cat_mode', mode);
@@ -7322,28 +7318,26 @@ async function selectCatMode(mode, save = true) {
     canvas.style.display = 'block';
     modelContainer.removeChildren();
     
-    // 重置縮放
     modelContainer.scale.set(1);
 
     try {
         const isMobile = window.innerWidth < 600;
-        // 手機版稍微大一點點，方便點擊
-        let baseScale = isMobile ? 0.23 : 0.15; 
+        
+        // ★ 修改點 1：縮小預設比例 (原 0.23 -> 0.12)
+        let baseScale = isMobile ? 0.12 : 0.08; 
 
         if (mode === 'hijiki') {
             await loadModelToContainer(MODEL_PATH_HIJIKI, baseScale, 0); 
         } else if (mode === 'tororo') {
             await loadModelToContainer(MODEL_PATH_TORORO, baseScale, 0);
         } else if (mode === 'both') {
-            // 兩隻貓時，稍微分開
-            let offset = isMobile ? 50 : 90;
-            // 這裡傳入 xOffset，稍後在 repositionCats 計算絕對位置
+            let offset = isMobile ? 35 : 60; // 縮小間距
             await loadModelToContainer(MODEL_PATH_HIJIKI, baseScale * 0.9, -offset);
             await loadModelToContainer(MODEL_PATH_TORORO, baseScale * 0.9, offset);
         }
         
-        // ★ 載入後立即計算一次正確位置
-        repositionCats();
+        // ★ 修改點 2：載入後強制執行邊界檢查，防止出生在螢幕外
+        setTimeout(repositionCats, 100);
         
         console.log(`已切換至模式: ${mode}`);
     } catch (err) {
@@ -7351,176 +7345,230 @@ async function selectCatMode(mode, save = true) {
     }
 }
 
-// 載入模型並設定基礎屬性
 async function loadModelToContainer(path, scale, xOffset) {
     const model = await PIXI.live2d.Live2DModel.from(path);
     model.scale.set(scale);
-    
-    // 將 xOffset 暫存在模型物件上，方便 resize 時重新計算
-    model._baseOffsetX = xOffset;
-    
+    model._baseOffsetX = xOffset; // 記住相對位置
+    model.x = xOffset; 
     model.interactive = true; 
     modelContainer.addChild(model);
 }
 
-// ★ 核心位置計算：強制靠右下角 (解決超出螢幕問題)
+// ★ 修改點 3：強制邊界限制 (Clamp) 與 智能定位
 function repositionCats() {
     if (!modelContainer || modelContainer.children.length === 0) return;
 
-    const isMobile = window.innerWidth < 600;
     const width = window.innerWidth;
     const height = window.innerHeight;
+    
+    // 取得目前容器的位置
+    let currentX = modelContainer.x;
+    let currentY = modelContainer.y;
 
-    // 設定錨點位置
-    // 手機：距離右邊 60px，距離底部 120px (避開導航列)
-    // 電腦：距離右邊 100px，距離底部 100px
-    const anchorX = width - (isMobile ? 60 : 100);
-    const anchorY = height - (isMobile ? 120 : 100);
+    // 如果是剛初始化 (位置是 0,0)，則自動設定到右下角
+    if (currentX === 0 && currentY === 0) {
+        currentX = width - 80;
+        currentY = height - 100;
+    }
 
-    modelContainer.position.set(anchorX, anchorY);
+    // 邊界檢查 (Padding)
+    const padding = 50; 
 
-    // 重新校正子模型位置 (如果有雙貓)
-    modelContainer.children.forEach(model => {
-        model.x = model._baseOffsetX || 0;
-        model.y = 0; // 垂直相對位置設為 0
-    });
+    // 強制限制 X 軸 (不讓貓跑出左右邊界)
+    if (currentX < padding) currentX = padding;
+    if (currentX > width - padding) currentX = width - padding;
+
+    // 強制限制 Y 軸 (不讓貓跑出上下邊界)
+    if (currentY < padding) currentY = padding;
+    if (currentY > height - padding) currentY = height - padding;
+
+    modelContainer.position.set(currentX, currentY);
 }
 
 // =======================================================
-// === 互動邏輯 (修復空白處誤觸 + 單擊動畫) ===
+// === 互動邏輯 (雙擊觸發 + 雙指縮放兼容) ===
 // =======================================================
 
 function initGlobalInteraction() {
     const canvas = document.getElementById(CANVAS_ID);
     
-    // --- 1. 擊中測試 (Hit Test) 優化版 ---
+    // 擊中測試 (Hit Test)
     function hitTest(x, y) {
         if (!modelContainer || modelContainer.children.length === 0) return false;
         
-        // 將全域座標轉換為 Container 本地座標
-        // 簡單來說：(點擊X - 容器X, 點擊Y - 容器Y)
-        const localX = x - modelContainer.x;
-        const localY = y - modelContainer.y;
+        // 將螢幕座標轉為 Container 本地座標
+        // 這裡做簡單的矩形邊界檢查，加上寬鬆的判定範圍
+        const bounds = modelContainer.getBounds();
+        const padding = 20; // 增加觸控容錯
 
-        for (let i = 0; i < modelContainer.children.length; i++) {
-            const child = modelContainer.children[i];
-            const bounds = child.getBounds(); // 這是世界座標的 Bounds
-
-            // A. 初步篩選：是否在矩形邊界內？
-            // 這裡我們做「縮邊」處理 (Padding)，減少空白誤觸
-            // 縮減寬度的 20% 作為邊緣容錯
-            const shrinkX = bounds.width * 0.2;
-            const shrinkY = bounds.height * 0.1;
-
-            if (x >= bounds.x + shrinkX && x <= (bounds.x + bounds.width - shrinkX) &&
-                y >= bounds.y + shrinkY && y <= (bounds.y + bounds.height)) {
-                
-                // 如果在範圍內，回傳 true (視為點到貓)
-                // 進階：如果模型支援 hitTest 自定義區域，可在此呼叫 child.hitTest(...)
-                return true;
-            }
-        }
-        return false;
+        return (x >= bounds.x - padding && x <= bounds.x + bounds.width + padding &&
+                y >= bounds.y - padding && y <= bounds.y + bounds.height + padding);
     }
 
-    // --- 2. 觸控開始 (TOUCH START) ---
-    window.addEventListener('touchstart', (e) => {
-        if (canvas.style.display === 'none') return;
+    // --- 觸控邏輯 (Touch) ---
+    
+    canvas.addEventListener('touchstart', (e) => {
+        // ★ 關鍵：如果是多指觸控 (如雙指縮放)，直接忽略，讓瀏覽器處理
+        if (e.touches.length > 1) return;
+
         const touch = e.touches[0];
         
         if (hitTest(touch.clientX, touch.clientY)) {
-            // ★ 點到了！攔截事件，不讓網頁捲動
-            if (e.cancelable) e.preventDefault();
-            e.stopPropagation();
+            // 只有點到貓且是單指時，才攔截 (允許拖曳貓)
+            // 注意：這裡不呼叫 preventDefault，以免阻擋瀏覽器滾動，除非正在拖曳
             
-            isInteracting = true;
+            isDragging = false; // 先假設不是拖曳
             startX = touch.clientX;
             startY = touch.clientY;
+            containerStartX = modelContainer.x;
+            containerStartY = modelContainer.y;
             
-            // 立即觸發 CSS 視覺按壓效果 (加強回饋感)
-            triggerVisualEffect();
-        } else {
-            isInteracting = false;
+            // 標記 canvas 為互動中，這時可以考慮阻擋原生滾動
+            canvas.setAttribute('data-interacting', 'true');
         }
     }, { passive: false });
 
-    // --- 3. 觸控結束 (TOUCH END) - 觸發動作 ---
-    window.addEventListener('touchend', (e) => {
-        if (isInteracting) {
-            // 簡單判斷：如果是單擊 (沒有大幅移動)，則觸發動作
-            // 這裡不再判斷雙擊，單擊直接觸發
-            const touch = e.changedTouches[0];
-            const dist = Math.hypot(touch.clientX - startX, touch.clientY - startY);
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) return; // 雙指縮放時放行
+        if (canvas.getAttribute('data-interacting') !== 'true') return;
+
+        const touch = e.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+
+        // 防手抖：移動超過 5px 才算拖曳
+        if (!isDragging && Math.hypot(dx, dy) > 5) {
+            isDragging = true;
+        }
+
+        if (isDragging) {
+            // ★ 拖曳貓咪時，阻止瀏覽器畫面滾動
+            if (e.cancelable) e.preventDefault();
             
-            if (dist < 10) { // 移動小於 10px 視為點擊
-                triggerCatReaction();
-            }
-            isInteracting = false;
+            modelContainer.x = containerStartX + dx;
+            modelContainer.y = containerStartY + dy;
         }
     }, { passive: false });
 
-    // --- 4. 滑鼠點擊 (電腦版) ---
+    canvas.addEventListener('touchend', (e) => {
+        if (canvas.getAttribute('data-interacting') !== 'true') return;
+        
+        // 如果沒有發生拖曳，則視為點擊
+        if (!isDragging) {
+            handleDoubleTap(); // 檢查是否為雙擊
+        }
+        
+        isDragging = false;
+        canvas.removeAttribute('data-interacting');
+        
+        // 拖曳結束後，執行一次邊界檢查，防止把貓丟出螢幕
+        repositionCats();
+    });
+
+    // --- 滑鼠邏輯 (Mouse - 電腦版) ---
+    
     window.addEventListener('mousedown', (e) => {
         if (canvas.style.display === 'none') return;
         if (hitTest(e.clientX, e.clientY)) {
-            e.preventDefault(); // 防止選取文字
-            triggerVisualEffect();
-            triggerCatReaction();
+            isDragging = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            containerStartX = modelContainer.x;
+            containerStartY = modelContainer.y;
+            canvas.setAttribute('data-interacting', 'true');
+            document.body.style.cursor = 'grabbing';
         }
     });
 
-    // --- 5. 滑鼠懸停 (電腦版游標變化) ---
     window.addEventListener('mousemove', (e) => {
-        if (canvas.style.display === 'none') return;
+        // 游標樣式變更 (懸停效果)
         if (hitTest(e.clientX, e.clientY)) {
-            document.body.classList.add('cat-hovering'); // 改變游標
+            document.body.classList.add('cat-hovering');
         } else {
             document.body.classList.remove('cat-hovering');
         }
+
+        if (canvas.getAttribute('data-interacting') !== 'true') return;
+
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        if (!isDragging && Math.hypot(dx, dy) > 5) {
+            isDragging = true;
+        }
+
+        if (isDragging) {
+            modelContainer.x = containerStartX + dx;
+            modelContainer.y = containerStartY + dy;
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (canvas.getAttribute('data-interacting') === 'true') {
+            if (!isDragging) {
+                handleDoubleTap(); // 電腦版也統一用雙擊觸發
+            }
+            repositionCats(); // 邊界檢查
+        }
+        isDragging = false;
+        canvas.removeAttribute('data-interacting');
+        document.body.style.cursor = '';
     });
 }
 
-// 觸發貓咪動作與音效/震動
+// ★ 核心：雙擊判斷邏輯
+function handleDoubleTap() {
+    const currentTime = new Date().getTime();
+    const tapLength = currentTime - lastTapTime;
+    
+    // 判斷兩次點擊間隔是否小於 300ms
+    if (tapLength < 300 && tapLength > 0) {
+        // --- 觸發雙擊動作 ---
+        triggerCatReaction();
+        triggerVisualEffect(); // 播放 CSS 動畫
+        
+        // 重置，避免觸發第三次
+        lastTapTime = 0; 
+    } else {
+        // 這是第一次點擊
+        lastTapTime = currentTime;
+    }
+}
+
+// 觸發貓咪動作與音效
 function triggerCatReaction() {
     if (!modelContainer) return;
 
-    // 1. 播放 Live2D 動作 (隨機)
     modelContainer.children.forEach(cat => {
         playRandomMotion(cat);
     });
 
-    // 2. 手機震動回饋 (如果支援)
-    if (navigator.vibrate) navigator.vibrate(40);
+    if (navigator.vibrate) navigator.vibrate(50);
 }
 
-// 觸發 CSS 動畫 (Jelly Effect)
+// 觸發 CSS Q彈動畫
 function triggerVisualEffect() {
     const canvas = document.getElementById(CANVAS_ID);
-    
-    // 重置動畫 Class 以便重複觸發
     canvas.classList.remove('cat-active-click');
-    void canvas.offsetWidth; // 強制 Reflow
+    void canvas.offsetWidth; // 強制重繪
     canvas.classList.add('cat-active-click');
     
-    // 動畫結束後移除 class (雖然有 animation-end，但在快速點擊時這樣比較保險)
     setTimeout(() => {
         canvas.classList.remove('cat-active-click');
     }, 500);
 }
 
-// 播放隨機動作邏輯 (保持不變)
 function playRandomMotion(model) {
     if (!model || !model.internalModel || !model.internalModel.motionManager) return;
     const motionMgr = model.internalModel.motionManager;
     const groups = Object.keys(motionMgr.definitions);
     if (groups.length === 0) return;
 
-    // 過濾掉待機動作，盡量選特殊動作 (Tap)
     let targetGroups = groups.filter(g => g.toLowerCase().includes('tap') || g.toLowerCase().includes('touch'));
-    if (targetGroups.length === 0) targetGroups = groups; // 如果沒有 Tap 動作，就隨機選
+    if (targetGroups.length === 0) targetGroups = groups;
     
     const randomGroup = targetGroups[Math.floor(Math.random() * targetGroups.length)];
-    motionMgr.startRandomMotion(randomGroup, 3); // 優先級 3 強制播放
+    motionMgr.startRandomMotion(randomGroup, 3);
 }
 
 // 補回選單控制
