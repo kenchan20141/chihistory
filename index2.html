@@ -68,7 +68,7 @@ form-action 'self';
 <!-- PixiJS 核心 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.8/browser/pixi.min.js"></script>
 <!-- PixiLive2DDisplay 插件 (支援 Cubism 2/3/4) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi-live2d-display/0.4.0/cubism4.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
 
 
 	<script>
@@ -20749,8 +20749,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 // --- Live2D 設定開始 ---
-
 (async function() {
+    // --- 新增這兩行 ---
+    // 確保 PIXI 全域變數可被插件讀取
+    window.PIXI = PIXI; 
+    
+    // 如果插件沒有自動掛載，手動掛載 (防呆機制)
+    if (!PIXI.live2d && window.PixiLive2dDisplay) {
+        PIXI.live2d = window.PixiLive2dDisplay;
+    }
+    // ----------------
+
     const canvas = document.getElementById('live2d-canvas');
     
     // 初始化 Pixi 應用程式 (背景透明)
