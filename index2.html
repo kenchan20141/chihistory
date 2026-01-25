@@ -2,21 +2,21 @@
 <html lang="zh">
 <head>
 
-	
-
 <meta http-equiv="Content-Security-Policy" content="
 default-src 'self';
-script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.streamable.com https://cdn.heapanalytics.com https://www.gstatic.com https://apis.google.com https://cdn.onesignal.com https://onesignal.com https://api.onesignal.com https://*.firebaseio.com;
+script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.streamable.com https://cdn.heapanalytics.com https://www.gstatic.com https://apis.google.com https://cdn.onesignal.com https://onesignal.com https://api.onesignal.com https://*.firebaseio.com https://cubism.live2d.com https://cdnjs.cloudflare.com;
 style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://onesignal.com;
 font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;
 img-src 'self' https: data: blob: https://*.streamable.com https://heapanalytics.com https://*.googleusercontent.com;
 media-src 'self' https://youfulca.com https://*.streamable.com https://assets.mixkit.co https://taira-komori.net;
-connect-src 'self' https://cdnjs.cloudflare.com https://script.google.com https://script.googleusercontent.com https://san4si1.vercel.app https://sansi.kenchan20151.workers.dev https://corsproxy.io https://docs.google.com https://*.googleusercontent.com https://v1.hitokoto.cn https://chatapi.akash.network https://text.pollinations.ai https://gen.pollinations.ai https://router.huggingface.co https://api.llm7.io https://*.streamable.com https://cdn.jsdelivr.net https://api-fawn-chi.vercel.app https://heapanalytics.com https://*.firebaseio.com wss://*.firebaseio.com https://www.gstatic.com https://www.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://cdn.onesignal.com https://onesignal.com https://onesignal.com/api/v1/notifications https://api.onesignal.com;
+connect-src 'self' https://script.google.com https://script.googleusercontent.com https://san4si1.vercel.app https://sansi.kenchan20151.workers.dev https://corsproxy.io https://docs.google.com https://*.googleusercontent.com https://v1.hitokoto.cn https://chatapi.akash.network https://text.pollinations.ai https://gen.pollinations.ai https://router.huggingface.co https://api.llm7.io https://*.streamable.com https://cdn.jsdelivr.net https://api-fawn-chi.vercel.app https://heapanalytics.com https://*.firebaseio.com wss://*.firebaseio.com https://www.gstatic.com https://www.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://cdn.onesignal.com https://onesignal.com https://onesignal.com/api/v1/notifications https://api.onesignal.com data: blob:;
+worker-src 'self' blob:;
 frame-src 'self' https://streamable.com https://kenchan20141.pyscriptapps.com https://kenchan20141.github.io https://sansi.vercel.app https://lyricschi.vercel.app https://penpalchi.vercel.app https://litstudy.vercel.app https://621d05f47d591.site123.me https://script.google.com https://www.i2ocr.com https://*.firebaseapp.com https://onesignal.com;
 object-src 'none';
 base-uri 'self';
 form-action 'self';
 ">
+
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -65,10 +65,12 @@ form-action 'self';
 <!-- 新增這行：Firebase Authentication -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
-<!-- PixiJS 核心 -->
+<!-- Live2D Cubism Core (必須) -->
+<script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dCubismCore.min.js"></script>
+<!-- PixiJS (渲染引擎) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.8/browser/pixi.min.js"></script>
-<!-- PixiLive2DDisplay 插件 (支援 Cubism 2/3/4) -->
-<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
+<!-- Pixi Live2D Display (連接 Pixi 與 Live2D 的插件) -->
+<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/index.min.js"></script>
 
 
 	<script>
@@ -7044,44 +7046,179 @@ read-mode-container {
     to { opacity: 1; transform: translateY(0); }
 }
 
-	/* Live2D 畫布容器：固定在左下角或您喜歡的位置 */
+	
+/* Live2D 畫布設定 */
 #live2d-canvas {
     position: fixed;
     bottom: 0;
-    left: 0; /* 如果想放右邊改成 right: 0 */
-    width: 400px; /* 根據需求調整大小 */
-    height: 400px;
-    z-index: 9999; /* 確保在最上層 */
-    pointer-events: none; /* 讓滑鼠可以穿透畫布空白處，不擋住網頁內容 */
-    display: none; /* 預設隱藏，等待呼喚 */
+    left: 20px; /* 放在左下角 */
+    z-index: 15000; /* 確保在大多數內容之上，但在 Modal 之下 */
+    pointer-events: auto; /* 允許點擊互動 */
+    width: 300px; /* 初始寬度，JS會控制 */
+    height: 300px;
+    display: none; /* 預設隱藏，點擊按鈕才出現 */
 }
 
-/* 呼喚/隱藏按鈕樣式 (範例) */
-#toggle-live2d-btn {
+/* 莫蘭迪 SVG 按鈕樣式 */
+.morandi-float-btn {
     position: fixed;
-    bottom: 20px;
-    left: 20px;
-    z-index: 10000;
-    padding: 10px 15px;
-    background-color: #333;
+    bottom: 25px;
+    left: 25px; /* 對應畫布位置 */
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    /* 莫蘭迪灰綠色 #8fa398 或您可改用 #d69a92 (豆沙紅) */
+    background-color: #8fa398; 
     color: white;
     border: none;
-    border-radius: 20px;
     cursor: pointer;
-    font-family: 'Noto Serif TC', serif;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    z-index: 15001; /* 比畫布高一層 */
+    box-shadow: 0 4px 15px rgba(143, 163, 152, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    padding: 10px;
 }
 
-#toggle-live2d-btn:hover {
-    background-color: #555;
+.morandi-float-btn:hover {
+    transform: scale(1.15) rotate(10deg);
+    background-color: #7d9186; /* 稍微變深 */
+    box-shadow: 0 6px 20px rgba(143, 163, 152, 0.6);
 }
+
+.morandi-float-btn svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+}
+
+/* 調整手機版位置，避免遮擋 */
+@media (max-width: 600px) {
+    #live2d-canvas {
+        left: -20px;
+        width: 200px;
+        height: 200px;
+    }
+    .morandi-float-btn {
+        width: 40px;
+        height: 40px;
+        bottom: 20px;
+        left: 20px;
+    }
+}
+
+
+
+
 	
 </style>
 
 <script>
 
 
+// --- Live2D 整合邏輯 ---
 
+let app;
+let models = {}; // 儲存模型實例
+let isLive2DVisible = false;
+
+async function initLive2D() {
+    const canvas = document.getElementById('live2d-canvas');
+    if (!canvas) return;
+
+    // 1. 初始化 Pixi 應用
+    app = new PIXI.Application({
+        view: canvas,
+        autoStart: true,
+        backgroundAlpha: 0, // 透明背景
+        width: 500,         // 畫布解析度寬度
+        height: 400,        // 畫布解析度高度
+        resolution: window.devicePixelRatio || 1,
+    });
+
+    // 2. 設定模型路徑 (請確保路徑與步驟1的資料夾結構一致)
+    // 這裡使用 Cubism 4 的載入方式
+    const modelPathHijiki = 'live2d/hijiki/runtime/hijiki.model3.json';
+    const modelPathTororo = 'live2d/tororo/runtime/tororo.model3.json';
+
+    try {
+        // 載入黑貓 (Hijiki)
+        const hijiki = await PIXI.live2d.Live2DModel.from(modelPathHijiki);
+        setupModel(hijiki, 0.5, 80, 100); // 縮放, x, y
+        models.hijiki = hijiki;
+
+        // 載入白貓 (Tororo)
+        const tororo = await PIXI.live2d.Live2DModel.from(modelPathTororo);
+        setupModel(tororo, 0.5, 220, 100); // 放在黑貓旁邊
+        models.tororo = tororo;
+
+        console.log("貓咪模型載入成功！");
+
+    } catch (error) {
+        console.error("Live2D 模型載入失敗:", error);
+    }
+}
+
+// 模型設定輔助函式
+function setupModel(model, scale, x, y) {
+    app.stage.addChild(model);
+    model.scale.set(scale);
+    model.x = x;
+    model.y = y;
+    
+    // 開啟互動
+    model.interactive = true;
+    model.buttonMode = true;
+
+    // 點擊事件：隨機播放動作
+    model.on('pointerdown', () => {
+        // 播放隨機動作，官方範例通常有 "TapBody" 這個動作組
+        model.motion('TapBody'); 
+        
+        // 播放音效 (可選，需確保您有該音效檔)
+        // const sound = new Audio('meow.mp3');
+        // sound.play().catch(()=>{});
+        
+        if (navigator.vibrate) navigator.vibrate(20); // 震動回饋
+    });
+    
+    // 拖曳視線 (讓貓咪看著滑鼠)
+    // 注意：這會消耗效能，若卡頓可移除
+    /*
+    window.addEventListener('mousemove', (event) => {
+       if(!isLive2DVisible) return;
+       // 簡單的視線追蹤邏輯... (略，保持簡單)
+    });
+    */
+}
+
+// 按鈕切換顯示/隱藏
+function toggleLive2D() {
+    const canvas = document.getElementById('live2d-canvas');
+    const btn = document.getElementById('live2d-toggle-btn');
+    
+    if (!app) {
+        // 第一次點擊時才初始化，節省資源
+        initLive2D();
+        isLive2DVisible = true;
+        canvas.style.display = 'block';
+        btn.style.backgroundColor = '#d69a92'; // 激活變成豆沙紅
+    } else {
+        isLive2DVisible = !isLive2DVisible;
+        canvas.style.display = isLive2DVisible ? 'block' : 'none';
+        
+        // 切換按鈕顏色表示狀態
+        if (isLive2DVisible) {
+            btn.style.backgroundColor = '#d69a92'; // 豆沙紅
+            // 每次喚醒都播放一個打招呼動作
+            if (models.hijiki) models.hijiki.motion('TapBody');
+            if (models.tororo) models.tororo.motion('TapBody');
+        } else {
+            btn.style.backgroundColor = '#8fa398'; // 莫蘭迪綠
+        }
+    }
+}
 
 
 // 全域變數：記錄當天(或本次會話) API 循環失敗的次數
@@ -7159,12 +7296,6 @@ observer.observe(document.body, { childList: true, subtree: true });
 </div>
 
 
-<!-- 呼喚按鈕 -->
-<button id="toggle-live2d-btn" onclick="toggleLive2D()">呼喚貓咪</button>
-
-<!-- Live2D 畫布 -->
-<canvas id="live2d-canvas"></canvas>
-	
 
 <!-- 文萃容器 (原：精選文章容器) -->
 <div id="featuredContainer" class="box" style="display: none;">
@@ -20745,117 +20876,27 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<script>
 
 
-// --- Live2D 設定開始 ---
-(async function() {
-    // --- 新增這兩行 ---
-    // 確保 PIXI 全域變數可被插件讀取
-    window.PIXI = PIXI; 
-    
-    // 如果插件沒有自動掛載，手動掛載 (防呆機制)
-    if (!PIXI.live2d && window.PixiLive2dDisplay) {
-        PIXI.live2d = window.PixiLive2dDisplay;
-    }
-    // ----------------
 
-    const canvas = document.getElementById('live2d-canvas');
-    
-    // 初始化 Pixi 應用程式 (背景透明)
-    const app = new PIXI.Application({
-        view: canvas,
-        autoStart: true,
-        backgroundAlpha: 0, // 透明背景
-        width: 800,         // 畫布內部解析度寬度 (可比 CSS 大以保持清晰)
-        height: 800,        // 畫布內部解析度高度
-        resizeTo: canvas    // 自動配合 CSS 大小
-    });
+<!-- Live2D 畫布容器 -->
+<canvas id="live2d-canvas"></canvas>
 
-    // 模型路徑 (請確保與第一步的資料夾結構一致)
-    const hijikiModelPath = 'live2d_models/hijiki/hijiki.model3.json';
-    const tororoModelPath = 'live2d_models/tororo/tororo.model3.json';
+<!-- 貓咪呼喚按鈕 (SVG 圖案) -->
+<button id="live2d-toggle-btn" class="morandi-float-btn" onclick="toggleLive2D()" title="呼喚貓咪">
+    <!-- SVG 貓咪圖示 -->
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="currentColor" fill-opacity="0.1"/>
+        <path d="M8.5 8C9.32843 8 10 7.32843 10 6.5C10 5.67157 9.32843 5 8.5 5C7.67157 5 7 5.67157 7 6.5C7 7.32843 7.67157 8 8.5 8Z" fill="currentColor"/>
+        <path d="M15.5 8C16.3284 8 17 7.32843 17 6.5C17 5.67157 16.3284 5 15.5 5C14.6716 5 14 5.67157 14 6.5C14 7.32843 14.6716 8 15.5 8Z" fill="currentColor"/>
+        <path d="M12 18C14.5 18 16.5 16 16.5 13.5H7.5C7.5 16 9.5 18 12 18Z" fill="currentColor"/>
+        <path d="M12 13.5L9 10.5M12 13.5L15 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+</button>
 
-    // 載入模型函式
-    async function loadCat(path, x, y, scale) {
-        try {
-            const model = await PIXI.live2d.Live2DModel.from(path);
-            
-            app.stage.addChild(model);
-
-            // 設定位置與大小
-            model.x = x;
-            model.y = y;
-            model.scale.set(scale);
-            
-            // 啟用互動
-            model.interactive = true;
-            model.buttonMode = true; // 滑鼠移上去變手指
-
-            // 確保畫布的 pointer-events 在模型上有效
-            // 這樣點擊模型會觸發，點擊空白處會穿透到網頁
-            model.on('pointerdown', () => {
-                // 點擊觸發隨機動作
-                model.motion('Tap'); 
-                // 或者如果您想指定動作: model.motion('Tap', 0);
-            });
-
-            // 自動隨機眨眼與閒置動作
-            model.internalModel.motionManager.stopAllMotions();
-            
-            return model;
-        } catch (error) {
-            console.error('模型載入失敗:', error);
-        }
-    }
-
-    // 同時載入兩隻貓
-    // 參數說明: (路徑, X座標, Y座標, 縮放比例)
-    // 座標和縮放需要根據您畫布的大小微調
-    
-    // 載入 Tororo (白貓)
-    const tororo = await loadCat(tororoModelPath, -50, 100, 0.25);
-    
-    // 載入 Hijiki (黑貓) - 放旁邊一點
-    const hijiki = await loadCat(hijikiModelPath, 150, 100, 0.25);
-
-    // 修正畫布 CSS 的 pointer-events
-    // 當滑鼠在模型上時設為 auto，不在時設為 none (讓網頁可點擊)
-    app.renderer.plugins.interaction.on('pointerdown', (event) => {
-       // Pixi 內部點擊處理
-    });
-    
-    // 為了讓滑鼠能穿透畫布的透明區域，點擊網頁其他連結：
-    canvas.style.pointerEvents = 'none';
-    if(tororo) {
-        tororo.on('mouseover', () => canvas.style.pointerEvents = 'auto');
-        tororo.on('mouseout', () => canvas.style.pointerEvents = 'none');
-    }
-    if(hijiki) {
-        hijiki.on('mouseover', () => canvas.style.pointerEvents = 'auto');
-        hijiki.on('mouseout', () => canvas.style.pointerEvents = 'none');
-    }
-
-})();
-
-// 呼喚/隱藏按鈕的功能
-function toggleLive2D() {
-    const canvas = document.getElementById('live2d-canvas');
-    const btn = document.getElementById('toggle-live2d-btn');
-    
-    if (canvas.style.display === 'none' || canvas.style.display === '') {
-        canvas.style.display = 'block';
-        btn.innerText = '隱藏貓咪';
-    } else {
-        canvas.style.display = 'none';
-        btn.innerText = '呼喚貓咪';
-    }
-}
-// --- Live2D 設定結束 ---
 
 
 	
-</script>
 	
 
 
