@@ -7098,25 +7098,24 @@ read-mode-container {
     filter: brightness(1.1);
 }
 
-/* 貓咪對話氣泡 (新功能) */
+/* --- 對話氣泡樣式 (常駐型) --- */
 .cat-speech-bubble {
     position: fixed;
     background-color: rgba(255, 255, 255, 0.95);
     border: 2px solid #8fa398; /* 莫蘭迪綠 */
     border-radius: 12px;
-    padding: 12px 15px;
+    padding: 15px;
     color: #5d4037;
     font-family: 'Noto Serif TC', serif;
     font-size: 1rem;
-    line-height: 1.5;
-    max-width: 220px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    z-index: 2147483648; /* 比畫布高一層 */
-    pointer-events: auto; /* 允許點擊氣泡 */
+    line-height: 1.6;
+    max-width: 240px; /* 稍微加寬 */
+    box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    z-index: 2147483648; 
+    pointer-events: auto; /* 允許選取文字 */
     opacity: 0;
-    transform: translateY(10px) scale(0.9);
+    transform: translateY(10px) scale(0.95);
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    /* 確保文字不會溢出 */
     word-wrap: break-word;
 }
 
@@ -7125,6 +7124,7 @@ read-mode-container {
     transform: translateY(0) scale(1);
 }
 
+/* 氣泡小箭頭 */
 .cat-speech-bubble::after {
     content: '';
     position: absolute;
@@ -7136,7 +7136,32 @@ read-mode-container {
     border-color: #8fa398 transparent transparent transparent;
 }
 
-/* 載入中的省略號動畫 */
+/* --- 長按蓄力光圈 (視覺引導) --- */
+.long-press-ring {
+    position: fixed;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 4px solid rgba(143, 163, 152, 0.3); /* 底色 */
+    border-top-color: #8fa398; /* 進度色 */
+    z-index: 2147483649;
+    pointer-events: none;
+    display: none;
+    box-sizing: border-box;
+}
+
+/* 蓄力旋轉動畫 */
+@keyframes ring-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.long-press-ring.active {
+    display: block;
+    animation: ring-spin 0.8s linear forwards; /* 0.8s 對應長按時間 */
+}
+
+/* 載入中的省略號 */
 .cat-loading-dots::after {
     content: ' .';
     animation: dots 1.5s steps(5, end) infinite;
@@ -7163,9 +7188,8 @@ body.cat-dragging { cursor: grabbing !important; }
 
 <script>
 
-
 // =======================================================
-// === Live2D 貓咪系統 (無限縮放 + 半隱藏 + 長按對話) ===
+// === Live2D 貓咪系統 (常駐對話 + 強制刷新 + 視覺引導) ===
 // =======================================================
 
 let app;
@@ -7193,11 +7217,11 @@ let lastTapTime = 0;
 
 // 長按相關
 let pressTimer = null;
-const LONG_PRESS_DURATION = 800; // 長按 800ms 觸發對話
+const LONG_PRESS_DURATION = 800; // 800ms 觸發
 
-// 對話氣泡元素
+// UI 元素
 let speechBubble = null;
-let bubbleTimer = null;
+let chargingRing = null; // 蓄力光圈
 
 document.addEventListener('DOMContentLoaded', () => {
     const savedMode = localStorage.getItem('sansi_cat_mode');
@@ -7206,6 +7230,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     createSpeechBubble();
+    createChargingRing(); // 初始化光圈
     initGlobalInteraction();
     
     window.addEventListener('resize', () => {
@@ -7222,6 +7247,15 @@ function createSpeechBubble() {
     speechBubble.className = 'cat-speech-bubble';
     speechBubble.style.display = 'none'; 
     document.body.appendChild(speechBubble);
+}
+
+// 建立蓄力光圈
+function createChargingRing() {
+    if (document.getElementById('longPressRing')) return;
+    chargingRing = document.createElement('div');
+    chargingRing.id = 'longPressRing';
+    chargingRing.className = 'long-press-ring';
+    document.body.appendChild(chargingRing);
 }
 
 async function initLive2DApp() {
@@ -7331,26 +7365,21 @@ function repositionCats() {
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
     
-    // 允許移出一半
     const allowOverflowX = bounds.width * 0.5;
     const allowOverflowY = bounds.height * 0.5;
 
     let newX = modelContainer.x;
     let newY = modelContainer.y;
 
-    // 右邊界
     if (newX + bounds.width > screenW + allowOverflowX) {
         newX = screenW + allowOverflowX - bounds.width;
     }
-    // 下邊界
     if (newY + bounds.height > screenH + allowOverflowY) {
         newY = screenH + allowOverflowY - bounds.height;
     }
-    // 左邊界
     if (newX < -allowOverflowX) {
         newX = -allowOverflowX;
     }
-    // 上邊界
     if (newY < -allowOverflowY) {
         newY = -allowOverflowY;
     }
@@ -7363,7 +7392,7 @@ function repositionCats() {
 }
 
 // =======================================================
-// === 全域互動邏輯 ===
+// === 全域互動邏輯 (含視覺引導) ===
 // =======================================================
 
 function initGlobalInteraction() {
@@ -7384,23 +7413,43 @@ function initGlobalInteraction() {
         );
     }
 
-    // --- 長按邏輯 ---
-    function startLongPressTimer() {
+    // --- 長按邏輯 (含視覺回饋) ---
+    function startLongPressTimer(x, y) {
         isLongPress = false;
         if (pressTimer) clearTimeout(pressTimer);
+        
+        // 顯示蓄力光圈
+        showChargingRing(x, y);
+
         pressTimer = setTimeout(() => {
             isLongPress = true;
             isDragging = false; 
+            hideChargingRing(); // 時間到，隱藏光圈
             triggerCatChat(); // 觸發對話
             if (navigator.vibrate) navigator.vibrate(80);
         }, LONG_PRESS_DURATION);
     }
 
     function cancelLongPressTimer() {
+        hideChargingRing(); // 取消時隱藏光圈
         if (pressTimer) {
             clearTimeout(pressTimer);
             pressTimer = null;
         }
+    }
+
+    // --- 顯示/隱藏蓄力光圈 ---
+    function showChargingRing(x, y) {
+        if (!chargingRing) return;
+        // 定位到手指中心 (光圈大小 60px)
+        chargingRing.style.left = `${x - 30}px`;
+        chargingRing.style.top = `${y - 30}px`;
+        chargingRing.classList.add('active');
+    }
+
+    function hideChargingRing() {
+        if (!chargingRing) return;
+        chargingRing.classList.remove('active');
     }
 
     // --- 觸控事件 ---
@@ -7432,7 +7481,9 @@ function initGlobalInteraction() {
                 containerStartY = modelContainer.y;
                 
                 canvas.setAttribute('data-interacting', 'true');
-                startLongPressTimer();
+                
+                // ★ 啟動長按與視覺引導
+                startLongPressTimer(touch.clientX, touch.clientY);
             } else {
                 canvas.removeAttribute('data-interacting');
             }
@@ -7446,17 +7497,14 @@ function initGlobalInteraction() {
             cancelLongPressTimer();
         }
 
-        // ★ 縮放邏輯 (解除限制) ★
+        // 縮放邏輯
         if (isPinching && e.touches.length === 2) {
             if (e.cancelable) e.preventDefault();
             const currentDist = getPinchDistance(e.touches);
             if (initialPinchDist > 0) {
                 const scaleFactor = currentDist / initialPinchDist;
                 let newScale = initialScale * scaleFactor;
-                
-                // ★ 設為極大範圍：0.01 ~ 10.0 (接近無限制) ★
                 newScale = Math.max(0.01, Math.min(newScale, 10.0));
-                
                 modelContainer.scale.set(newScale);
                 updateBubblePosition(); 
             }
@@ -7488,7 +7536,6 @@ function initGlobalInteraction() {
 
         if (isPinching && e.touches.length < 2) {
             isPinching = false;
-            // 縮放結束後檢查一次邊界，若貓變太大跑太遠，這裡會拉回
             repositionCats(); 
             return;
         }
@@ -7507,7 +7554,8 @@ function initGlobalInteraction() {
 
     // --- 滑鼠事件 ---
     window.addEventListener('mousedown', (e) => {
-        if (canvas.style.display === 'none' || e.button !== 0) return;
+        if (canvas.style.display === 'none') return;
+        if (e.button !== 0) return;
 
         if (hitTest(e.clientX, e.clientY)) {
             e.preventDefault();
@@ -7518,7 +7566,9 @@ function initGlobalInteraction() {
             containerStartY = modelContainer.y;
             canvas.setAttribute('data-interacting', 'true');
             document.body.classList.add('cat-dragging');
-            startLongPressTimer();
+            
+            // ★ 滑鼠長按與視覺引導
+            startLongPressTimer(e.clientX, e.clientY);
         }
     });
 
@@ -7564,17 +7614,13 @@ function initGlobalInteraction() {
         document.body.classList.remove('cat-dragging');
     });
     
-    // ★ 補回電腦版滾輪縮放 (無限制) ★
     window.addEventListener('wheel', (e) => {
         if (canvas.style.display === 'none') return;
         if (hitTest(e.clientX, e.clientY)) {
             e.preventDefault();
             const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
             let newScale = modelContainer.scale.x * zoomFactor;
-            
-            // 範圍：0.01 ~ 10.0
             newScale = Math.max(0.01, Math.min(newScale, 10.0));
-            
             modelContainer.scale.set(newScale);
             repositionCats();
             updateBubblePosition();
@@ -7582,12 +7628,13 @@ function initGlobalInteraction() {
     }, { passive: false });
 }
 
-// === 雙擊邏輯 ===
+// === 雙擊邏輯 (觸發隱藏氣泡) ===
 function handleDoubleTap() {
     const currentTime = new Date().getTime();
     const tapLength = currentTime - lastTapTime;
     
     if (tapLength < 500 && tapLength > 50) {
+        hideBubble(); // ★ 雙擊時隱藏氣泡
         triggerCatReaction();
         triggerVisualEffect(); 
         lastTapTime = 0; 
@@ -7596,22 +7643,32 @@ function handleDoubleTap() {
     }
 }
 
-// === 長按對話邏輯 ===
+// === 長按對話邏輯 (隨機刷新內容) ===
 async function triggerCatChat() {
-    showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>");
+    // 隱藏舊氣泡並顯示載入中
+    hideBubble();
+    
+    // 延遲一下讓隱藏動畫播完
+    setTimeout(() => {
+        showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); // 0 = 不自動隱藏
+    }, 100);
+    
     triggerCatReaction();
 
-    const prompt = "你是我的貓咪助手，請用可愛、簡短的語氣，告訴我一個關於中國語文、文學、成語或文化的有趣冷知識。字數限制在 50 字以內。請不要用列點，直接說話。";
+    // ★ 關鍵：加入隨機數 (Random Seed) 防止 API 快取，確保每次內容不同
+    const randomSeed = Math.floor(Math.random() * 10000);
+    const prompt = `(Seed: ${randomSeed}) 你是我的貓咪助手，請用可愛、簡短的語氣，告訴我一個關於中國語文、文學、成語或文化的有趣冷知識。字數限制在 50 字以內。請不要用列點，直接說話。`;
 
     try {
-        const text = await callAPI(prompt, 0.7);
-        showBubble(text, 6000); 
+        const text = await callAPI(prompt, 0.9); // 提高溫度增加隨機性
+        showBubble(text, 0); // 顯示後不自動隱藏，直到下次操作
     } catch (e) {
         console.error("API Error", e);
-        showBubble("喵嗚... 網絡好像有點問題...", 3000);
+        showBubble("喵嗚... 網絡好像有點問題...", 0);
     }
 }
 
+// 顯示氣泡 (autoHideMs = 0 代表常駐)
 function showBubble(htmlContent, autoHideMs = 0) {
     if (!speechBubble) return;
     
@@ -7621,11 +7678,6 @@ function showBubble(htmlContent, autoHideMs = 0) {
     speechBubble.classList.add('show');
     
     updateBubblePosition();
-
-    if (bubbleTimer) clearTimeout(bubbleTimer);
-    if (autoHideMs > 0) {
-        bubbleTimer = setTimeout(hideBubble, autoHideMs);
-    }
 }
 
 function hideBubble() {
@@ -7673,7 +7725,6 @@ function triggerVisualEffect() {
     setTimeout(() => { canvas.classList.remove('cat-active-click'); }, 400);
 }
 
-// === 修改：隨機動作邏輯 (解鎖所有 Motion) ===
 function playRandomMotion(model) {
     if (!model || !model.internalModel || !model.internalModel.motionManager) return;
     const motionMgr = model.internalModel.motionManager;
@@ -7686,9 +7737,7 @@ function playRandomMotion(model) {
     if (targetGroups.length === 0) targetGroups = groups;
     
     const randomGroup = targetGroups[Math.floor(Math.random() * targetGroups.length)];
-    const motionsInGroup = motionMgr.definitions[randomGroup];
-    
-    // 即使該 Group 有多個 Motion，Live2D 插件的 startRandomMotion 會自動隨機選一個
+    // ★ 確保隨機播放該組內的所有 Motion (如 01, 02... 08)
     motionMgr.startRandomMotion(randomGroup, 3); 
 }
 
