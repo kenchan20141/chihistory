@@ -206,6 +206,47 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
         <i class="fas fa-music"></i>
         <span>音樂播放器</span>
     </button>
+
+
+<!-- 分隔線 (選用) -->
+<div style="height: 1px; background: rgba(255,255,255,0.1); margin: 5px 10px;"></div>
+
+<!-- 貓咪主按鈕 -->
+<button class="side-menu-item" onclick="toggleCatSubMenu()" title="呼喚貓咪">
+    <!-- 原本的 SVG 貓咪圖示 -->
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;">
+        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="currentColor" fill-opacity="0.1"/>
+        <path d="M8.5 8C9.32843 8 10 7.32843 10 6.5C10 5.67157 9.32843 5 8.5 5C7.67157 5 7 5.67157 7 6.5C7 7.32843 7.67157 8 8.5 8Z" fill="currentColor"/>
+        <path d="M15.5 8C16.3284 8 17 7.32843 17 6.5C17 5.67157 16.3284 5 15.5 5C14.6716 5 14 5.67157 14 6.5C14 7.32843 14.6716 8 15.5 8Z" fill="currentColor"/>
+        <path d="M12 18C14.5 18 16.5 16 16.5 13.5H7.5C7.5 16 9.5 18 12 18Z" fill="currentColor"/>
+        <path d="M12 13.5L9 10.5M12 13.5L15 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <span>Live2D</span> <!-- 側邊欄展開時顯示文字，未展開時隱藏 -->
+</button>
+
+<!-- 貓咪選擇子菜單 (預設隱藏) -->
+<div id="cat-sub-menu" class="cat-sub-menu" style="display: none;">
+    <!-- 選項：關閉 (空) -->
+    <div class="cat-option" onclick="selectCatMode('none')" title="隱藏">
+        <i class="fas fa-ban"></i>
+    </div>
+    <!-- 選項：黑貓 (Hijiki) -->
+    <div class="cat-option" onclick="selectCatMode('hijiki')" title="黑貓">
+        <div class="cat-icon-preview" style="background-color: #333;"></div>
+    </div>
+    <!-- 選項：白貓 (Tororo) -->
+    <div class="cat-option" onclick="selectCatMode('tororo')" title="白貓">
+        <div class="cat-icon-preview" style="background-color: #f0f0f0; border: 1px solid #ccc;"></div>
+    </div>
+    <!-- 選項：兩隻 (Both) -->
+    <div class="cat-option" onclick="selectCatMode('both')" title="一起">
+        <div class="cat-icon-preview" style="background: linear-gradient(135deg, #333 50%, #f0f0f0 50%);"></div>
+    </div>
+</div>
+
+
+
+		  
 </div>
     </div>
 </div>
@@ -7110,7 +7151,62 @@ read-mode-container {
     }
 }
 
+/* Live2D 畫布設定 - 可拖曳、層級最高 */
+#live2d-canvas {
+    position: fixed;
+    /* 初始位置 */
+    bottom: 20px; 
+    left: 20px;
+    z-index: 2147483647; /* 確保比 Footer 和大多數 Modal 高 */
+    pointer-events: auto; /* 允許點擊互動和拖曳 */
+    cursor: grab; /* 鼠標提示可拖曳 */
+    display: none; /* 預設由 JS 控制 */
+}
 
+#live2d-canvas:active {
+    cursor: grabbing;
+}
+
+/* 貓咪子選單樣式 */
+.cat-sub-menu {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 5px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    margin: 5px 10px;
+    animation: fadeIn 0.3s ease;
+}
+
+.cat-option {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.cat-option:hover {
+    transform: scale(1.2);
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.cat-option i {
+    color: #d69a92; /* 豆沙紅 */
+    font-size: 14px;
+}
+
+/* 純色圓點預覽圖 */
+.cat-icon-preview {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
 
 
 	
@@ -7121,101 +7217,202 @@ read-mode-container {
 
 // --- Live2D 整合邏輯 ---
 
-// --- Live2D 整合邏輯 (還原測試成功版) ---
+/// --- Live2D 整合邏輯 (進階版：拖曳、切換、記憶) ---
 
 let app;
-let models = {}; 
-let isLive2DVisible = false;
+let currentModelDrag = null; // 用於拖曳計算
+let models = {}; // 儲存已載入的模型實例
 
-async function initLive2D() {
-    const canvas = document.getElementById('live2d-canvas');
-    if (!canvas) return;
+// 設定模型路徑
+const MODEL_PATH_HIJIKI = 'live2d/hijiki/runtime/hijiki.model3.json';
+const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
 
-    // 1. 初始化 Pixi 應用 (只做一次)
-    if (!app) {
-        app = new PIXI.Application({
-            view: canvas,
-            autoStart: true,
-            backgroundAlpha: 0, // 透明背景
-            width: 350,         // 配合你的 CSS 與模型大小微調
-            height: 350,
-            resolution: window.devicePixelRatio || 1,
-        });
+// 頁面載入時檢查紀錄
+document.addEventListener('DOMContentLoaded', () => {
+    const savedMode = localStorage.getItem('sansi_cat_mode');
+    if (savedMode && savedMode !== 'none') {
+        selectCatMode(savedMode, false); // false 代表不需額外儲存，純讀取
     }
+    
+    // 初始化拖曳功能
+    makeCanvasDraggable();
+});
 
-    // 2. 設定模型路徑 (請確認這些路徑相對於 index2.html 是正確的)
-    const modelPathHijiki = 'live2d/hijiki/runtime/hijiki.model3.json';
-    const modelPathTororo = 'live2d/tororo/runtime/tororo.model3.json';
+// 1. 初始化 Pixi 應用
+async function initLive2DApp() {
+    const canvas = document.getElementById('live2d-canvas');
+    if (!canvas || app) return;
 
-    try {
-        console.log("📥 [Live2D] 開始載入...");
+    app = new PIXI.Application({
+        view: canvas,
+        autoStart: true,
+        backgroundAlpha: 0,
+        width: 350,
+        height: 300, // 調整高度以容納兩隻貓
+        resolution: window.devicePixelRatio || 1,
+    });
+    
+    // 確保點擊畫布不會穿透 (方便拖曳)
+    canvas.style.display = 'block';
+}
 
-        // 直接載入，不需額外檢查，因為 script 標籤已經保證了環境
-        const hijiki = await PIXI.live2d.Live2DModel.from(modelPathHijiki);
-        setupModel(hijiki, 0.25, 60, 100); 
-        models.hijiki = hijiki;
-
-        // 嘗試載入第二隻貓 (如果有的話)
-        try {
-            const tororo = await PIXI.live2d.Live2DModel.from(modelPathTororo);
-            setupModel(tororo, 0.25, 200, 100);
-            models.tororo = tororo;
-        } catch (e) {
-            console.log("Tororo 模型載入略過或失敗 (非致命錯誤)");
-        }
-
-        console.log("✅ [Live2D] 載入成功！");
-
-    } catch (error) {
-        console.error("❌ [Live2D] 載入失敗:", error);
-        // 如果這裡報錯，通常只有兩個原因：
-        // 1. CSP 擋住了 live2dcubismcore.min.js
-        // 2. 模型路徑 (modelPathHijiki) 寫錯了 (例如伺服器上路徑不同)
+// 2. 切換子選單顯示
+function toggleCatSubMenu() {
+    const menu = document.getElementById('cat-sub-menu');
+    if (menu.style.display === 'none') {
+        menu.style.display = 'flex';
+    } else {
+        menu.style.display = 'none';
     }
 }
 
-// 輔助函式保持不變
-function setupModel(model, scale, x, y) {
-    if (!app) return;
+// 3. 選擇貓咪模式 (核心邏輯)
+async function selectCatMode(mode, save = true) {
+    if (save) {
+        localStorage.setItem('sansi_cat_mode', mode);
+        // 如果是使用者主動點擊，選完後收起選單和側邊欄
+        document.getElementById('cat-sub-menu').style.display = 'none';
+        
+        // 可選：關閉側邊欄 (視您需求開啟)
+        /*
+        const sideMenu = document.getElementById('sideMenu');
+        const sideMenuToggle = document.getElementById('sideMenuToggle');
+        if (sideMenu) sideMenu.classList.remove('active');
+        if (sideMenuToggle) sideMenuToggle.classList.remove('active');
+        */
+    }
+
+    const canvas = document.getElementById('live2d-canvas');
+    
+    // 模式：隱藏
+    if (mode === 'none') {
+        if (canvas) canvas.style.display = 'none';
+        if (app && app.stage) app.stage.removeChildren();
+        return;
+    }
+
+    // 確保 App 已初始化
+    await initLive2DApp();
+    canvas.style.display = 'block';
+    
+    // 清空舞台
+    app.stage.removeChildren();
+    models = {}; // 重置
+
+    try {
+        if (mode === 'hijiki') {
+            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.22, 175, 150);
+        } else if (mode === 'tororo') {
+            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.22, 175, 150);
+        } else if (mode === 'both') {
+            // 兩隻貓並排：調整 X 座標
+            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.18, 100, 160);
+            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.18, 250, 160);
+        }
+    } catch (err) {
+        console.error("模型載入失敗:", err);
+    }
+}
+
+// 4. 載入並設定單一模型
+async function loadAndSetupModel(path, name, scale, x, y) {
+    const model = await PIXI.live2d.Live2DModel.from(path);
     app.stage.addChild(model);
+    
     model.scale.set(scale);
     model.x = x;
     model.y = y;
     
+    // 啟用互動
     model.interactive = true;
-    model.on('pointerdown', () => {
+    model.buttonMode = true; // 滑鼠變手型
+    
+    // 點擊互動：播放動作 + 震動
+    model.on('pointerdown', (e) => {
+        // 阻止冒泡，避免與拖曳衝突 (視情況調整)
+        // e.stopPropagation(); 
+        
         model.motion('TapBody');
         if (navigator.vibrate) navigator.vibrate(20);
-    });
-}
-
-
-// 按鈕切換顯示/隱藏
-function toggleLive2D() {
-    const canvas = document.getElementById('live2d-canvas');
-    const btn = document.getElementById('live2d-toggle-btn');
-    
-    if (!app) {
-        // 第一次點擊時才初始化，節省資源
-        initLive2D();
-        isLive2DVisible = true;
-        canvas.style.display = 'block';
-        btn.style.backgroundColor = '#d69a92'; // 激活變成豆沙紅
-    } else {
-        isLive2DVisible = !isLive2DVisible;
-        canvas.style.display = isLive2DVisible ? 'block' : 'none';
         
-        // 切換按鈕顏色表示狀態
-        if (isLive2DVisible) {
-            btn.style.backgroundColor = '#d69a92'; // 豆沙紅
-            // 每次喚醒都播放一個打招呼動作
-            if (models.hijiki) models.hijiki.motion('TapBody');
-            if (models.tororo) models.tororo.motion('TapBody');
-        } else {
-            btn.style.backgroundColor = '#8fa398'; // 莫蘭迪綠
-        }
-    }
+        // 隨機播放一點音效或表情 (若有)
+        // model.expression('GameWin'); 
+    });
+
+    models[name] = model;
 }
+
+// 5. 實作畫布全螢幕拖曳功能
+function makeCanvasDraggable() {
+    const canvas = document.getElementById('live2d-canvas');
+    if (!canvas) return;
+
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
+    // 判斷是否為「點擊」(未移動)
+    let hasMoved = false; 
+
+    // 開始拖曳
+    const onDown = (e) => {
+        // 只有點擊畫布本身才觸發拖曳 (模型內部的點擊事件由 Pixi 處理，但我們可以讓整個畫布一起動)
+        isDragging = true;
+        hasMoved = false;
+        
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+
+        startX = clientX;
+        startY = clientY;
+
+        const rect = canvas.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        // 防止文字選取
+        e.preventDefault();
+    };
+
+    // 拖曳中
+    const onMove = (e) => {
+        if (!isDragging) return;
+
+        const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+        const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+
+        // 如果移動超過一點點距離，標記為已移動
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+            hasMoved = true;
+        }
+
+        canvas.style.left = `${initialLeft + dx}px`;
+        canvas.style.top = `${initialTop + dy}px`;
+        // 移除 bottom 屬性以允許自由移動
+        canvas.style.bottom = 'auto';
+        canvas.style.right = 'auto';
+    };
+
+    // 結束拖曳
+    const onUp = () => {
+        isDragging = false;
+        // 如果沒有發生實際移動 (只是點擊)，這裡不需要做特別處理
+        // Pixi 的 pointerdown 會處理模型的互動
+    };
+
+    // 滑鼠事件
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    // 觸控事件
+    canvas.addEventListener('touchstart', onDown, { passive: false });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
+}
+
+
 
 
 // 全域變數：記錄當天(或本次會話) API 循環失敗的次數
@@ -20879,17 +21076,6 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Live2D 畫布容器 -->
 <canvas id="live2d-canvas"></canvas>
 
-<!-- 貓咪呼喚按鈕 (SVG 圖案) -->
-<button id="live2d-toggle-btn" class="morandi-float-btn" onclick="toggleLive2D()" title="呼喚貓咪">
-    <!-- SVG 貓咪圖示 -->
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="currentColor" fill-opacity="0.1"/>
-        <path d="M8.5 8C9.32843 8 10 7.32843 10 6.5C10 5.67157 9.32843 5 8.5 5C7.67157 5 7 5.67157 7 6.5C7 7.32843 7.67157 8 8.5 8Z" fill="currentColor"/>
-        <path d="M15.5 8C16.3284 8 17 7.32843 17 6.5C17 5.67157 16.3284 5 15.5 5C14.6716 5 14 5.67157 14 6.5C14 7.32843 14.6716 8 15.5 8Z" fill="currentColor"/>
-        <path d="M12 18C14.5 18 16.5 16 16.5 13.5H7.5C7.5 16 9.5 18 12 18Z" fill="currentColor"/>
-        <path d="M12 13.5L9 10.5M12 13.5L15 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
-</button>
 
 
 
