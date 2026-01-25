@@ -7245,6 +7245,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSmartInteraction();
 });
 
+
 // 2. 選擇模式
 async function selectCatMode(mode, save = true) {
     if (save) {
@@ -7285,6 +7286,38 @@ async function selectCatMode(mode, save = true) {
         console.error("模型載入失敗:", err);
     }
 }
+
+// ==========================================
+// === 補回：貓咪選單 UI 控制函式 ===
+// ==========================================
+
+// 打開貓咪選擇視窗
+function openCatMenu() {
+    // 1. 先收起側邊選單 (如果有打開)
+    const sideMenu = document.getElementById('sideMenu');
+    if (sideMenu) {
+        sideMenu.classList.remove('active');
+        document.getElementById('sideMenuToggle').classList.remove('active');
+    }
+    
+    // 2. 顯示貓咪選擇視窗
+    const modal = document.getElementById('catSelectionModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    } else {
+        console.error("找不到 ID 為 catSelectionModal 的元素");
+    }
+}
+
+// 關閉貓咪選擇視窗 (點擊背景關閉)
+function closeCatMenu(event) {
+    if (event.target.id === 'catSelectionModal') {
+        document.getElementById('catSelectionModal').style.display = 'none';
+    }
+}
+
+
+	
 
 // 3. 初始化 Pixi (背景透明)
 async function initLive2DApp() {
