@@ -7222,16 +7222,12 @@ read-mode-container {
 <script>
 
 
-// --- Live2D 整合邏輯 ---
-
-/// --- Live2D 整合邏輯 (進階版：拖曳、切換、記憶) ---
-
 // =======================================================
-// === Live2D 貓咪系統 (全螢幕穿透 + 手機拖曳修復版) ===
+// === Live2D 貓咪系統 (群組控制 + 雙擊互動版) ===
 // =======================================================
 
 let app;
-let currentModel = null; // 追蹤當前模型實例
+let modelContainer; // ★ 關鍵：用一個容器來裝所有的貓
 const CANVAS_ID = 'live2d-canvas';
 
 // 設定模型路徑
@@ -7246,11 +7242,28 @@ document.addEventListener('DOMContentLoaded', () => {
             selectCatMode(savedMode, false);
         }, 1000);
     }
-    // 啟動智慧互動偵測 (解決遮擋問題)
     initSmartInteraction();
 });
 
-// 2. 選擇模式
+// 2. 初始化 Pixi (建立容器)
+async function initLive2DApp() {
+    const canvas = document.getElementById(CANVAS_ID);
+    if (app) return;
+
+    app = new PIXI.Application({
+        view: canvas,
+        autoStart: true,
+        backgroundAlpha: 0,
+        resizeTo: window,
+        resolution: window.devicePixelRatio || 1,
+    });
+
+    // ★ 建立一個容器，之後所有的貓都放在這裡面
+    modelContainer = new PIXI.Container();
+    app.stage.addChild(modelContainer);
+}
+
+// 3. 選擇模式 (載入到容器中)
 async function selectCatMode(mode, save = true) {
     if (save) {
         localStorage.setItem('sansi_cat_mode', mode);
@@ -7261,32 +7274,32 @@ async function selectCatMode(mode, save = true) {
     const canvas = document.getElementById(CANVAS_ID);
     
     if (mode === 'none') {
-        if (canvas) canvas.style.display = 'none';
-        if (app && app.stage) app.stage.removeChildren();
-        currentModel = null;
+        canvas.style.display = 'none';
+        if (modelContainer) modelContainer.removeChildren();
         return;
     }
 
     await initLive2DApp();
     canvas.style.display = 'block';
     
-    // 清空舊模型
-    app.stage.removeChildren();
-    currentModel = null;
+    // 清空容器
+    modelContainer.removeChildren();
+    
+    // 重置容器位置與縮放 (預設在畫面右下)
+    modelContainer.scale.set(1);
+    modelContainer.x = window.innerWidth * 0.6; 
+    modelContainer.y = window.innerHeight * 0.5;
 
     try {
-        // 載入模型 (全螢幕模式下，位置需依螢幕比例動態調整)
-        // 預設位置：螢幕右下角
-        const defaultX = window.innerWidth * 0.7; // 螢幕寬度 70% 處
-        const defaultY = window.innerHeight * 0.5; // 螢幕高度 50% 處
-
+        // ★ 載入模型並加入容器 (座標是相對於容器的)
         if (mode === 'hijiki') {
-            await loadAndSetupModel(MODEL_PATH_HIJIKI, 0.15, defaultX, defaultY); 
+            await loadModelToContainer(MODEL_PATH_HIJIKI, 0.15, 0, 0); 
         } else if (mode === 'tororo') {
-            await loadAndSetupModel(MODEL_PATH_TORORO, 0.15, defaultX, defaultY);
+            await loadModelToContainer(MODEL_PATH_TORORO, 0.15, 0, 0);
         } else if (mode === 'both') {
-            await loadAndSetupModel(MODEL_PATH_HIJIKI, 0.13, defaultX - 80, defaultY);
-            await loadAndSetupModel(MODEL_PATH_TORORO, 0.13, defaultX + 80, defaultY);
+            // 兩隻貓並排：一隻左(-80) 一隻右(+80)
+            await loadModelToContainer(MODEL_PATH_HIJIKI, 0.13, -80, 0);
+            await loadModelToContainer(MODEL_PATH_TORORO, 0.13, 80, 0);
         }
         console.log(`已切換至模式: ${mode}`);
     } catch (err) {
@@ -7294,188 +7307,107 @@ async function selectCatMode(mode, save = true) {
     }
 }
 
+// 輔助：載入單一模型到容器
+async function loadModelToContainer(path, scale, x, y) {
+    const model = await PIXI.live2d.Live2DModel.from(path);
+    model.scale.set(scale);
+    model.x = x;
+    model.y = y;
+    model.interactive = true; // 讓模型本身可以被偵測
+    modelContainer.addChild(model);
+}
+
 // ==========================================
 // === 補回：貓咪選單 UI 控制函式 ===
 // ==========================================
-
-// 打開貓咪選擇視窗
 function openCatMenu() {
-    // 1. 先收起側邊選單 (如果有打開)
     const sideMenu = document.getElementById('sideMenu');
     if (sideMenu) {
         sideMenu.classList.remove('active');
         document.getElementById('sideMenuToggle').classList.remove('active');
     }
-    
-    // 2. 顯示貓咪選擇視窗
     const modal = document.getElementById('catSelectionModal');
-    if (modal) {
-        modal.style.display = 'flex';
-    } else {
-        console.error("找不到 ID 為 catSelectionModal 的元素");
-    }
+    if (modal) modal.style.display = 'flex';
 }
 
-// 關閉貓咪選擇視窗 (點擊背景關閉)
 function closeCatMenu(event) {
     if (event.target.id === 'catSelectionModal') {
         document.getElementById('catSelectionModal').style.display = 'none';
     }
 }
 
-// 1. 初始化 Pixi (改為全螢幕)
-async function initLive2DApp() {
-    const canvas = document.getElementById(CANVAS_ID);
-    if (app) return;
-
-    app = new PIXI.Application({
-        view: canvas,
-        autoStart: true,
-        backgroundAlpha: 0, // 透明背景
-        resizeTo: window,   // ★ 關鍵：畫布自動跟隨視窗大小，解決被切掉的問題
-        resolution: window.devicePixelRatio || 1,
-    });
-}
-
-// 載入模型 (移除舊的點擊綁定)
-async function loadAndSetupModel(path, scale, x, y) {
-    const model = await PIXI.live2d.Live2DModel.from(path);
-    app.stage.addChild(model);
-    currentModel = model;
-
-    model.scale.set(scale);
-    model.x = x;
-    model.y = y;
-    
-    // 開啟互動 (讓 containsPoint 能夠運作)
-    model.interactive = true;
-    
-    // ★ 關鍵修改：這裡移除了原本的 'pointerdown' 監聽器 ★
-    // 因為我們已經把點擊邏輯移到了 initSmartInteraction 的 onEnd 裡面了
-    // 這樣才不會跟拖曳衝突。
-    
-    console.log("模型載入成功:", path);
-}
-
-// 輔助：播放動作 (針對檔案結構優化)
-function playRandomMotion(model) {
-    if (!model || !model.internalModel || !model.internalModel.motionManager) {
-        console.warn("無法獲取動作管理器");
-        return;
-    }
-
-    const motionMgr = model.internalModel.motionManager;
-    
-    // 獲取所有動作群組
-    const definitions = motionMgr.definitions;
-    const groups = Object.keys(definitions);
-    
-    // console.log("可用動作群組:", groups); // 除錯用
-
-    if (groups.length === 0) return;
-
-    // ★ 智慧篩選邏輯 ★
-    // 1. 我們不想點擊後只是播放 "Idle" (00_idle.motion3)，因為那看起來像沒反應
-    // 2. 我們優先找 "Tap", "TapBody" 或者除了 "Idle" 以外的群組
-    let targetGroups = groups.filter(g => 
-        !g.toLowerCase().includes('idle') &&  // 排除 idle
-        !g.toLowerCase().includes('loop')     // 排除 loop
-    );
-
-    // 如果篩選完沒東西了 (例如只有 Idle)，那就只好從全部裡面選
-    if (targetGroups.length === 0) {
-        targetGroups = groups;
-    }
-
-    // 隨機選一個群組
-    const randomGroup = targetGroups[Math.floor(Math.random() * targetGroups.length)];
-    
-    console.log("執行動作:", randomGroup);
-    
-    // 強制播放 (第二個參數 priority = 3，確保權重最高，打斷當前動作)
-    motionMgr.startRandomMotion(randomGroup, 3);
-}
-
 // =======================================================
-// === 解決問題一 & 二 & 拖曳修復：智慧互動與縮放 ===
+// === 核心互動邏輯 (群組操作 + 雙擊判定) ===
 // =======================================================
 
-// 2. 初始化互動 (手機/電腦 雙核心邏輯)
 function initSmartInteraction() {
     const canvas = document.getElementById(CANVAS_ID);
     
-    // 狀態變數
+    // 操作變數
     let initialDistance = 0;
     let initialScale = 1;
-    
-    // 判定點擊 vs 拖曳的變數
-    let isPressing = false;      // 是否按住
-    let isDragging = false;      // 是否正在拖曳 (移動距離超過閾值)
-    let startX, startY;          // 按下時的座標
-    let modelStartX, modelStartY;// 貓咪的原始位置
+    let isPressing = false;
+    let isDragging = false;
+    let startX, startY;
+    let containerStartX, containerStartY;
 
-    // ----------------------------------------------------
-    // A. 電腦版：智慧穿透 (滑鼠移動偵測)
-    // ----------------------------------------------------
+    // ★ 雙擊判定變數
+    let lastTapTime = 0;
+    const DOUBLE_TAP_DELAY = 300; // 300毫秒內點兩下算雙擊
+
+    // 輔助：檢查是否擊中容器內的任何一隻貓
+    function checkHit(x, y) {
+        if (!modelContainer || modelContainer.children.length === 0) return null;
+        // 遍歷容器內的所有貓
+        for (let i = 0; i < modelContainer.children.length; i++) {
+            const cat = modelContainer.children[i];
+            if (cat.containsPoint(new PIXI.Point(x, y))) {
+                return cat; // 回傳被擊中的那隻貓
+            }
+        }
+        return null;
+    }
+
+    // --- A. 智慧穿透 (滑鼠移動) ---
     window.addEventListener('mousemove', (e) => {
-        if (!currentModel || !app) return;
+        if (!modelContainer || !app) return;
 
-        // 如果正在拖曳或按住，強制保持可互動，防止甩飛
         if (isDragging || isPressing) {
             canvas.classList.add('interactive');
-            return; 
+            return;
         }
 
-        // 計算滑鼠在 Canvas 內的座標 (全螢幕模式下直接取 clientX/Y)
-        const hit = currentModel.containsPoint(new PIXI.Point(e.clientX, e.clientY));
-
-        if (hit) {
-            canvas.classList.add('interactive'); // 開啟阻擋 -> 可點擊貓
+        const hitCat = checkHit(e.clientX, e.clientY);
+        if (hitCat) {
+            canvas.classList.add('interactive');
         } else {
-            canvas.classList.remove('interactive'); // 關閉阻擋 -> 可點擊背後按鈕
+            canvas.classList.remove('interactive');
         }
     });
 
-    // ----------------------------------------------------
-    // B. 手機版：全域觸控攔截 (解決手機無法 hover 的問題)
-    // ----------------------------------------------------
+    // --- B. 按下 (Start) ---
     const onStart = (x, y) => {
-        // 在手機上，我們需要主動計算點擊位置是否在貓身上
-        // 因為 pointer-events: none 時，canvas 收不到事件
-        let hit = false;
-        
-        // 如果是觸控，手動計算 hit
-        if (typeof x !== 'undefined') {
-             hit = currentModel.containsPoint(new PIXI.Point(x, y));
-        } 
-        // 如果是滑鼠，依賴 classList.contains('interactive') 即可
-        else if (canvas.classList.contains('interactive')) {
-             hit = true;
-             // 滑鼠模式下 x, y 已經傳進來了
-        }
-
-        if (hit && currentModel) {
-            isPressing = true;       // 標記為按住中
-            isDragging = false;      // 尚未開始拖曳 (直到移動)
-            
+        const hitCat = checkHit(x, y);
+        // 手機版需要手動檢查，電腦版依賴 interactive class
+        if (hitCat || canvas.classList.contains('interactive')) {
+            isPressing = true;
+            isDragging = false;
             startX = x;
             startY = y;
-            modelStartX = currentModel.x;
-            modelStartY = currentModel.y;
+            // 記錄容器當前位置
+            containerStartX = modelContainer.x;
+            containerStartY = modelContainer.y;
         }
     };
 
-    // 監聽 window 的 touchstart，因為 canvas 可能穿透
     window.addEventListener('touchstart', (e) => {
-        if (!currentModel || document.getElementById(CANVAS_ID).style.display === 'none') return;
-
+        if (document.getElementById(CANVAS_ID).style.display === 'none') return;
         const touch = e.touches[0];
         
-        // 雙指縮放邏輯
+        // 雙指縮放
         if (e.touches.length === 2) {
-            // 檢查兩指中心是否在貓附近 (選用，這裡簡化為全螢幕縮放貓)
             initialDistance = getDistance(e.touches);
-            initialScale = currentModel.scale.x;
+            initialScale = modelContainer.scale.x;
             e.preventDefault();
         } 
         // 單指操作
@@ -7484,98 +7416,104 @@ function initSmartInteraction() {
         }
     }, { passive: false });
 
-    // 電腦版 mousedown (依賴 interactive class)
     canvas.addEventListener('mousedown', (e) => {
-        if (canvas.classList.contains('interactive')) {
-            onStart(e.clientX, e.clientY);
-        }
+        onStart(e.clientX, e.clientY);
     });
 
-    // ----------------------------------------------------
-    // C. 通用移動邏輯 (處理拖曳與縮放)
-    // ----------------------------------------------------
-    const handleMove = (x, y, touches) => {
-        if (!isPressing || !currentModel) return;
+    // --- C. 移動 (Move) - 拖曳整個容器 ---
+    const onMove = (x, y, touches) => {
+        if (!modelContainer) return;
 
-        // 雙指縮放
+        // 雙指縮放容器
         if (touches && touches.length === 2) {
             const currentDistance = getDistance(touches);
             if (initialDistance > 0) {
                 const scaleFactor = currentDistance / initialDistance;
                 let newScale = initialScale * scaleFactor;
-                newScale = Math.max(0.05, Math.min(newScale, 0.8)); // 限制縮放範圍
-                currentModel.scale.set(newScale);
+                newScale = Math.max(0.2, Math.min(newScale, 2.0)); // 限制縮放
+                modelContainer.scale.set(newScale); // ★ 縮放容器，兩隻貓一起變
             }
             return;
         }
 
+        if (!isPressing) return;
+
         const dx = x - startX;
         const dy = y - startY;
 
-        // ★ 核心邏輯：移動超過 5px 才視為拖曳，否則視為手抖或點擊
         if (!isDragging && Math.sqrt(dx*dx + dy*dy) > 5) {
             isDragging = true;
         }
 
         if (isDragging) {
-            currentModel.x = modelStartX + dx;
-            currentModel.y = modelStartY + dy;
+            // ★ 移動容器，兩隻貓一起動
+            modelContainer.x = containerStartX + dx;
+            modelContainer.y = containerStartY + dy;
         }
     };
 
     window.addEventListener('touchmove', (e) => {
-        if (isPressing) { // 如果按到了貓
-            if (e.cancelable) e.preventDefault(); // 禁止畫面捲動，專心拖貓
-            handleMove(e.touches[0].clientX, e.touches[0].clientY, e.touches);
+        if (isPressing || e.touches.length === 2) {
+            if (e.cancelable) e.preventDefault();
+            onMove(e.touches[0].clientX, e.touches[0].clientY, e.touches);
         }
     }, { passive: false });
 
     window.addEventListener('mousemove', (e) => {
         if (isPressing) {
-            handleMove(e.clientX, e.clientY);
+            onMove(e.clientX, e.clientY);
         }
     });
 
-    // ----------------------------------------------------
-    // D. 放開 (End) - 觸發點擊與特效
-    // ----------------------------------------------------
-    const handleEnd = () => {
-        if (isPressing) {
-            // ★ 如果剛才「沒有」進入拖曳狀態，那就是點擊！
-            if (!isDragging) {
-                console.log("觸發點擊貓咪");
+    // --- D. 放開 (End) - 雙擊判定 ---
+    const onEnd = (e) => {
+        // 如果剛才只是輕按且沒有拖曳 (點擊)
+        if (isPressing && !isDragging) {
+            const currentTime = new Date().getTime();
+            const timeDiff = currentTime - lastTapTime;
+
+            // ★ 雙擊邏輯：如果距離上次點擊小於 300ms
+            if (timeDiff < DOUBLE_TAP_DELAY && timeDiff > 0) {
+                console.log("觸發雙擊！");
                 
-                // 1. 播放動作
-                playRandomMotion(currentModel);
+                // 1. 找出被點的是哪隻貓 (如果是兩隻貓模式)
+                // 由於 touchup 沒有座標，我們用最後記錄的 startX/Y 近似
+                // 或者是對所有貓都播放動作
                 
-                // 2. ★ 觸發 CSS 視覺特效 (解決問題四) ★
+                // 簡單起見：讓所有貓都做動作，或者隨機一隻
+                modelContainer.children.forEach(cat => {
+                    playRandomMotion(cat);
+                });
+
+                // 2. 視覺特效
                 triggerVisualFeedback();
 
                 // 3. 震動
-                if (navigator.vibrate) navigator.vibrate(30);
+                if (navigator.vibrate) navigator.vibrate([30, 50, 30]); // 雙震動
+
+                // 重置時間，防止三連擊觸發兩次
+                lastTapTime = 0; 
+            } else {
+                // 這是第一次點擊，記錄時間
+                lastTapTime = currentTime;
             }
-            isPressing = false;
-            isDragging = false;
         }
+        
+        isPressing = false;
+        isDragging = false;
         initialDistance = 0;
     };
 
-    window.addEventListener('touchend', handleEnd);
-    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('mouseup', onEnd);
 }
 
-// 觸發視覺特效 (Q彈效果)
+// 觸發視覺特效
 function triggerVisualFeedback() {
     const canvas = document.getElementById(CANVAS_ID);
-    // 移除再加入 class 以重置動畫
     canvas.classList.remove('cat-click-effect');
-    
-    // 強制重繪 (Reflow)
-    void canvas.offsetWidth;
-    
+    void canvas.offsetWidth; // 重繪
     canvas.classList.add('cat-click-effect');
-    
-    // 動畫結束後移除 class (這裡設 150ms 配合 CSS transition)
     setTimeout(() => {
         canvas.classList.remove('cat-click-effect');
     }, 150);
@@ -7586,6 +7524,23 @@ function getDistance(touches) {
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.sqrt(dx * dx + dy * dy);
+}
+
+// 輔助：播放動作
+function playRandomMotion(model) {
+    if (!model || !model.internalModel || !model.internalModel.motionManager) return;
+    const motionMgr = model.internalModel.motionManager;
+    const groups = Object.keys(motionMgr.definitions);
+    if (groups.length === 0) return;
+
+    let targetGroups = groups.filter(g => 
+        !g.toLowerCase().includes('idle') && 
+        !g.toLowerCase().includes('loop')
+    );
+    if (targetGroups.length === 0) targetGroups = groups;
+    
+    const randomGroup = targetGroups[Math.floor(Math.random() * targetGroups.length)];
+    motionMgr.startRandomMotion(randomGroup, 3);
 }
 
 // 全域變數：記錄當天(或本次會話) API 循環失敗的次數
@@ -7619,7 +7574,6 @@ function trackApiCycleFailure() {
         globalApiCycleFailures = 0; 
     }
 }
-
 	
 // 頁面載入完成後，為所有 img 加上 lazy loading（包括動態生成的）
 document.addEventListener("DOMContentLoaded", function() {
