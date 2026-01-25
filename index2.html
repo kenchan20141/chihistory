@@ -7069,24 +7069,31 @@ read-mode-container {
 
 	
 /* Live2D 畫布設定 - 可拖曳、層級最高 */
+/* Live2D 畫布設定 */
 #live2d-canvas {
     position: fixed;
-    /* 初始位置 */
-    bottom: 0px; 
-    left: 0px;
-    
-    /* 關鍵修正：加大畫布尺寸，避免貓咪被切頭切尾 */
-    /* 這裡設定的大小是「可視區域」，稍後 JS 會讓它可拖曳 */
+    bottom: 0;
+    left: 0;
+    /* 這裡保持 800 或更大，確保貓咪完整，不會被切頭 */
     width: 800px; 
     height: 800px;
     
-    z-index: 2147483647; /* 確保比 Footer 和所有內容都高 */
-    pointer-events: auto; /* 允許點擊互動和拖曳 */
-    cursor: grab; /* 鼠標提示可拖曳 */
-    display: none; /* 預設由 JS 控制 */
+    /* 層級最高，確保貓咪在最上層 */
+    z-index: 2147483647; 
+    
+    /* ★ 核心修改 1：預設設為 none，讓滑鼠可以穿透畫布點擊後面的按鈕 */
+    pointer-events: none; 
+    
+    display: none; /* 預設由 JS 控制顯示 */
 }
 
-#live2d-canvas:active {
+/* 當 JS 偵測到滑鼠在貓身上時，會加上這個 class */
+#live2d-canvas.interactive {
+    pointer-events: auto !important; /* 恢復可點擊狀態 */
+    cursor: grab;
+}
+
+#live2d-canvas.interactive:active {
     cursor: grabbing;
 }
 
@@ -7215,216 +7222,264 @@ read-mode-container {
 /// --- Live2D 整合邏輯 (進階版：拖曳、切換、記憶) ---
 
 // =======================================================
-// === Live2D 貓咪系統 (完整修復版) ===
+// === Live2D 貓咪系統 (智慧互動修復版 V2.0) ===
 // =======================================================
 
 let app;
-let models = {}; // 儲存已載入的模型實例
+let currentModel = null; // 追蹤當前模型實例
+const CANVAS_ID = 'live2d-canvas';
 
 // 設定模型路徑
 const MODEL_PATH_HIJIKI = 'live2d/hijiki/runtime/hijiki.model3.json';
 const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
 
-// 1. 頁面載入時：讀取記憶並初始化
+// 1. 初始化與讀取記憶
 document.addEventListener('DOMContentLoaded', () => {
-    // 讀取上次的選擇
     const savedMode = localStorage.getItem('sansi_cat_mode');
-    
-    // 如果有紀錄且不是 'none'，則自動載入
     if (savedMode && savedMode !== 'none') {
-        // 延遲一點點執行，確保頁面元素都 ready
         setTimeout(() => {
-            selectCatMode(savedMode, false); // false = 不需重複寫入 storage
+            selectCatMode(savedMode, false);
         }, 1000);
     }
-    
-    // 初始化拖曳功能
-    makeCanvasDraggable();
+    // 啟動智慧互動偵測 (解決遮擋問題)
+    initSmartInteraction();
 });
 
-// 2. 打開/關閉 選擇視窗
-function openCatMenu() {
-    // 關閉側邊欄
-    const sideMenu = document.getElementById('sideMenu');
-    if (sideMenu) {
-        sideMenu.classList.remove('active');
-        document.getElementById('sideMenuToggle').classList.remove('active');
+// 2. 選擇模式
+async function selectCatMode(mode, save = true) {
+    if (save) {
+        localStorage.setItem('sansi_cat_mode', mode);
+        const menu = document.getElementById('catSelectionModal');
+        if (menu) menu.style.display = 'none';
     }
-    // 顯示選擇視窗
-    document.getElementById('catSelectionModal').style.display = 'flex';
+
+    const canvas = document.getElementById(CANVAS_ID);
+    
+    if (mode === 'none') {
+        if (canvas) canvas.style.display = 'none';
+        if (app && app.stage) app.stage.removeChildren();
+        currentModel = null;
+        return;
+    }
+
+    await initLive2DApp();
+    canvas.style.display = 'block';
+    
+    // 清空舊模型
+    app.stage.removeChildren();
+    currentModel = null;
+
+    try {
+        // 載入模型 (座標針對 800x800 畫布優化)
+        // x, y 為畫布中心點附近的起始位置
+        if (mode === 'hijiki') {
+            await loadAndSetupModel(MODEL_PATH_HIJIKI, 0.15, 150, 400); 
+        } else if (mode === 'tororo') {
+            await loadAndSetupModel(MODEL_PATH_TORORO, 0.15, 150, 400);
+        } else if (mode === 'both') {
+            await loadAndSetupModel(MODEL_PATH_HIJIKI, 0.13, 50, 450);
+            await loadAndSetupModel(MODEL_PATH_TORORO, 0.13, 250, 450);
+        }
+        console.log(`已切換至模式: ${mode}`);
+    } catch (err) {
+        console.error("模型載入失敗:", err);
+    }
 }
 
-function closeCatMenu(event) {
-    if (event.target.id === 'catSelectionModal') {
-        document.getElementById('catSelectionModal').style.display = 'none';
-    }
-}
-
-// 3. 初始化 Pixi 應用 (只執行一次)
+// 3. 初始化 Pixi (背景透明)
 async function initLive2DApp() {
-    const canvas = document.getElementById('live2d-canvas');
-    if (!canvas || app) return;
+    const canvas = document.getElementById(CANVAS_ID);
+    if (app) return;
 
-    // 建立 Pixi Application
     app = new PIXI.Application({
         view: canvas,
         autoStart: true,
         backgroundAlpha: 0, // 透明背景
-        width: 800,         // ★ 關鍵：畫布寬度設大一點
-        height: 800,        // ★ 關鍵：畫布高度設大一點
+        width: 800,
+        height: 800,
         resolution: window.devicePixelRatio || 1,
     });
-    
-    // 確保 Canvas 顯示
-    canvas.style.display = 'block';
 }
 
-// 4. 選擇模式並載入模型 (核心邏輯)
-async function selectCatMode(mode, save = true) {
-    if (save) {
-        localStorage.setItem('sansi_cat_mode', mode);
-        document.getElementById('catSelectionModal').style.display = 'none';
-    }
-
-    const canvas = document.getElementById('live2d-canvas');
-    
-    // 模式：隱藏
-    if (mode === 'none') {
-        if (canvas) canvas.style.display = 'none';
-        if (app && app.stage) app.stage.removeChildren();
-        return;
-    }
-
-    // 確保 App 已初始化
-    await initLive2DApp();
-    canvas.style.display = 'block';
-    
-    // 清空舞台 (移除舊貓)
-    app.stage.removeChildren();
-    models = {}; 
-
-    try {
-        // ★ 座標調整說明：
-        // Canvas 大小是 400x400。
-        // x=200, y=200 是正中心。
-        // scale=0.18 是縮放比例。
-        // 如果只剩耳朵，通常是因為 y 太大 (跑到下面去了) 或 x 太偏。
-        // 這裡將 y 設為 250~300 左右，讓貓站在底部。
-
-        if (mode === 'hijiki') {
-            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.18, 200, 220);
-        } else if (mode === 'tororo') {
-            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.18, 200, 220);
-        } else if (mode === 'both') {
-            // 兩隻貓並排：調整 X 座標 (左邊一隻，右邊一隻)
-            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.15, 120, 240);
-            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.15, 280, 240);
-        }
-        
-        // 載入成功提示 (可選)
-        if(save) console.log(`已切換至模式: ${mode}`);
-
-    } catch (err) {
-        console.error("模型載入失敗:", err);
-        // 如果載入失敗，嘗試重置
-        localStorage.removeItem('sansi_cat_mode');
-    }
-}
-
-// 5. 載入單一模型並綁定互動
-async function loadAndSetupModel(path, name, scale, x, y) {
+// 4. 載入模型與綁定動作 (解決點擊無反應問題)
+async function loadAndSetupModel(path, scale, x, y) {
     const model = await PIXI.live2d.Live2DModel.from(path);
     app.stage.addChild(model);
     
-    // 設定位置與大小
+    // 儲存引用以便後續縮放
+    currentModel = model;
+
+    // 設定初始大小與位置
     model.scale.set(scale);
     model.x = x;
     model.y = y;
     
-    // 啟用互動
+    // 開啟互動
     model.interactive = true;
-    model.buttonMode = true; // 滑鼠變手型
-    
-    // 綁定點擊事件
+    model.buttonMode = true;
+
+    // ★ 解決問題三：強制綁定點擊事件 ★
+    // 我們不依賴 HitArea，而是直接綁定整個模型的點擊
     model.on('pointerdown', (e) => {
-        // 播放隨機動作 (TapBody 是標準動作名稱)
-        model.motion('TapBody');
+        // 1. 播放動作
+        playRandomMotion(model);
         
-        // 震動回饋
+        // 2. 震動回饋
         if (navigator.vibrate) navigator.vibrate(20);
         
-        // 可以在這裡加入音效
+        // 3. (選用) 播放音效
         // const audio = new Audio('meow.mp3'); audio.play();
+        
+        console.log("貓咪被點擊！");
+    });
+}
+
+// ★ 輔助：強制播放隨機動作 ★
+function playRandomMotion(model) {
+    // 獲取內部動作管理器
+    const motionMgr = model.internalModel.motionManager;
+    
+    // 獲取所有定義的動作群組名稱 (通常是 'TapBody', 'Idle', '00', '01' 等)
+    const definitions = motionMgr.definitions;
+    const groups = Object.keys(definitions);
+    
+    if (groups.length > 0) {
+        // 隨機選一個群組
+        const randomGroup = groups[Math.floor(Math.random() * groups.length)];
+        // 播放該群組
+        console.log("播放動作群組:", randomGroup);
+        motionMgr.startRandomMotion(randomGroup);
+    } else {
+        console.warn("未發現動作定義");
+    }
+}
+
+// =======================================================
+// === 解決問題一 & 二：智慧互動與縮放 ===
+// =======================================================
+
+function initSmartInteraction() {
+    const canvas = document.getElementById(CANVAS_ID);
+    
+    // --- A. 解決遮擋：智慧穿透邏輯 ---
+    // 監聽全局滑鼠移動
+    window.addEventListener('mousemove', (e) => {
+        if (!currentModel || !app) return;
+
+        // 計算滑鼠在 Canvas 內的座標
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // 檢查是否「擊中」了貓咪的模型範圍
+        // containsPoint 是 PixiJS 的方法，會計算縮放和位置
+        const hit = currentModel.containsPoint(new PIXI.Point(x, y));
+
+        if (hit) {
+            // 如果摸到貓，讓 Canvas 可點擊 (啟用互動)
+            canvas.classList.add('interactive');
+        } else {
+            // 如果摸到空白處，讓 Canvas 穿透 (可以點後面的按鈕)
+            canvas.classList.remove('interactive');
+        }
     });
 
-    models[name] = model;
-}
-
-// 6. 實作全螢幕拖曳功能 (手機/電腦通用)
-function makeCanvasDraggable() {
-    const canvas = document.getElementById('live2d-canvas');
-    if (!canvas) return;
-
+    // --- B. 解決縮放：雙指觸控 (Pinch to Zoom) ---
+    // 同時整合了單指拖曳
+    let initialDistance = 0;
+    let initialScale = 1;
     let isDragging = false;
-    let startX, startY, initialLeft, initialTop;
+    let dragStartX, dragStartY;
+    let modelStartX, modelStartY;
 
-    // 開始拖曳
-    const onDown = (e) => {
-        // 判斷是否為點擊模型本身 (Pixi 會處理 pointerdown)，還是點擊 Canvas 空白處
-        // 這裡我們簡單處理：點擊 Canvas 就視為拖曳準備
-        isDragging = true;
-        
-        const clientX = e.clientX || e.touches[0].clientX;
-        const clientY = e.clientY || e.touches[0].clientY;
+    // 觸控開始
+    canvas.addEventListener('touchstart', (e) => {
+        if (!currentModel) return;
 
-        startX = clientX;
-        startY = clientY;
+        // 1. 雙指：縮放模式
+        if (e.touches.length === 2) {
+            initialDistance = getDistance(e.touches);
+            initialScale = currentModel.scale.x;
+            e.preventDefault(); // 防止頁面縮放
+        } 
+        // 2. 單指：拖曳模式
+        else if (e.touches.length === 1) {
+            // 檢查是否點到貓 (只允許拖曳貓，不允許拖曳空白處)
+            // 這裡簡單處理：只要 Canvas 是 interactive 狀態就允許拖
+            if (canvas.classList.contains('interactive')) {
+                isDragging = true;
+                dragStartX = e.touches[0].clientX;
+                dragStartY = e.touches[0].clientY;
+                modelStartX = currentModel.x;
+                modelStartY = currentModel.y;
+            }
+        }
+    }, { passive: false });
 
-        const rect = canvas.getBoundingClientRect();
-        initialLeft = rect.left;
-        initialTop = rect.top;
+    // 觸控移動
+    canvas.addEventListener('touchmove', (e) => {
+        if (!currentModel) return;
 
-        // 如果是滑鼠，防止文字選取
-        if (e.type === 'mousedown') e.preventDefault();
-    };
+        // 1. 雙指縮放
+        if (e.touches.length === 2) {
+            const currentDistance = getDistance(e.touches);
+            if (initialDistance > 0) {
+                const scaleFactor = currentDistance / initialDistance;
+                // 限制縮放範圍 (0.05 ~ 0.5)
+                let newScale = initialScale * scaleFactor;
+                newScale = Math.max(0.05, Math.min(newScale, 0.5));
+                
+                currentModel.scale.set(newScale);
+            }
+            e.preventDefault();
+        } 
+        // 2. 單指拖曳
+        else if (e.touches.length === 1 && isDragging) {
+            const dx = e.touches[0].clientX - dragStartX;
+            const dy = e.touches[0].clientY - dragStartY;
+            currentModel.x = modelStartX + dx;
+            currentModel.y = modelStartY + dy;
+            e.preventDefault();
+        }
+    }, { passive: false });
 
-    // 拖曳中
-    const onMove = (e) => {
-        if (!isDragging) return;
-
-        const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-        const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
-
-        const dx = clientX - startX;
-        const dy = clientY - startY;
-
-        // 設定新位置
-        canvas.style.left = `${initialLeft + dx}px`;
-        canvas.style.top = `${initialTop + dy}px`;
-        
-        // 移除 bottom/right 屬性，確保 left/top 生效
-        canvas.style.bottom = 'auto';
-        canvas.style.right = 'auto';
-        
-        // 防止手機捲動頁面
-        if (e.type === 'touchmove') e.preventDefault();
-    };
-
-    // 結束拖曳
-    const onUp = () => {
+    // 觸控結束
+    canvas.addEventListener('touchend', () => {
         isDragging = false;
-    };
+        initialDistance = 0;
+    });
 
-    // 綁定事件
-    canvas.addEventListener('mousedown', onDown);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    // --- C. 電腦版滑鼠拖曳 (保留) ---
+    canvas.addEventListener('mousedown', (e) => {
+        if (canvas.classList.contains('interactive')) {
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            modelStartX = currentModel.x;
+            modelStartY = currentModel.y;
+        }
+    });
 
-    canvas.addEventListener('touchstart', onDown, { passive: false });
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onUp);
+    window.addEventListener('mousemove', (e) => {
+        if (isDragging && currentModel) {
+            const dx = e.clientX - dragStartX;
+            const dy = e.clientY - dragStartY;
+            currentModel.x = modelStartX + dx;
+            currentModel.y = modelStartY + dy;
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
 }
 
+// 計算兩指距離的輔助函式
+function getDistance(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
 
 
 // 全域變數：記錄當天(或本次會話) API 循環失敗的次數
