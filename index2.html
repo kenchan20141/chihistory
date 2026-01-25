@@ -208,12 +208,9 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     </button>
 
 
-<!-- 分隔線 (選用) -->
+<!-- 側邊選單底部：貓咪按鈕 -->
 <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 5px 10px;"></div>
-
-<!-- 貓咪主按鈕 -->
-<button class="side-menu-item" onclick="toggleCatSubMenu()" title="呼喚貓咪">
-    <!-- 原本的 SVG 貓咪圖示 -->
+<button class="side-menu-item" onclick="openCatMenu()" title="呼喚貓咪">
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;">
         <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="currentColor" fill-opacity="0.1"/>
         <path d="M8.5 8C9.32843 8 10 7.32843 10 6.5C10 5.67157 9.32843 5 8.5 5C7.67157 5 7 5.67157 7 6.5C7 7.32843 7.67157 8 8.5 8Z" fill="currentColor"/>
@@ -221,28 +218,9 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
         <path d="M12 18C14.5 18 16.5 16 16.5 13.5H7.5C7.5 16 9.5 18 12 18Z" fill="currentColor"/>
         <path d="M12 13.5L9 10.5M12 13.5L15 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
-    <span>Live2D</span> <!-- 側邊欄展開時顯示文字，未展開時隱藏 -->
+    <span>Live2D</span>
 </button>
 
-<!-- 貓咪選擇子菜單 (預設隱藏) -->
-<div id="cat-sub-menu" class="cat-sub-menu" style="display: none;">
-    <!-- 選項：關閉 (空) -->
-    <div class="cat-option" onclick="selectCatMode('none')" title="隱藏">
-        <i class="fas fa-ban"></i>
-    </div>
-    <!-- 選項：黑貓 (Hijiki) -->
-    <div class="cat-option" onclick="selectCatMode('hijiki')" title="黑貓">
-        <div class="cat-icon-preview" style="background-color: #333;"></div>
-    </div>
-    <!-- 選項：白貓 (Tororo) -->
-    <div class="cat-option" onclick="selectCatMode('tororo')" title="白貓">
-        <div class="cat-icon-preview" style="background-color: #f0f0f0; border: 1px solid #ccc;"></div>
-    </div>
-    <!-- 選項：兩隻 (Both) -->
-    <div class="cat-option" onclick="selectCatMode('both')" title="一起">
-        <div class="cat-icon-preview" style="background: linear-gradient(135deg, #333 50%, #f0f0f0 50%);"></div>
-    </div>
-</div>
 
 
 
@@ -7090,18 +7068,35 @@ read-mode-container {
 }
 
 	
-/* Live2D 畫布設定 */
+/* Live2D 畫布設定 - 可拖曳、層級最高 */
 #live2d-canvas {
     position: fixed;
-    bottom: 0;
-    left: 20px; /* 放在左下角 */
-    z-index: 15000; /* 確保在大多數內容之上，但在 Modal 之下 */
-    pointer-events: auto; /* 允許點擊互動 */
-    width: 300px; /* 初始寬度，JS會控制 */
-    height: 300px;
-    display: none; /* 預設隱藏，點擊按鈕才出現 */
+    /* 初始位置 */
+    bottom: 0px; 
+    left: 0px;
+    
+    /* 關鍵修正：加大畫布尺寸，避免貓咪被切頭切尾 */
+    /* 這裡設定的大小是「可視區域」，稍後 JS 會讓它可拖曳 */
+    width: 400px; 
+    height: 400px;
+    
+    z-index: 2147483647; /* 確保比 Footer 和所有內容都高 */
+    pointer-events: auto; /* 允許點擊互動和拖曳 */
+    cursor: grab; /* 鼠標提示可拖曳 */
+    display: none; /* 預設由 JS 控制 */
 }
 
+#live2d-canvas:active {
+    cursor: grabbing;
+}
+
+/* 確保選擇視窗的 ICON 大小一致 */
+.report-option-icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+	
 /* 莫蘭迪 SVG 按鈕樣式 */
 .morandi-float-btn {
     position: fixed;
@@ -7219,67 +7214,76 @@ read-mode-container {
 
 /// --- Live2D 整合邏輯 (進階版：拖曳、切換、記憶) ---
 
+// =======================================================
+// === Live2D 貓咪系統 (完整修復版) ===
+// =======================================================
+
 let app;
-let currentModelDrag = null; // 用於拖曳計算
 let models = {}; // 儲存已載入的模型實例
 
 // 設定模型路徑
 const MODEL_PATH_HIJIKI = 'live2d/hijiki/runtime/hijiki.model3.json';
 const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
 
-// 頁面載入時檢查紀錄
+// 1. 頁面載入時：讀取記憶並初始化
 document.addEventListener('DOMContentLoaded', () => {
+    // 讀取上次的選擇
     const savedMode = localStorage.getItem('sansi_cat_mode');
+    
+    // 如果有紀錄且不是 'none'，則自動載入
     if (savedMode && savedMode !== 'none') {
-        selectCatMode(savedMode, false); // false 代表不需額外儲存，純讀取
+        // 延遲一點點執行，確保頁面元素都 ready
+        setTimeout(() => {
+            selectCatMode(savedMode, false); // false = 不需重複寫入 storage
+        }, 1000);
     }
     
     // 初始化拖曳功能
     makeCanvasDraggable();
 });
 
-// 1. 初始化 Pixi 應用
+// 2. 打開/關閉 選擇視窗
+function openCatMenu() {
+    // 關閉側邊欄
+    const sideMenu = document.getElementById('sideMenu');
+    if (sideMenu) {
+        sideMenu.classList.remove('active');
+        document.getElementById('sideMenuToggle').classList.remove('active');
+    }
+    // 顯示選擇視窗
+    document.getElementById('catSelectionModal').style.display = 'flex';
+}
+
+function closeCatMenu(event) {
+    if (event.target.id === 'catSelectionModal') {
+        document.getElementById('catSelectionModal').style.display = 'none';
+    }
+}
+
+// 3. 初始化 Pixi 應用 (只執行一次)
 async function initLive2DApp() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas || app) return;
 
+    // 建立 Pixi Application
     app = new PIXI.Application({
         view: canvas,
         autoStart: true,
-        backgroundAlpha: 0,
-        width: 350,
-        height: 300, // 調整高度以容納兩隻貓
+        backgroundAlpha: 0, // 透明背景
+        width: 400,         // ★ 關鍵：畫布寬度設大一點
+        height: 400,        // ★ 關鍵：畫布高度設大一點
         resolution: window.devicePixelRatio || 1,
     });
     
-    // 確保點擊畫布不會穿透 (方便拖曳)
+    // 確保 Canvas 顯示
     canvas.style.display = 'block';
 }
 
-// 2. 切換子選單顯示
-function toggleCatSubMenu() {
-    const menu = document.getElementById('cat-sub-menu');
-    if (menu.style.display === 'none') {
-        menu.style.display = 'flex';
-    } else {
-        menu.style.display = 'none';
-    }
-}
-
-// 3. 選擇貓咪模式 (核心邏輯)
+// 4. 選擇模式並載入模型 (核心邏輯)
 async function selectCatMode(mode, save = true) {
     if (save) {
         localStorage.setItem('sansi_cat_mode', mode);
-        // 如果是使用者主動點擊，選完後收起選單和側邊欄
-        document.getElementById('cat-sub-menu').style.display = 'none';
-        
-        // 可選：關閉側邊欄 (視您需求開啟)
-        /*
-        const sideMenu = document.getElementById('sideMenu');
-        const sideMenuToggle = document.getElementById('sideMenuToggle');
-        if (sideMenu) sideMenu.classList.remove('active');
-        if (sideMenuToggle) sideMenuToggle.classList.remove('active');
-        */
+        document.getElementById('catSelectionModal').style.display = 'none';
     }
 
     const canvas = document.getElementById('live2d-canvas');
@@ -7295,30 +7299,44 @@ async function selectCatMode(mode, save = true) {
     await initLive2DApp();
     canvas.style.display = 'block';
     
-    // 清空舞台
+    // 清空舞台 (移除舊貓)
     app.stage.removeChildren();
-    models = {}; // 重置
+    models = {}; 
 
     try {
+        // ★ 座標調整說明：
+        // Canvas 大小是 400x400。
+        // x=200, y=200 是正中心。
+        // scale=0.18 是縮放比例。
+        // 如果只剩耳朵，通常是因為 y 太大 (跑到下面去了) 或 x 太偏。
+        // 這裡將 y 設為 250~300 左右，讓貓站在底部。
+
         if (mode === 'hijiki') {
-            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.22, 175, 150);
+            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.18, 200, 220);
         } else if (mode === 'tororo') {
-            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.22, 175, 150);
+            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.18, 200, 220);
         } else if (mode === 'both') {
-            // 兩隻貓並排：調整 X 座標
-            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.18, 100, 160);
-            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.18, 250, 160);
+            // 兩隻貓並排：調整 X 座標 (左邊一隻，右邊一隻)
+            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.15, 120, 240);
+            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.15, 280, 240);
         }
+        
+        // 載入成功提示 (可選)
+        if(save) console.log(`已切換至模式: ${mode}`);
+
     } catch (err) {
         console.error("模型載入失敗:", err);
+        // 如果載入失敗，嘗試重置
+        localStorage.removeItem('sansi_cat_mode');
     }
 }
 
-// 4. 載入並設定單一模型
+// 5. 載入單一模型並綁定互動
 async function loadAndSetupModel(path, name, scale, x, y) {
     const model = await PIXI.live2d.Live2DModel.from(path);
     app.stage.addChild(model);
     
+    // 設定位置與大小
     model.scale.set(scale);
     model.x = x;
     model.y = y;
@@ -7327,36 +7345,34 @@ async function loadAndSetupModel(path, name, scale, x, y) {
     model.interactive = true;
     model.buttonMode = true; // 滑鼠變手型
     
-    // 點擊互動：播放動作 + 震動
+    // 綁定點擊事件
     model.on('pointerdown', (e) => {
-        // 阻止冒泡，避免與拖曳衝突 (視情況調整)
-        // e.stopPropagation(); 
-        
+        // 播放隨機動作 (TapBody 是標準動作名稱)
         model.motion('TapBody');
+        
+        // 震動回饋
         if (navigator.vibrate) navigator.vibrate(20);
         
-        // 隨機播放一點音效或表情 (若有)
-        // model.expression('GameWin'); 
+        // 可以在這裡加入音效
+        // const audio = new Audio('meow.mp3'); audio.play();
     });
 
     models[name] = model;
 }
 
-// 5. 實作畫布全螢幕拖曳功能
+// 6. 實作全螢幕拖曳功能 (手機/電腦通用)
 function makeCanvasDraggable() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas) return;
 
     let isDragging = false;
     let startX, startY, initialLeft, initialTop;
-    // 判斷是否為「點擊」(未移動)
-    let hasMoved = false; 
 
     // 開始拖曳
     const onDown = (e) => {
-        // 只有點擊畫布本身才觸發拖曳 (模型內部的點擊事件由 Pixi 處理，但我們可以讓整個畫布一起動)
+        // 判斷是否為點擊模型本身 (Pixi 會處理 pointerdown)，還是點擊 Canvas 空白處
+        // 這裡我們簡單處理：點擊 Canvas 就視為拖曳準備
         isDragging = true;
-        hasMoved = false;
         
         const clientX = e.clientX || e.touches[0].clientX;
         const clientY = e.clientY || e.touches[0].clientY;
@@ -7368,8 +7384,8 @@ function makeCanvasDraggable() {
         initialLeft = rect.left;
         initialTop = rect.top;
 
-        // 防止文字選取
-        e.preventDefault();
+        // 如果是滑鼠，防止文字選取
+        if (e.type === 'mousedown') e.preventDefault();
     };
 
     // 拖曳中
@@ -7382,36 +7398,32 @@ function makeCanvasDraggable() {
         const dx = clientX - startX;
         const dy = clientY - startY;
 
-        // 如果移動超過一點點距離，標記為已移動
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-            hasMoved = true;
-        }
-
+        // 設定新位置
         canvas.style.left = `${initialLeft + dx}px`;
         canvas.style.top = `${initialTop + dy}px`;
-        // 移除 bottom 屬性以允許自由移動
+        
+        // 移除 bottom/right 屬性，確保 left/top 生效
         canvas.style.bottom = 'auto';
         canvas.style.right = 'auto';
+        
+        // 防止手機捲動頁面
+        if (e.type === 'touchmove') e.preventDefault();
     };
 
     // 結束拖曳
     const onUp = () => {
         isDragging = false;
-        // 如果沒有發生實際移動 (只是點擊)，這裡不需要做特別處理
-        // Pixi 的 pointerdown 會處理模型的互動
     };
 
-    // 滑鼠事件
+    // 綁定事件
     canvas.addEventListener('mousedown', onDown);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
 
-    // 觸控事件
     canvas.addEventListener('touchstart', onDown, { passive: false });
     window.addEventListener('touchmove', onMove, { passive: false });
     window.addEventListener('touchend', onUp);
 }
-
 
 
 
@@ -21077,7 +21089,45 @@ document.addEventListener('DOMContentLoaded', function() {
 <canvas id="live2d-canvas"></canvas>
 
 
+<!-- === 新增：貓咪選擇視窗 (沿用閱讀資源樣式) === -->
+<div id="catSelectionModal" class="report-menu-overlay" onclick="closeCatMenu(event)" style="z-index: 20010;">
+    <!-- 增加 max-width 讓四個選項在電腦版能並排 -->
+    <div class="report-menu-content" style="max-width: 800px;">
+        <div class="report-menu-title" style="color: #5d4037;">選擇你的學習夥伴</div>
+        
+        <!-- 使用 grid 佈局，電腦版 4 欄，手機版 2 欄 -->
+        <div class="report-options-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
+            
+            <!-- 選項 1：隱藏 -->
+            <div class="report-option-card" onclick="selectCatMode('none')">
+                <i class="fas fa-ban report-option-icon" style="color: #ccc;"></i>
+                <span class="report-option-text">隱藏</span>
+            </div>
 
+            <!-- 選項 2：黑貓 -->
+            <div class="report-option-card" onclick="selectCatMode('hijiki')">
+                <i class="fas fa-cat report-option-icon" style="color: #333;"></i>
+                <span class="report-option-text">黑貓 (Hijiki)</span>
+            </div>
+
+            <!-- 選項 3：白貓 -->
+            <div class="report-option-card" onclick="selectCatMode('tororo')">
+                <i class="fas fa-cat report-option-icon" style="color: #f0f0f0; text-shadow: 0 0 2px #999;"></i>
+                <span class="report-option-text">白貓 (Tororo)</span>
+            </div>
+
+            <!-- 選項 4：雙貓 -->
+            <div class="report-option-card" onclick="selectCatMode('both')">
+                <div style="display:flex; gap:5px; justify-content:center; margin-bottom:5px;">
+                    <i class="fas fa-cat" style="font-size: 1.5rem; color: #333;"></i>
+                    <i class="fas fa-cat" style="font-size: 1.5rem; color: #f0f0f0; text-shadow: 0 0 2px #999;"></i>
+                </div>
+                <span class="report-option-text">兩隻都要</span>
+            </div>
+
+        </div>
+    </div>
+</div>
 
 	
 	
