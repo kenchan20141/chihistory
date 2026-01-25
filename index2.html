@@ -7164,7 +7164,7 @@ body.cat-dragging { cursor: grabbing !important; }
 <script>
 
 // =======================================================
-// === Live2D 貓咪系統 (常駐對話 + 無限縮放 + 隱形長按) ===
+// === Live2D 貓咪系統 (修復長按中斷 + 常駐對話) ===
 // =======================================================
 
 let app;
@@ -7330,21 +7330,26 @@ function repositionCats() {
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
     
+    // 允許移出一半
     const allowOverflowX = bounds.width * 0.5;
     const allowOverflowY = bounds.height * 0.5;
 
     let newX = modelContainer.x;
     let newY = modelContainer.y;
 
+    // 右邊界
     if (newX + bounds.width > screenW + allowOverflowX) {
         newX = screenW + allowOverflowX - bounds.width;
     }
+    // 下邊界
     if (newY + bounds.height > screenH + allowOverflowY) {
         newY = screenH + allowOverflowY - bounds.height;
     }
+    // 左邊界
     if (newX < -allowOverflowX) {
         newX = -allowOverflowX;
     }
+    // 上邊界
     if (newY < -allowOverflowY) {
         newY = -allowOverflowY;
     }
@@ -7378,14 +7383,16 @@ function initGlobalInteraction() {
         );
     }
 
-    // --- 長按邏輯 (無視覺引導) ---
+    // --- 長按邏輯 ---
     function startLongPressTimer() {
         isLongPress = false;
         if (pressTimer) clearTimeout(pressTimer);
         
         pressTimer = setTimeout(() => {
             isLongPress = true;
+            // ★ 觸發長按後，強制停止拖曳，避免手指離開時產生位移
             isDragging = false; 
+            
             triggerCatChat(); // 觸發對話
             if (navigator.vibrate) navigator.vibrate(80);
         }, LONG_PRESS_DURATION);
@@ -7439,8 +7446,13 @@ function initGlobalInteraction() {
     window.addEventListener('touchmove', (e) => {
         if (canvas.getAttribute('data-interacting') !== 'true') return;
 
-        if (isPinching || isDragging || Math.hypot(e.touches[0].clientX - startX, e.touches[0].clientY - startY) > 5) {
+        // ★ 核心修復：大幅放寬移動容錯值 (5px -> 15px)
+        // 手指按住時難免會微動，放寬限制可防止長按被誤判為拖曳而取消
+        if (!isPinching && Math.hypot(e.touches[0].clientX - startX, e.touches[0].clientY - startY) > 15) {
             cancelLongPressTimer();
+            
+            // 只有當真的移動超過閾值，才視為拖曳
+            if (!isDragging) isDragging = true;
         }
 
         // 縮放邏輯
@@ -7458,15 +7470,12 @@ function initGlobalInteraction() {
         }
 
         if (!isPinching && e.touches.length === 1) {
+            // ★ 如果已經觸發了長按，鎖死拖曳功能，防止對話框跳動
             if (isLongPress) return;
 
             const touch = e.touches[0];
             const dx = touch.clientX - startX;
             const dy = touch.clientY - startY;
-
-            if (!isDragging && Math.hypot(dx, dy) > 10) {
-                isDragging = true;
-            }
 
             if (isDragging) {
                 if (e.cancelable) e.preventDefault();
@@ -7478,6 +7487,7 @@ function initGlobalInteraction() {
     }, { passive: false });
 
     window.addEventListener('touchend', (e) => {
+        // 手指離開時，先清除尚未觸發的計時器
         cancelLongPressTimer();
 
         if (isPinching && e.touches.length < 2) {
@@ -7487,6 +7497,8 @@ function initGlobalInteraction() {
         }
 
         if (canvas.getAttribute('data-interacting') === 'true') {
+            // ★ 核心邏輯：如果不是拖曳，且「沒有」觸發過長按，才算點擊/雙擊
+            // 這樣長按放手後，就不會被當成點擊，氣泡就不會消失
             if (!isDragging && !isLongPress) {
                 handleDoubleTap(); 
             }
@@ -7495,6 +7507,8 @@ function initGlobalInteraction() {
             canvas.removeAttribute('data-interacting');
             repositionCats();
         }
+        
+        // ★ 重置長按旗標
         isLongPress = false;
     });
 
@@ -7530,12 +7544,10 @@ function initGlobalInteraction() {
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
-        if (Math.hypot(dx, dy) > 5) {
+        // 滑鼠移動容錯
+        if (Math.hypot(dx, dy) > 10) {
             cancelLongPressTimer();
-        }
-
-        if (!isDragging && Math.hypot(dx, dy) > 5) {
-            isDragging = true;
+            if (!isDragging) isDragging = true;
         }
 
         if (isDragging && !isLongPress) {
@@ -7589,13 +7601,10 @@ function handleDoubleTap() {
     }
 }
 
-// === 長按對話邏輯 (隨機刷新內容 + 常駐) ===
+// === 長按對話邏輯 (修復：直接顯示) ===
 async function triggerCatChat() {
-    hideBubble();
-    
-    setTimeout(() => {
-        showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); 
-    }, 100);
+    // ★ 移除先 hide 再 show 的邏輯，直接顯示，避免放手時的視覺閃爍
+    showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); 
     
     triggerCatReaction();
 
@@ -7617,6 +7626,8 @@ function showBubble(htmlContent, autoHideMs = 0) {
     
     speechBubble.innerHTML = htmlContent;
     speechBubble.style.display = 'block';
+    
+    // 強制重繪
     void speechBubble.offsetWidth; 
     speechBubble.classList.add('show');
     
