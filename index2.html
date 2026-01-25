@@ -7228,7 +7228,6 @@ read-mode-container {
 // =======================================================
 // === Live2D 貓咪系統 (互動 & 緊湊畫布版) ===
 // =======================================================
-
 let app;
 let models = {}; 
 let currentBaseScale = 0.13; // 基礎縮放比例 (對應 Slider 100%)
@@ -7247,7 +7246,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const slider = document.getElementById('catScaleSlider');
         if (slider) {
             slider.value = Math.round(userScaleMultiplier * 100);
-            document.getElementById('catScaleValue').innerText = slider.value + '%';
+            const display = document.getElementById('catScaleValue');
+            if (display) display.innerText = slider.value + '%';
         }
     }
 
@@ -7260,16 +7260,36 @@ document.addEventListener('DOMContentLoaded', () => {
     makeCanvasDraggable();
 });
 
+// ★★★ 補回：打開/關閉 選擇視窗函數 ★★★
+function openCatMenu() {
+    // 關閉側邊欄 (避免遮擋)
+    const sideMenu = document.getElementById('sideMenu');
+    if (sideMenu) {
+        sideMenu.classList.remove('active');
+        const toggle = document.getElementById('sideMenuToggle');
+        if (toggle) toggle.classList.remove('active');
+    }
+    // 顯示選擇視窗
+    const modal = document.getElementById('catSelectionModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeCatMenu(event) {
+    // 點擊背景才關閉
+    if (event.target.id === 'catSelectionModal') {
+        event.target.style.display = 'none';
+    }
+}
+// ★★★ 補回結束 ★★★
+
 // 2. 用戶調整縮放
 function updateCatScale(val) {
     userScaleMultiplier = val / 100;
-    document.getElementById('catScaleValue').innerText = val + '%';
+    const display = document.getElementById('catScaleValue');
+    if(display) display.innerText = val + '%';
     
     // 即時應用到現有模型
     Object.values(models).forEach(model => {
-        // 重新計算縮放 (基礎 * 用戶倍率)
-        // 這裡需要根據模式 (單貓/雙貓) 取得原始設定，為簡化，我們直接更新 scale
-        // 為了保持位置正確，我們通常只更新 scale.x 和 scale.y
         model.scale.set(currentBaseScale * userScaleMultiplier);
     });
     
@@ -7298,7 +7318,8 @@ async function initLive2DApp() {
 async function selectCatMode(mode, save = true) {
     if (save) {
         localStorage.setItem('sansi_cat_mode', mode);
-        document.getElementById('catSelectionModal').style.display = 'none';
+        const modal = document.getElementById('catSelectionModal');
+        if (modal) modal.style.display = 'none';
     }
 
     const canvas = document.getElementById('live2d-canvas');
@@ -7327,11 +7348,14 @@ async function selectCatMode(mode, save = true) {
             await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 175, 220);
         } else if (mode === 'both') {
             currentBaseScale = 0.13; // 雙貓稍微小一點
-            // 左貓 (Hijiki) x=100, 右貓 (Tororo) x=250
+            // 左貓 (Hijiki) x=90, 右貓 (Tororo) x=260
             await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 90, 240);
             await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 260, 240);
         }
         
+        // 首次載入應用縮放
+        updateCatScale(Math.round(userScaleMultiplier * 100));
+
     } catch (err) {
         console.error("模型載入失敗:", err);
     }
@@ -7370,14 +7394,12 @@ async function loadAndSetupModel(path, name, x, y) {
                     targetGroup = groups[Math.floor(Math.random() * groups.length)];
                 }
                 
-                // 在該群組中隨機選一個動作索引 (0, 1, 2...)
-                // 這裡我們直接呼叫 playMotion，它會自動處理索引
+                // 在該群組中隨機選一個動作索引
                 model.motion(targetGroup);
                 console.log(`[Live2D] 播放動作群組: ${targetGroup}`);
             }
         } else {
             // 如果沒有定義 Motions，嘗試播放表情 (Expression)
-            // (部分模型可能只有表情沒有動作檔)
             const expressionManager = model.internalModel.expressionManager;
             if (expressionManager && expressionManager.definitions) {
                  const exps = expressionManager.definitions.map(d => d.Name);
@@ -7432,7 +7454,6 @@ function makeCanvasDraggable() {
     window.addEventListener('touchmove', onMove, { passive: false });
     window.addEventListener('touchend', onUp);
 }
-
 
 
 // 全域變數：記錄當天(或本次會話) API 循環失敗的次數
