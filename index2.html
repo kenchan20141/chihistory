@@ -7164,7 +7164,7 @@ body.cat-dragging { cursor: grabbing !important; }
 <script>
 
 // =======================================================
-// === Live2D 貓咪系統 (修復長按中斷 + 常駐對話) ===
+// === Live2D 貓咪系統 (海量題庫 + 貓叫聲效 + 無限縮放) ===
 // =======================================================
 
 let app;
@@ -7173,6 +7173,11 @@ const CANVAS_ID = 'live2d-canvas';
 
 const MODEL_PATH_HIJIKI = 'live2d/hijiki/runtime/hijiki.model3.json';
 const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
+
+// ★ 新增：貓叫聲效
+const CAT_SOUND_URL = 'https://taira-komori.net/sound_os2/animals01/cat1a.mp3';
+const catAudio = new Audio(CAT_SOUND_URL);
+catAudio.volume = 0.6; // 音量適中
 
 // --- 互動狀態 ---
 let isDragging = false;
@@ -7390,10 +7395,8 @@ function initGlobalInteraction() {
         
         pressTimer = setTimeout(() => {
             isLongPress = true;
-            // ★ 觸發長按後，強制停止拖曳，避免手指離開時產生位移
             isDragging = false; 
-            
-            triggerCatChat(); // 觸發對話
+            triggerCatChat(); 
             if (navigator.vibrate) navigator.vibrate(80);
         }, LONG_PRESS_DURATION);
     }
@@ -7434,8 +7437,6 @@ function initGlobalInteraction() {
                 containerStartY = modelContainer.y;
                 
                 canvas.setAttribute('data-interacting', 'true');
-                
-                // ★ 啟動長按
                 startLongPressTimer();
             } else {
                 canvas.removeAttribute('data-interacting');
@@ -7446,12 +7447,9 @@ function initGlobalInteraction() {
     window.addEventListener('touchmove', (e) => {
         if (canvas.getAttribute('data-interacting') !== 'true') return;
 
-        // ★ 核心修復：大幅放寬移動容錯值 (5px -> 15px)
-        // 手指按住時難免會微動，放寬限制可防止長按被誤判為拖曳而取消
+        // 移動容錯 (15px)
         if (!isPinching && Math.hypot(e.touches[0].clientX - startX, e.touches[0].clientY - startY) > 15) {
             cancelLongPressTimer();
-            
-            // 只有當真的移動超過閾值，才視為拖曳
             if (!isDragging) isDragging = true;
         }
 
@@ -7470,7 +7468,6 @@ function initGlobalInteraction() {
         }
 
         if (!isPinching && e.touches.length === 1) {
-            // ★ 如果已經觸發了長按，鎖死拖曳功能，防止對話框跳動
             if (isLongPress) return;
 
             const touch = e.touches[0];
@@ -7487,7 +7484,6 @@ function initGlobalInteraction() {
     }, { passive: false });
 
     window.addEventListener('touchend', (e) => {
-        // 手指離開時，先清除尚未觸發的計時器
         cancelLongPressTimer();
 
         if (isPinching && e.touches.length < 2) {
@@ -7497,8 +7493,6 @@ function initGlobalInteraction() {
         }
 
         if (canvas.getAttribute('data-interacting') === 'true') {
-            // ★ 核心邏輯：如果不是拖曳，且「沒有」觸發過長按，才算點擊/雙擊
-            // 這樣長按放手後，就不會被當成點擊，氣泡就不會消失
             if (!isDragging && !isLongPress) {
                 handleDoubleTap(); 
             }
@@ -7507,8 +7501,6 @@ function initGlobalInteraction() {
             canvas.removeAttribute('data-interacting');
             repositionCats();
         }
-        
-        // ★ 重置長按旗標
         isLongPress = false;
     });
 
@@ -7526,8 +7518,6 @@ function initGlobalInteraction() {
             containerStartY = modelContainer.y;
             canvas.setAttribute('data-interacting', 'true');
             document.body.classList.add('cat-dragging');
-            
-            // ★ 滑鼠長按
             startLongPressTimer();
         }
     });
@@ -7544,7 +7534,6 @@ function initGlobalInteraction() {
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
-        // 滑鼠移動容錯
         if (Math.hypot(dx, dy) > 10) {
             cancelLongPressTimer();
             if (!isDragging) isDragging = true;
@@ -7586,37 +7575,148 @@ function initGlobalInteraction() {
     }, { passive: false });
 }
 
-// === 雙擊邏輯 (觸發隱藏氣泡) ===
+// === 雙擊邏輯 (播放音效 + 隱藏氣泡) ===
 function handleDoubleTap() {
     const currentTime = new Date().getTime();
     const tapLength = currentTime - lastTapTime;
     
     if (tapLength < 500 && tapLength > 50) {
-        hideBubble(); // ★ 雙擊時隱藏氣泡
-        triggerCatReaction();
-        triggerVisualEffect(); 
+        // ★ 觸發雙擊事件 ★
+        hideBubble(); // 隱藏氣泡
+        triggerCatReaction(); // 觸發動作
+        triggerVisualEffect(); // 觸發視覺
+        
+        // ★ 播放貓叫聲 ★
+        if (catAudio) {
+            catAudio.currentTime = 0; // 重置播放進度，確保連續點擊能觸發
+            catAudio.play().catch(e => console.log("音效播放受阻:", e));
+        }
+        
         lastTapTime = 0; 
     } else {
         lastTapTime = currentTime;
     }
 }
 
-// === 長按對話邏輯 (修復：直接顯示) ===
+// === 長按對話邏輯 (★ 海量動態題庫引擎) ===
 async function triggerCatChat() {
-    // ★ 移除先 hide 再 show 的邏輯，直接顯示，避免放手時的視覺閃爍
-    showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); 
+    hideBubble();
+    
+    setTimeout(() => {
+        showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); 
+    }, 100);
     
     triggerCatReaction();
 
-    const randomSeed = Math.floor(Math.random() * 10000);
-    const prompt = `(Seed: ${randomSeed}) 你是我的貓咪助手，請用可愛、簡短的語氣，告訴我一個關於中國語文、文學、成語或文化的有趣冷知識。字數限制在 50 字以內。請不要用列點，直接說話。`;
+    // 1. 海量分類庫 (>150項)
+    const categories = [
+        '古代生僻字由來', '成語背後的恐怖故事', '古代詩人死法', '古代黑科技', 
+        '中國神話生物', '古代刑罰冷知識', '古代飲食習慣', '古代考試作弊方法',
+        '古代化妝術', '民間禁忌與迷信', '古代青樓文化', '古代廁所文明',
+        '中藥奇怪成分', '古人如何避暑', '古人如何罵人', '古代奇怪法律',
+        '古代避孕方法', '古代如何驗屍', '古代太監生活秘聞', '古代整容術',
+        '古代鬧鬼傳說', '古代如何處理垃圾', '古代消防技術', '古代間諜工具',
+        '古代牙齒保健', '古代如何抗疫', '古代盜墓技巧', '古代賭博遊戲',
+        '古代如何預測天氣', '古代快遞系統', '古代寵物飼養', '古代如何離婚',
+        '古代剩男剩女問題', '古代同性戀文化', '古代如何造紙', '古代火藥配方',
+        '古代毒藥大全', '古代暗器種類', '古代海盜故事', '古代外星人記載',
+        '古代機器人傳說', '古代整人玩具', '古代情趣用品', '古代如何洗澡',
+        '古代如何上廁所', '古代乞丐組織', '古代殺手集團', '古代黑幫文化',
+        '古代如何防盜', '古代監獄生活', '古代死刑執行細節', '古代如何驗毒',
+        '古代如何製作木乃伊(中國版)', '古代如何保存食物', '古代冰塊製作',
+        '古代如何治療性病', '古代如何墮胎', '古代如何接生', '古代如何坐月子',
+        '古代親子鑑定法', '古代如何選美', '古代如何相親', '古代婚禮鬧洞房',
+        '古代葬禮習俗', '古代守孝禁忌', '古代如何招魂', '古代趕屍真相',
+        '古代蠱毒傳說', '古代降頭術', '古代風水禁忌', '古代面相學',
+        '古代手相學', '古代測字術', '古代占星術', '古代算命騙術',
+        '古代江湖郎中', '古代街頭魔術', '古代雜技表演', '古代戲班規矩',
+        '古代青樓黑話', '古代土匪切口', '古代黑市交易', '古代奴隸買賣',
+        '古代人口販賣', '古代器官買賣傳聞', '古代食人記錄', '古代活人祭祀',
+        '古代冥婚儀式', '古代如何打小人', '古代如何下咒', '古代如何解毒',
+        '古代戰場清理', '古代戰俘處置', '古代軍糧秘密', '古代生物武器',
+        '古代化學武器', '古代地雷地道', '古代水戰裝備', '古代鎧甲弱點',
+        '古代名劍傳說', '古代妖刀故事', '古代神獸真實原型', '古代山海經生物',
+        '古代龍的目擊記錄', '古代鳳凰傳說', '古代麒麟出現記錄', '古代殭屍種類',
+        '古代鬼怪等級', '古代神仙體系', '古代地府官職', '古代投胎轉世傳說',
+        '古代孟婆湯成分', '古代奈何橋故事', '古代十八層地獄', '古代閻王爺由來',
+        '古代城隍爺職責', '古代土地公故事', '古代財神爺種類', '古代月老傳說',
+        '古代灶神禁忌', '古代門神由來', '古代驅鬼儀式', '古代辟邪物品',
+        '古代護身符製作', '古代丹藥成分', '古代長生不老藥', '古代煉金術',
+        '古代點石成金術', '古代隱身術傳聞', '古代穿牆術傳聞', '古代飛天術傳聞',
+        '古代千里眼順風耳', '古代讀心術', '古代催眠術', '古代控夢術',
+        '古代靈魂出竅', '古代前世記憶', '古代輪迴故事', '古代因果報應',
+        '古代善惡簿', '古代生死簿', '古代判官筆', '古代孽鏡臺',
+        '古代望鄉臺', '古代三生石', '古代彼岸花', '古代黃泉路',
+        '古代鬼門關', '古代酆都鬼城', '古代泰山治鬼', '古代茅山道術',
+        '古代湘西趕屍', '古代苗疆蠱術', '古代南洋降頭', '古代日本陰陽術(與中國關係)',
+        '古代西藏密宗', '古代薩滿教', '古代白蓮教', '古代太平道',
+        '古代五斗米道', '古代全真教', '古代正一教', '古代佛教傳入趣事'
+    ];
+
+    // 2. 定義切入角度 (>150項)
+    const angles = [
+        '越冷門越好', '令人毛骨悚然的', '好笑荒謬的', '顛覆常識的', 
+        '現代人絕對做不到的', '聽起來很假但其實是真的', '有點噁心的',
+        '細思極恐的', '讓人起雞皮疙瘩的', '毀三觀的', '讓人笑到肚子痛的',
+        '古代人的奇葩邏輯', '古代人的重口味', '古代人的黑色幽默', '古代人的硬核生存',
+        '古代人的智慧(或愚蠢)', '古代人的迷之自信', '古代人的尷尬時刻', '古代人的社死現場',
+        '古代人的戀愛腦', '古代人的直男癌', '古代人的綠茶行為', '古代人的土味情話',
+        '古代人的凡爾賽', '古代人的內捲', '古代人的躺平', '古代人的摸魚技巧',
+        '古代人的職場厚黑學', '古代人的婆媳大戰', '古代人的育兒崩潰', '古代人的整容失敗',
+        '古代人的減肥血淚史', '古代人的脫髮焦慮', '古代人的失眠對策', '古代人的便秘療法',
+        '古代人的口臭救星', '古代人的狐臭掩蓋法', '古代人的腳氣治療', '古代人的痔瘡痛苦',
+        '古代人的寄生蟲困擾', '古代人的性病恐慌', '古代人的避孕失敗', '古代人的墮胎慘劇',
+        '古代人的難產故事', '古代人的近親結婚', '古代人的老少配', '古代人的多角戀',
+        '古代人的偷情技巧', '古代人的捉姦現場', '古代人的離婚大戰', '古代人的爭產風波',
+        '古代人的驗屍烏龍', '古代人的誤診案例', '古代人的醫療事故', '古代人的庸醫害人',
+        '古代人的迷信害死人', '古代人的求雨鬧劇', '古代人的驅鬼笑話', '古代人的煉丹爆炸',
+        '古代人的飛行失敗', '古代人的潛水溺亡', '古代人的探險失蹤', '古代人的盜墓報應',
+        '古代人的貪污手段', '古代人的行賄技巧', '古代人的買官賣官', '古代人的科舉作弊',
+        '古代人的替考風波', '古代人的學術造假', '古代人的抄襲醜聞', '古代人的文人相輕',
+        '古代人的鍵盤俠行為', '古代人的網路暴力(紙筆版)', '古代人的謠言傳播', '古代人的公關危機',
+        '古代人的洗白手段', '古代人的帶風向', '古代人的水軍(造勢者)', '古代人的粉絲文化',
+        '古代人的追星瘋狂', '古代人的私生飯', '古代人的偶像塌房', '古代人的娛樂圈潛規則',
+        '古代人的選美黑幕', '古代人的賭博出千', '古代人的仙人跳', '古代人的龐氏騙局',
+        '古代人的殺豬盤', '古代人的電話詐騙(信鴿版)', '古代人的碰瓷', '古代人的勒索綁架',
+        '古代人的撕票', '古代人的越獄', '古代人的劫法場', '古代人的頂包',
+        '古代人的替死鬼', '古代人的屈打成招', '古代人的冤假錯案', '古代人的文字獄',
+        '古代人的禁書目錄', '古代人的焚書坑儒', '古代人的思想控制', '古代人的洗腦教育',
+        '古代人的愚民政策', '古代人的造反理由', '古代人的起義口號', '古代人的邪教組織',
+        '古代人的秘密結社', '古代人的黑幫規矩', '古代人的江湖道義', '古代人的武林大會(真相)',
+        '古代人的比武招親(內幕)', '古代人的英雄救美(套路)', '古代人的以身相許(陷阱)', '古代人的指腹為婚(悲劇)',
+        '古代人的娃娃親', '古代人的童養媳', '古代人的入贅', '古代人的休書',
+        '古代人的貞節牌坊(血淚)', '古代人的浸豬籠', '古代人的騎木驢', '古代人的凌遲',
+        '古代人的腰斬', '古代人的車裂', '古代人的剝皮', '古代人的烹殺',
+        '古代人的鋸刑', '古代人的刖刑', '古代人的宮刑', '古代人的墨刑',
+        '古代人的流放', '古代人的充軍', '古代人的籍沒', '古代人的連坐',
+        '古代人的誅九族', '古代人的滿門抄斬', '古代人的株連甚廣', '古代人的文字避諱',
+        '古代人的皇帝名諱', '古代人的拍馬屁', '古代人的伴君如伴虎', '古代人的兔死狗烹',
+        '古代人的過河拆橋', '古代人的卸磨殺驢', '古代人的鳥盡弓藏', '古代人的成王敗寇'
+    ];
+
+    // 3. 隨機抽取組合
+    const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+    const randomAngle = angles[Math.floor(Math.random() * angles.length)];
+    const randomSeed = Math.floor(Math.random() * 999999);
+
+    // 4. 構建極度具體的 Prompt
+    const prompt = `
+    (RandomSeed: ${randomSeed})
+    你是我的貓咪助手。請告訴我一個關於【${randomCategory}】的冷知識。
+    要求：
+    1. 內容必須【${randomAngle}】。
+    2. 字數嚴格限制在 50 字以內。
+    3. 語氣可愛、口語化（像貓在說話），不要用列點，不要像教科書。
+    4. 絕對不要講「你好」、「你知道嗎」這類廢話，直接講知識點。
+    `;
 
     try {
-        const text = await callAPI(prompt, 0.9); 
-        showBubble(text, 0); // 顯示後不自動隱藏 (0)
+        // 調用 API (使用較高的 temperature 增加隨機性)
+        const text = await callAPI(prompt, 0.99); 
+        showBubble(text, 0); 
     } catch (e) {
         console.error("API Error", e);
-        showBubble("喵嗚... 網絡好像有點問題...", 0);
+        showBubble("喵嗚... 腦袋打結了... 再試一次？", 0);
     }
 }
 
@@ -7626,8 +7726,6 @@ function showBubble(htmlContent, autoHideMs = 0) {
     
     speechBubble.innerHTML = htmlContent;
     speechBubble.style.display = 'block';
-    
-    // 強制重繪
     void speechBubble.offsetWidth; 
     speechBubble.classList.add('show');
     
@@ -7691,6 +7789,7 @@ function playRandomMotion(model) {
     if (targetGroups.length === 0) targetGroups = groups;
     
     const randomGroup = targetGroups[Math.floor(Math.random() * targetGroups.length)];
+    // ★ 確保隨機播放該組內的所有 Motion (如 01, 02... 08)
     motionMgr.startRandomMotion(randomGroup, 3); 
 }
 
