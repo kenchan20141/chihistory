@@ -4,12 +4,12 @@
 
 <meta http-equiv="Content-Security-Policy" content="
 default-src 'self';
-script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://*.streamable.com https://cdn.heapanalytics.com https://www.gstatic.com https://apis.google.com https://cdn.onesignal.com https://onesignal.com https://api.onesignal.com https://*.firebaseio.com https://cubism.live2d.com https://cdnjs.cloudflare.com;
+script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cubism.live2d.com https://*.streamable.com https://cdn.heapanalytics.com https://www.gstatic.com https://apis.google.com https://cdn.onesignal.com https://onesignal.com https://api.onesignal.com https://*.firebaseio.com;
 style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://onesignal.com;
 font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com;
 img-src 'self' https: data: blob: https://*.streamable.com https://heapanalytics.com https://*.googleusercontent.com;
 media-src 'self' https://youfulca.com https://*.streamable.com https://assets.mixkit.co https://taira-komori.net;
-connect-src 'self' https://script.google.com https://script.googleusercontent.com https://san4si1.vercel.app https://sansi.kenchan20151.workers.dev https://corsproxy.io https://docs.google.com https://*.googleusercontent.com https://v1.hitokoto.cn https://chatapi.akash.network https://text.pollinations.ai https://gen.pollinations.ai https://router.huggingface.co https://api.llm7.io https://*.streamable.com https://cdn.jsdelivr.net https://api-fawn-chi.vercel.app https://heapanalytics.com https://*.firebaseio.com wss://*.firebaseio.com https://www.gstatic.com https://www.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://cdn.onesignal.com https://onesignal.com https://onesignal.com/api/v1/notifications https://api.onesignal.com https://cdnjs.cloudflare.com data: blob:;
+connect-src 'self' https://script.google.com https://script.googleusercontent.com https://sansi.vercel.app https://sansi.kenchan20151.workers.dev https://corsproxy.io https://docs.google.com https://*.googleusercontent.com https://v1.hitokoto.cn https://chatapi.akash.network https://text.pollinations.ai https://gen.pollinations.ai https://router.huggingface.co https://api.llm7.io https://*.streamable.com https://cdn.jsdelivr.net https://api-fawn-chi.vercel.app https://heapanalytics.com https://*.firebaseio.com wss://*.firebaseio.com https://www.gstatic.com https://www.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://cdn.onesignal.com https://onesignal.com https://onesignal.com/api/v1/notifications https://api.onesignal.com https://cdnjs.cloudflare.com data: blob:;
 worker-src 'self' blob:;
 frame-src 'self' https://streamable.com https://kenchan20141.pyscriptapps.com https://kenchan20141.github.io https://sansi.vercel.app https://lyricschi.vercel.app https://penpalchi.vercel.app https://litstudy.vercel.app https://621d05f47d591.site123.me https://script.google.com https://www.i2ocr.com https://*.firebaseapp.com https://onesignal.com;
 object-src 'none';
@@ -65,17 +65,14 @@ form-action 'self';
 <!-- 新增這行：Firebase Authentication -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
-<!-- 1. Live2D Cubism 2 核心 (必須第一) -->
-<script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
-
-<!-- 2. Live2D Cubism 4 核心 (必須第二，這是您缺少的關鍵) -->
-<script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2dcubismcore.min.js"></script>
-
-<!-- 3. PixiJS v6.5.8 (必須第三) -->
+<!-- 1. PixiJS (渲染引擎) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.8/browser/pixi.min.js"></script>
 
-<!-- 4. Pixi Live2D Plugin v0.4.0 (必須最後) -->
-<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
+<!-- 2. Live2D Cubism Core (官方核心庫 - 這是關鍵) -->
+<script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+
+<!-- 3. Pixi Live2D Plugin (Cubism 4 專用版 - 這是關鍵) -->
+<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
 
 
 	<script>
@@ -7124,78 +7121,67 @@ read-mode-container {
 
 // --- Live2D 整合邏輯 ---
 
-// --- Live2D 整合邏輯 (修復版) ---
+// --- Live2D 整合邏輯 (還原測試成功版) ---
 
 let app;
-let models = {}; // 儲存模型實例
+let models = {}; 
 let isLive2DVisible = false;
 
 async function initLive2D() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas) return;
 
-    // ★★★ 關鍵修復：手動對接核心變數 ★★★
-    // 檢查是否有小寫的變數，若有，強制賦值給大寫變數讓插件讀取
-    if (!window.Live2DCubismCore && window.live2dcubismcore) {
-        window.Live2DCubismCore = window.live2dcubismcore;
-        console.log("已手動修正 Live2DCubismCore 變數名稱");
-    }
-
-    // 再次檢查核心是否真的存在
-    if (!window.Live2DCubismCore) {
-        console.error("❌ 嚴重錯誤：瀏覽器無法載入 Cubism 4 核心。");
-        console.error("請檢查：1. 網路是否封鎖了 cdn.jsdelivr.net");
-        console.error("請檢查：2. 是否有安裝 AdBlock 阻擋了腳本");
-        return;
-    }
-
-    // 確保插件掛載
-    if (!window.PIXI.live2d) {
-        window.PIXI.live2d = window.PixiLive2dDisplay;
-    }
-
-    // 初始化 Pixi 應用
+    // 1. 初始化 Pixi 應用 (只做一次)
     if (!app) {
         app = new PIXI.Application({
             view: canvas,
             autoStart: true,
-            backgroundAlpha: 0,
-            width: 300,  // 手機版建議寬度
-            height: 300, // 手機版建議高度
+            backgroundAlpha: 0, // 透明背景
+            width: 350,         // 配合你的 CSS 與模型大小微調
+            height: 350,
             resolution: window.devicePixelRatio || 1,
         });
     }
 
-    // 模型路徑 (請確保這些檔案真的在您的伺服器上)
+    // 2. 設定模型路徑 (請確認這些路徑相對於 index2.html 是正確的)
     const modelPathHijiki = 'live2d/hijiki/runtime/hijiki.model3.json';
     const modelPathTororo = 'live2d/tororo/runtime/tororo.model3.json';
 
     try {
-        console.log("📥 開始載入 Live2D 模型...");
-        
-        // 載入模型
+        console.log("📥 [Live2D] 開始載入...");
+
+        // 直接載入，不需額外檢查，因為 script 標籤已經保證了環境
         const hijiki = await PIXI.live2d.Live2DModel.from(modelPathHijiki);
-        setupModel(hijiki, 0.25, 60, 80); // 調整參數：縮放, x, y
+        setupModel(hijiki, 0.25, 60, 100); 
         models.hijiki = hijiki;
 
-        const tororo = await PIXI.live2d.Live2DModel.from(modelPathTororo);
-        setupModel(tororo, 0.25, 180, 80);
-        models.tororo = tororo;
+        // 嘗試載入第二隻貓 (如果有的話)
+        try {
+            const tororo = await PIXI.live2d.Live2DModel.from(modelPathTororo);
+            setupModel(tororo, 0.25, 200, 100);
+            models.tororo = tororo;
+        } catch (e) {
+            console.log("Tororo 模型載入略過或失敗 (非致命錯誤)");
+        }
 
-        console.log("✅ 貓咪模型載入成功！");
+        console.log("✅ [Live2D] 載入成功！");
 
     } catch (error) {
-        console.error("❌ 模型載入失敗:", error);
+        console.error("❌ [Live2D] 載入失敗:", error);
+        // 如果這裡報錯，通常只有兩個原因：
+        // 1. CSP 擋住了 live2dcubismcore.min.js
+        // 2. 模型路徑 (modelPathHijiki) 寫錯了 (例如伺服器上路徑不同)
     }
 }
 
 // 輔助函式保持不變
 function setupModel(model, scale, x, y) {
-    if(!app) return;
+    if (!app) return;
     app.stage.addChild(model);
     model.scale.set(scale);
     model.x = x;
     model.y = y;
+    
     model.interactive = true;
     model.on('pointerdown', () => {
         model.motion('TapBody');
