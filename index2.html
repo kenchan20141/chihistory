@@ -7068,29 +7068,22 @@ read-mode-container {
 }
 
 	
-/* Live2D 畫布設定 - 緊湊版 */
+/* Live2D 畫布設定 - 可拖曳、層級最高 */
 #live2d-canvas {
     position: fixed;
+    /* 初始位置 */
     bottom: 0px; 
-    left: 20px; /* 預設靠左一點 */
+    left: 0px;
     
-    /* ★★★ 關鍵修正：緊湊尺寸 ★★★ */
-    /* 350px 寬度剛好夠兩隻貓並排 (稍微重疊) 或單隻貓活動 */
-    /* 400px 高度確保耳朵不被切 */
-    width: 350px; 
-    height: 400px;
+    /* 關鍵修正：加大畫布尺寸，避免貓咪被切頭切尾 */
+    /* 這裡設定的大小是「可視區域」，稍後 JS 會讓它可拖曳 */
+    width: 800px; 
+    height: 800px;
     
-    /* 確保背景透明，讓滑鼠事件穿透透明區 (需要配合 Pointer Events 屬性，但在 Canvas 上主要靠縮小面積) */
-    background: transparent; 
-    
-    z-index: 2147483647; 
-    pointer-events: auto;
-    cursor: grab;
-    display: none;
-}
-
-#live2d-canvas:active {
-    cursor: grabbing;
+    z-index: 2147483647; /* 確保比 Footer 和所有內容都高 */
+    pointer-events: auto; /* 允許點擊互動和拖曳 */
+    cursor: grab; /* 鼠標提示可拖曳 */
+    display: none; /* 預設由 JS 控制 */
 }
 
 #live2d-canvas:active {
@@ -7225,195 +7218,149 @@ read-mode-container {
 // === Live2D 貓咪系統 (完整修復版) ===
 // =======================================================
 
-// =======================================================
-// === Live2D 貓咪系統 (互動 & 緊湊畫布版) ===
-// =======================================================
 let app;
-let models = {}; 
-let currentBaseScale = 0.13; // 基礎縮放比例 (對應 Slider 100%)
-let userScaleMultiplier = 1.0; // 用戶自訂的倍率 (0.5 ~ 1.5)
+let models = {}; // 儲存已載入的模型實例
 
 // 設定模型路徑
 const MODEL_PATH_HIJIKI = 'live2d/hijiki/runtime/hijiki.model3.json';
 const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
 
-// 1. 頁面載入初始化
+// 1. 頁面載入時：讀取記憶並初始化
 document.addEventListener('DOMContentLoaded', () => {
-    // 讀取縮放設定
-    const savedScale = localStorage.getItem('sansi_cat_scale');
-    if (savedScale) {
-        userScaleMultiplier = parseFloat(savedScale);
-        const slider = document.getElementById('catScaleSlider');
-        if (slider) {
-            slider.value = Math.round(userScaleMultiplier * 100);
-            const display = document.getElementById('catScaleValue');
-            if (display) display.innerText = slider.value + '%';
-        }
-    }
-
-    // 讀取模式設定
+    // 讀取上次的選擇
     const savedMode = localStorage.getItem('sansi_cat_mode');
+    
+    // 如果有紀錄且不是 'none'，則自動載入
     if (savedMode && savedMode !== 'none') {
-        setTimeout(() => selectCatMode(savedMode, false), 1000);
+        // 延遲一點點執行，確保頁面元素都 ready
+        setTimeout(() => {
+            selectCatMode(savedMode, false); // false = 不需重複寫入 storage
+        }, 1000);
     }
     
+    // 初始化拖曳功能
     makeCanvasDraggable();
 });
 
-// ★★★ 補回：打開/關閉 選擇視窗函數 ★★★
+// 2. 打開/關閉 選擇視窗
 function openCatMenu() {
-    // 關閉側邊欄 (避免遮擋)
+    // 關閉側邊欄
     const sideMenu = document.getElementById('sideMenu');
     if (sideMenu) {
         sideMenu.classList.remove('active');
-        const toggle = document.getElementById('sideMenuToggle');
-        if (toggle) toggle.classList.remove('active');
+        document.getElementById('sideMenuToggle').classList.remove('active');
     }
     // 顯示選擇視窗
-    const modal = document.getElementById('catSelectionModal');
-    if (modal) modal.style.display = 'flex';
+    document.getElementById('catSelectionModal').style.display = 'flex';
 }
 
 function closeCatMenu(event) {
-    // 點擊背景才關閉
     if (event.target.id === 'catSelectionModal') {
-        event.target.style.display = 'none';
+        document.getElementById('catSelectionModal').style.display = 'none';
     }
 }
-// ★★★ 補回結束 ★★★
 
-// 2. 用戶調整縮放
-function updateCatScale(val) {
-    userScaleMultiplier = val / 100;
-    const display = document.getElementById('catScaleValue');
-    if(display) display.innerText = val + '%';
-    
-    // 即時應用到現有模型
-    Object.values(models).forEach(model => {
-        model.scale.set(currentBaseScale * userScaleMultiplier);
-    });
-    
-    // 儲存設定
-    localStorage.setItem('sansi_cat_scale', userScaleMultiplier);
-}
-
-// 3. 初始化 Pixi (配合 CSS 的緊湊尺寸)
+// 3. 初始化 Pixi 應用 (只執行一次)
 async function initLive2DApp() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas || app) return;
 
+    // 建立 Pixi Application
     app = new PIXI.Application({
         view: canvas,
         autoStart: true,
-        backgroundAlpha: 0, 
-        // 設定渲染解析度與 CSS 一致，確保點擊位置準確
-        width: 350,         
-        height: 400,        
+        backgroundAlpha: 0, // 透明背景
+        width: 800,         // ★ 關鍵：畫布寬度設大一點
+        height: 800,        // ★ 關鍵：畫布高度設大一點
         resolution: window.devicePixelRatio || 1,
     });
+    
+    // 確保 Canvas 顯示
     canvas.style.display = 'block';
 }
 
-// 4. 選擇模式 (座標校正)
+// 4. 選擇模式並載入模型 (核心邏輯)
 async function selectCatMode(mode, save = true) {
     if (save) {
         localStorage.setItem('sansi_cat_mode', mode);
-        const modal = document.getElementById('catSelectionModal');
-        if (modal) modal.style.display = 'none';
+        document.getElementById('catSelectionModal').style.display = 'none';
     }
 
     const canvas = document.getElementById('live2d-canvas');
+    
+    // 模式：隱藏
     if (mode === 'none') {
         if (canvas) canvas.style.display = 'none';
         if (app && app.stage) app.stage.removeChildren();
         return;
     }
 
+    // 確保 App 已初始化
     await initLive2DApp();
     canvas.style.display = 'block';
+    
+    // 清空舞台 (移除舊貓)
     app.stage.removeChildren();
     models = {}; 
 
     try {
-        // ★★★ 緊湊畫布 (350x400) 的座標設定 ★★★
-        // y=400 是最底部。貓的錨點通常在中心或腳底。
-        // 測試值：y=200 是畫布中間。這兩隻貓的中心點大約在身體中央。
-        // 所以 y 設定在 250~300 左右可以讓牠們「站」在畫布底部。
+        // ★ 座標調整說明：
+        // Canvas 大小是 400x400。
+        // x=200, y=200 是正中心。
+        // scale=0.18 是縮放比例。
+        // 如果只剩耳朵，通常是因為 y 太大 (跑到下面去了) 或 x 太偏。
+        // 這裡將 y 設為 250~300 左右，讓貓站在底部。
 
         if (mode === 'hijiki') {
-            currentBaseScale = 0.15; // 單隻貓可以大一點
-            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 175, 220); // x=175 (居中)
+            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.18, 200, 220);
         } else if (mode === 'tororo') {
-            currentBaseScale = 0.15;
-            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 175, 220);
+            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.18, 200, 220);
         } else if (mode === 'both') {
-            currentBaseScale = 0.13; // 雙貓稍微小一點
-            // 左貓 (Hijiki) x=90, 右貓 (Tororo) x=260
-            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 90, 240);
-            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 260, 240);
+            // 兩隻貓並排：調整 X 座標 (左邊一隻，右邊一隻)
+            await loadAndSetupModel(MODEL_PATH_HIJIKI, 'hijiki', 0.15, 120, 240);
+            await loadAndSetupModel(MODEL_PATH_TORORO, 'tororo', 0.15, 280, 240);
         }
         
-        // 首次載入應用縮放
-        updateCatScale(Math.round(userScaleMultiplier * 100));
+        // 載入成功提示 (可選)
+        if(save) console.log(`已切換至模式: ${mode}`);
 
     } catch (err) {
         console.error("模型載入失敗:", err);
+        // 如果載入失敗，嘗試重置
+        localStorage.removeItem('sansi_cat_mode');
     }
 }
 
-// 5. 載入模型與互動邏輯
-async function loadAndSetupModel(path, name, x, y) {
+// 5. 載入單一模型並綁定互動
+async function loadAndSetupModel(path, name, scale, x, y) {
     const model = await PIXI.live2d.Live2DModel.from(path);
     app.stage.addChild(model);
     
-    // 應用縮放與位置
-    model.scale.set(currentBaseScale * userScaleMultiplier);
+    // 設定位置與大小
+    model.scale.set(scale);
     model.x = x;
     model.y = y;
     
     // 啟用互動
     model.interactive = true;
-    model.buttonMode = true;
+    model.buttonMode = true; // 滑鼠變手型
     
-    // ★★★ 互動核心：點擊播放隨機動作 ★★★
+    // 綁定點擊事件
     model.on('pointerdown', (e) => {
-        // 1. 震動回饋
-        if (navigator.vibrate) navigator.vibrate(20);
-
-        // 2. 隨機動作邏輯
-        // 檢查模型內部是否有定義動作群組
-        const motionManager = model.internalModel.motionManager;
-        const definitions = model.internalModel.motionManager.definitions;
+        // 播放隨機動作 (TapBody 是標準動作名稱)
+        model.motion('TapBody');
         
-        if (definitions && definitions.Motions) {
-            const groups = Object.keys(definitions.Motions);
-            if (groups.length > 0) {
-                // 優先尋找 'TapBody' 或 'Tap'，沒有的話隨機選一個群組
-                let targetGroup = groups.find(g => g.toLowerCase().includes('tap'));
-                if (!targetGroup) {
-                    targetGroup = groups[Math.floor(Math.random() * groups.length)];
-                }
-                
-                // 在該群組中隨機選一個動作索引
-                model.motion(targetGroup);
-                console.log(`[Live2D] 播放動作群組: ${targetGroup}`);
-            }
-        } else {
-            // 如果沒有定義 Motions，嘗試播放表情 (Expression)
-            const expressionManager = model.internalModel.expressionManager;
-            if (expressionManager && expressionManager.definitions) {
-                 const exps = expressionManager.definitions.map(d => d.Name);
-                 const randomExp = exps[Math.floor(Math.random() * exps.length)];
-                 model.expression(randomExp);
-                 console.log(`[Live2D] 播放表情: ${randomExp}`);
-            }
-        }
+        // 震動回饋
+        if (navigator.vibrate) navigator.vibrate(20);
+        
+        // 可以在這裡加入音效
+        // const audio = new Audio('meow.mp3'); audio.play();
     });
 
     models[name] = model;
 }
 
-// 6. 畫布拖曳功能 (保持不變，確保可拖曳)
+// 6. 實作全螢幕拖曳功能 (手機/電腦通用)
 function makeCanvasDraggable() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas) return;
@@ -7421,39 +7368,63 @@ function makeCanvasDraggable() {
     let isDragging = false;
     let startX, startY, initialLeft, initialTop;
 
+    // 開始拖曳
     const onDown = (e) => {
+        // 判斷是否為點擊模型本身 (Pixi 會處理 pointerdown)，還是點擊 Canvas 空白處
+        // 這裡我們簡單處理：點擊 Canvas 就視為拖曳準備
         isDragging = true;
+        
         const clientX = e.clientX || e.touches[0].clientX;
         const clientY = e.clientY || e.touches[0].clientY;
+
         startX = clientX;
         startY = clientY;
+
         const rect = canvas.getBoundingClientRect();
         initialLeft = rect.left;
         initialTop = rect.top;
+
+        // 如果是滑鼠，防止文字選取
         if (e.type === 'mousedown') e.preventDefault();
     };
 
+    // 拖曳中
     const onMove = (e) => {
         if (!isDragging) return;
+
         const clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
         const clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+
         const dx = clientX - startX;
         const dy = clientY - startY;
+
+        // 設定新位置
         canvas.style.left = `${initialLeft + dx}px`;
         canvas.style.top = `${initialTop + dy}px`;
+        
+        // 移除 bottom/right 屬性，確保 left/top 生效
         canvas.style.bottom = 'auto';
+        canvas.style.right = 'auto';
+        
+        // 防止手機捲動頁面
         if (e.type === 'touchmove') e.preventDefault();
     };
 
-    const onUp = () => { isDragging = false; };
+    // 結束拖曳
+    const onUp = () => {
+        isDragging = false;
+    };
 
+    // 綁定事件
     canvas.addEventListener('mousedown', onDown);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+
     canvas.addEventListener('touchstart', onDown, { passive: false });
     window.addEventListener('touchmove', onMove, { passive: false });
     window.addEventListener('touchend', onUp);
 }
+
 
 
 // 全域變數：記錄當天(或本次會話) API 循環失敗的次數
@@ -21118,25 +21089,34 @@ document.addEventListener('DOMContentLoaded', function() {
 <canvas id="live2d-canvas"></canvas>
 
 
-<!-- === 貓咪選擇視窗 (內容更新) === -->
+<!-- === 新增：貓咪選擇視窗 (沿用閱讀資源樣式) === -->
 <div id="catSelectionModal" class="report-menu-overlay" onclick="closeCatMenu(event)" style="z-index: 20010;">
+    <!-- 增加 max-width 讓四個選項在電腦版能並排 -->
     <div class="report-menu-content" style="max-width: 800px;">
         <div class="report-menu-title" style="color: #5d4037;">選擇你的學習夥伴</div>
         
-        <!-- 貓咪選項 (保持不變) -->
-        <div class="report-options-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 25px;">
+        <!-- 使用 grid 佈局，電腦版 4 欄，手機版 2 欄 -->
+        <div class="report-options-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
+            
+            <!-- 選項 1：隱藏 -->
             <div class="report-option-card" onclick="selectCatMode('none')">
                 <i class="fas fa-ban report-option-icon" style="color: #ccc;"></i>
                 <span class="report-option-text">隱藏</span>
             </div>
+
+            <!-- 選項 2：黑貓 -->
             <div class="report-option-card" onclick="selectCatMode('hijiki')">
                 <i class="fas fa-cat report-option-icon" style="color: #333;"></i>
                 <span class="report-option-text">黑貓 (Hijiki)</span>
             </div>
+
+            <!-- 選項 3：白貓 -->
             <div class="report-option-card" onclick="selectCatMode('tororo')">
                 <i class="fas fa-cat report-option-icon" style="color: #f0f0f0; text-shadow: 0 0 2px #999;"></i>
                 <span class="report-option-text">白貓 (Tororo)</span>
             </div>
+
+            <!-- 選項 4：雙貓 -->
             <div class="report-option-card" onclick="selectCatMode('both')">
                 <div style="display:flex; gap:5px; justify-content:center; margin-bottom:5px;">
                     <i class="fas fa-cat" style="font-size: 1.5rem; color: #333;"></i>
@@ -21144,19 +21124,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <span class="report-option-text">兩隻都要</span>
             </div>
-        </div>
 
-        <!-- ★★★ 新增：縮放控制條 ★★★ -->
-        <div style="background-color: #fcfdfd; padding: 15px; border-radius: 12px; border: 1px solid #e0ddd7;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                <label style="font-weight: bold; color: #5e7067;">貓咪大小調整</label>
-                <span id="catScaleValue" style="color: #8fa398; font-weight: bold;">100%</span>
-            </div>
-            <input type="range" id="catScaleSlider" min="50" max="150" value="100" 
-                   style="width: 100%; cursor: pointer;" 
-                   oninput="updateCatScale(this.value)">
         </div>
-
     </div>
 </div>
 
