@@ -65,16 +65,16 @@ form-action 'self';
 <!-- 新增這行：Firebase Authentication -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
-<!-- 1. Cubism 2 核心 -->
+<!-- 1. Live2D Cubism 2 核心 (必須第一) -->
 <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
 
-<!-- 2. Cubism 4 核心 (更換為 dylanNew 版本，這個版本的變數掛載最標準) -->
+<!-- 2. Live2D Cubism 4 核心 (必須第二，這是您缺少的關鍵) -->
 <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2dcubismcore.min.js"></script>
 
-<!-- 3. PixiJS -->
+<!-- 3. PixiJS v6.5.8 (必須第三) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.8/browser/pixi.min.js"></script>
 
-<!-- 4. Pixi Live2D Plugin (0.4.0) -->
+<!-- 4. Pixi Live2D Plugin v0.4.0 (必須最後) -->
 <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
 
 
@@ -7124,7 +7124,8 @@ read-mode-container {
 
 // --- Live2D 整合邏輯 ---
 
-// --- Live2D 整合邏輯 (修正版) ---
+// --- Live2D 整合邏輯 (修復版) ---
+
 let app;
 let models = {}; // 儲存模型實例
 let isLive2DVisible = false;
@@ -7133,125 +7134,75 @@ async function initLive2D() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas) return;
 
-    // 1. 【關鍵修復】強制對接核心變數
-    // 有些 CDN 版本會使用小寫名稱，這裡強制將其導向插件需要的「Live2DCubismCore」
-    window.Live2DCubismCore = window.Live2DCubismCore || window.live2dcubismcore;
+    // ★★★ 關鍵修復：手動對接核心變數 ★★★
+    // 檢查是否有小寫的變數，若有，強制賦值給大寫變數讓插件讀取
+    if (!window.Live2DCubismCore && window.live2dcubismcore) {
+        window.Live2DCubismCore = window.live2dcubismcore;
+        console.log("已手動修正 Live2DCubismCore 變數名稱");
+    }
 
+    // 再次檢查核心是否真的存在
     if (!window.Live2DCubismCore) {
-        console.error("❌ 錯誤：找不到 Live2DCubismCore。請檢查 HTML 中的 script 標籤是否正確載入。");
-        alert("Live2D 初始化失敗：核心組件未就緒。");
+        console.error("❌ 嚴重錯誤：瀏覽器無法載入 Cubism 4 核心。");
+        console.error("請檢查：1. 網路是否封鎖了 cdn.jsdelivr.net");
+        console.error("請檢查：2. 是否有安裝 AdBlock 阻擋了腳本");
         return;
     }
 
-    // 2. 確保插件已正確掛載到 PIXI
+    // 確保插件掛載
     if (!window.PIXI.live2d) {
-        if (window.PixiLive2dDisplay) {
-            window.PIXI.live2d = window.PixiLive2dDisplay;
-        } else {
-            console.error("❌ 錯誤：找不到 PixiLive2dDisplay 插件。");
-            return;
-        }
+        window.PIXI.live2d = window.PixiLive2dDisplay;
     }
 
-    // 3. 初始化 Pixi 應用程式 (若尚未建立)
+    // 初始化 Pixi 應用
     if (!app) {
-        try {
-            app = new PIXI.Application({
-                view: canvas,
-                autoStart: true,
-                backgroundAlpha: 0, // 透明背景
-                width: 500,         // 畫布寬度
-                height: 400,        // 畫布高度
-                resolution: window.devicePixelRatio || 1,
-                antialias: true
-            });
-        } catch (e) {
-            console.error("❌ PixiJS 初始化失敗:", e);
-            return;
-        }
+        app = new PIXI.Application({
+            view: canvas,
+            autoStart: true,
+            backgroundAlpha: 0,
+            width: 300,  // 手機版建議寬度
+            height: 300, // 手機版建議高度
+            resolution: window.devicePixelRatio || 1,
+        });
     }
 
-    // 4. 設定模型路徑 (請確保檔案存在於您的主機目錄)
+    // 模型路徑 (請確保這些檔案真的在您的伺服器上)
     const modelPathHijiki = 'live2d/hijiki/runtime/hijiki.model3.json';
     const modelPathTororo = 'live2d/tororo/runtime/tororo.model3.json';
 
     try {
-        console.log("📥 正在載入貓咪模型...");
-
-        // 同時開始載入兩個模型以節省時間
-        const [hijiki, tororo] = await Promise.all([
-            PIXI.live2d.Live2DModel.from(modelPathHijiki),
-            PIXI.live2d.Live2DModel.from(modelPathTororo)
-        ]);
-
-        // 設定黑貓 (Hijiki)
-        setupModel(hijiki, 0.2, 80, 50); // 縮放, X座標, Y座標
+        console.log("📥 開始載入 Live2D 模型...");
+        
+        // 載入模型
+        const hijiki = await PIXI.live2d.Live2DModel.from(modelPathHijiki);
+        setupModel(hijiki, 0.25, 60, 80); // 調整參數：縮放, x, y
         models.hijiki = hijiki;
 
-        // 設定白貓 (Tororo)
-        setupModel(tororo, 0.2, 220, 50);
+        const tororo = await PIXI.live2d.Live2DModel.from(modelPathTororo);
+        setupModel(tororo, 0.25, 180, 80);
         models.tororo = tororo;
 
-        console.log("✅ Live2D 載入完成！");
+        console.log("✅ 貓咪模型載入成功！");
 
     } catch (error) {
-        console.error("❌ 模型載入失敗，請檢查檔案路徑或網絡:", error);
-        console.log("建議檢查：", modelPathHijiki);
+        console.error("❌ 模型載入失敗:", error);
     }
 }
 
-// 模型設定輔助函式 (保持與之前一致)
+// 輔助函式保持不變
 function setupModel(model, scale, x, y) {
-    if (!app || !model) return;
-
+    if(!app) return;
     app.stage.addChild(model);
     model.scale.set(scale);
     model.x = x;
     model.y = y;
-    
-    // 開啟互動
     model.interactive = true;
-
-    // 點擊事件：播放動作
     model.on('pointerdown', () => {
-        // 觸發隨機動作
-        model.motion('TapBody'); 
-        if (navigator.vibrate) navigator.vibrate(20); // 震動回饋
+        model.motion('TapBody');
+        if (navigator.vibrate) navigator.vibrate(20);
     });
 }
 
-// 模型設定輔助函式
-function setupModel(model, scale, x, y) {
-    app.stage.addChild(model);
-    model.scale.set(scale);
-    model.x = x;
-    model.y = y;
-    
-    // 開啟互動
-    model.interactive = true;
-    model.buttonMode = true;
-
-    // 點擊事件：隨機播放動作
-    model.on('pointerdown', () => {
-        // 播放隨機動作，官方範例通常有 "TapBody" 這個動作組
-        model.motion('TapBody'); 
-        
-        // 播放音效 (可選，需確保您有該音效檔)
-        // const sound = new Audio('meow.mp3');
-        // sound.play().catch(()=>{});
-        
-        if (navigator.vibrate) navigator.vibrate(20); // 震動回饋
-    });
-    
-    // 拖曳視線 (讓貓咪看著滑鼠)
-    // 注意：這會消耗效能，若卡頓可移除
-    /*
-    window.addEventListener('mousemove', (event) => {
-       if(!isLive2DVisible) return;
-       // 簡單的視線追蹤邏輯... (略，保持簡單)
-    });
-    */
-}
 
 // 按鈕切換顯示/隱藏
 function toggleLive2D() {
