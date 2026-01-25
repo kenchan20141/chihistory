@@ -7077,8 +7077,8 @@ read-mode-container {
     
     /* 關鍵修正：加大畫布尺寸，避免貓咪被切頭切尾 */
     /* 這裡設定的大小是「可視區域」，稍後 JS 會讓它可拖曳 */
-    width: 400px; 
-    height: 400px;
+    width: 800px; 
+    height: 800px;
     
     z-index: 2147483647; /* 確保比 Footer 和所有內容都高 */
     pointer-events: auto; /* 允許點擊互動和拖曳 */
@@ -7270,8 +7270,8 @@ async function initLive2DApp() {
         view: canvas,
         autoStart: true,
         backgroundAlpha: 0, // 透明背景
-        width: 400,         // ★ 關鍵：畫布寬度設大一點
-        height: 400,        // ★ 關鍵：畫布高度設大一點
+        width: 800,         // ★ 關鍵：畫布寬度設大一點
+        height: 800,        // ★ 關鍵：畫布高度設大一點
         resolution: window.devicePixelRatio || 1,
     });
     
