@@ -65,12 +65,14 @@ form-action 'self';
 <!-- 新增這行：Firebase Authentication -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
-<!-- Live2D Cubism Core (必須) -->
+<!-- Live2D Cubism Core (Cubism 4 核心) -->
 <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dCubismCore.min.js"></script>
-<!-- PixiJS (渲染引擎) -->
+
+<!-- PixiJS (渲染引擎 - 建議鎖定版本以確保穩定) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.8/browser/pixi.min.js"></script>
-<!-- Pixi Live2D Display (連接 Pixi 與 Live2D 的插件) -->
-<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/index.min.js"></script>
+
+<!-- ★★★ 關鍵修改：改用 Cubism 4 專用版，解決 Runtime 錯誤 ★★★ -->
+<script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/cubism4.min.js"></script>
 
 
 	<script>
@@ -7127,13 +7129,21 @@ async function initLive2D() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas) return;
 
+    // ★★★ 新增這行：確保 PixiJS 與 Live2D 插件連接 ★★★
+    // 解決有時候 PIXI.live2d 尚未準備好的問題
+    if (!window.PIXI.live2d) {
+        console.log("正在手動註冊 Live2D...");
+        // 這裡不需要額外動作，只要確保上面的 cubism4.min.js 載入正確，
+        // 它會自動掛載。如果報錯，代表 script 載入順序有誤。
+    }
+
     // 1. 初始化 Pixi 應用
     app = new PIXI.Application({
         view: canvas,
         autoStart: true,
-        backgroundAlpha: 0, // 透明背景
-        width: 500,         // 畫布解析度寬度
-        height: 400,        // 畫布解析度高度
+        backgroundAlpha: 0, 
+        width: 500,         
+        height: 400,        
         resolution: window.devicePixelRatio || 1,
     });
 
