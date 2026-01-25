@@ -65,13 +65,16 @@ form-action 'self';
 <!-- 新增這行：Firebase Authentication -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
-<!-- Live2D Cubism Core (Cubism 4 核心 - 必須最先載入) -->
-<script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dCubismCore.min.js"></script>
+<!-- 1. Cubism 2 核心 (解決 Could not find Cubism 2 runtime 報錯) -->
+<script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
 
-<!-- PixiJS v6.5.8 (渲染引擎) -->
+<!-- 2. Cubism 4 核心 (貓咪模型實際需要的庫) -->
+<script src="https://cdn.jsdelivr.net/gh/Arisuria/Live2D-Core@main/live2dcubismcore.min.js"></script>
+
+<!-- 3. PixiJS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.8/browser/pixi.min.js"></script>
 
-<!-- Pixi Live2D Plugin (鎖定 0.4.0 版本以適配 Pixi v6，並使用 index.min.js 獲得最佳相容性) -->
+<!-- 4. Pixi Live2D Plugin (鎖定 0.4.0) -->
 <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
 
 
@@ -7131,11 +7134,24 @@ async function initLive2D() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas) return;
 
-    // 1. 安全檢查：確認核心庫是否已載入
-    if (typeof Live2DCubismCore === 'undefined') {
-        console.error("Live2D 核心庫尚未載入，請檢查網路連線或 AdBlock 設定。");
-        alert("Live2D 初始化失敗：核心庫未載入。");
+    // --- 強化版檢查 ---
+    // 檢查 Cubism 4 核心是否存在 (相容多種命名方式)
+    const core4 = window.Live2DCubismCore || window.live2dcubismcore;
+    
+    if (!core4) {
+        console.error("Live2D 核心庫 (Cubism 4) 尚未載入。");
+        alert("Live2D 初始化失敗：核心庫未載入。請嘗試關閉 AdBlock 或換個瀏覽器。");
         return;
+    }
+
+    // 確保插件已掛載到 PIXI
+    if (!window.PIXI.live2d) {
+        if (window.PixiLive2dDisplay) {
+            window.PIXI.live2d = window.PixiLive2dDisplay;
+        } else {
+            console.error("找不到 Live2D 插件。");
+            return;
+        }
     }
 
     // 2. 安全檢查：確認 Pixi 與 Plugin 是否連結
