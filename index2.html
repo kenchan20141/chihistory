@@ -7164,7 +7164,7 @@ body.cat-dragging { cursor: grabbing !important; }
 <script>
 
 // =======================================================
-// === Live2D 貓咪系統 (海量題庫 + 貓叫聲效 + 無限縮放) ===
+// === Live2D 貓咪系統 (修復氣泡消失BUG + 海量題庫 + 聲效) ===
 // =======================================================
 
 let app;
@@ -7174,10 +7174,10 @@ const CANVAS_ID = 'live2d-canvas';
 const MODEL_PATH_HIJIKI = 'live2d/hijiki/runtime/hijiki.model3.json';
 const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
 
-// ★ 新增：貓叫聲效
+// 貓叫聲效
 const CAT_SOUND_URL = 'https://taira-komori.net/sound_os2/animals01/cat1a.mp3';
 const catAudio = new Audio(CAT_SOUND_URL);
-catAudio.volume = 0.6; // 音量適中
+catAudio.volume = 0.6; 
 
 // --- 互動狀態 ---
 let isDragging = false;
@@ -7201,7 +7201,7 @@ const LONG_PRESS_DURATION = 800; // 800ms 觸發
 
 // 對話氣泡元素
 let speechBubble = null;
-let bubbleTimer = null;
+let bubbleTimer = null; // 控制氣泡消失的計時器
 
 document.addEventListener('DOMContentLoaded', () => {
     const savedMode = localStorage.getItem('sansi_cat_mode');
@@ -7588,7 +7588,7 @@ function handleDoubleTap() {
         
         // ★ 播放貓叫聲 ★
         if (catAudio) {
-            catAudio.currentTime = 0; // 重置播放進度，確保連續點擊能觸發
+            catAudio.currentTime = 0; 
             catAudio.play().catch(e => console.log("音效播放受阻:", e));
         }
         
@@ -7598,17 +7598,14 @@ function handleDoubleTap() {
     }
 }
 
-// === 長按對話邏輯 (★ 海量動態題庫引擎) ===
+// === 長按對話邏輯 (★ 關鍵修復：確保顯示) ===
 async function triggerCatChat() {
-    hideBubble();
-    
-    setTimeout(() => {
-        showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); 
-    }, 100);
+    // 1. 強制重置/顯示氣泡，不使用 hideBubble() 以免產生 Race Condition
+    showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); 
     
     triggerCatReaction();
 
-    // 1. 海量分類庫 (>150項)
+    // 2. 海量分類庫 (確保不重複)
     const categories = [
         '古代生僻字由來', '成語背後的恐怖故事', '古代詩人死法', '古代黑科技', 
         '中國神話生物', '古代刑罰冷知識', '古代飲食習慣', '古代考試作弊方法',
@@ -7624,7 +7621,7 @@ async function triggerCatChat() {
         '古代如何上廁所', '古代乞丐組織', '古代殺手集團', '古代黑幫文化',
         '古代如何防盜', '古代監獄生活', '古代死刑執行細節', '古代如何驗毒',
         '古代如何製作木乃伊(中國版)', '古代如何保存食物', '古代冰塊製作',
-        '古代如何治療性病', '古代如何墮胎', '古代如何接生', '古代如何坐月子',
+       '古代如何接生', '古代如何坐月子',
         '古代親子鑑定法', '古代如何選美', '古代如何相親', '古代婚禮鬧洞房',
         '古代葬禮習俗', '古代守孝禁忌', '古代如何招魂', '古代趕屍真相',
         '古代蠱毒傳說', '古代降頭術', '古代風水禁忌', '古代面相學',
@@ -7653,7 +7650,6 @@ async function triggerCatChat() {
         '古代五斗米道', '古代全真教', '古代正一教', '古代佛教傳入趣事'
     ];
 
-    // 2. 定義切入角度 (>150項)
     const angles = [
         '越冷門越好', '令人毛骨悚然的', '好笑荒謬的', '顛覆常識的', 
         '現代人絕對做不到的', '聽起來很假但其實是真的', '有點噁心的',
@@ -7665,7 +7661,7 @@ async function triggerCatChat() {
         '古代人的職場厚黑學', '古代人的婆媳大戰', '古代人的育兒崩潰', '古代人的整容失敗',
         '古代人的減肥血淚史', '古代人的脫髮焦慮', '古代人的失眠對策', '古代人的便秘療法',
         '古代人的口臭救星', '古代人的狐臭掩蓋法', '古代人的腳氣治療', '古代人的痔瘡痛苦',
-        '古代人的寄生蟲困擾', '古代人的性病恐慌', '古代人的避孕失敗', '古代人的墮胎慘劇',
+        '古代人的寄生蟲困擾', '古代人的墮胎慘劇',
         '古代人的難產故事', '古代人的近親結婚', '古代人的老少配', '古代人的多角戀',
         '古代人的偷情技巧', '古代人的捉姦現場', '古代人的離婚大戰', '古代人的爭產風波',
         '古代人的驗屍烏龍', '古代人的誤診案例', '古代人的醫療事故', '古代人的庸醫害人',
@@ -7694,12 +7690,10 @@ async function triggerCatChat() {
         '古代人的過河拆橋', '古代人的卸磨殺驢', '古代人的鳥盡弓藏', '古代人的成王敗寇'
     ];
 
-    // 3. 隨機抽取組合
     const randomCategory = categories[Math.floor(Math.random() * categories.length)];
     const randomAngle = angles[Math.floor(Math.random() * angles.length)];
     const randomSeed = Math.floor(Math.random() * 999999);
 
-    // 4. 構建極度具體的 Prompt
     const prompt = `
     (RandomSeed: ${randomSeed})
     你是我的貓咪助手。請告訴我一個關於【${randomCategory}】的冷知識。
@@ -7711,7 +7705,6 @@ async function triggerCatChat() {
     `;
 
     try {
-        // 調用 API (使用較高的 temperature 增加隨機性)
         const text = await callAPI(prompt, 0.99); 
         showBubble(text, 0); 
     } catch (e) {
@@ -7720,24 +7713,47 @@ async function triggerCatChat() {
     }
 }
 
-// 顯示氣泡 (autoHideMs = 0 代表常駐)
+// === 顯示氣泡 (核心修正：強制清除舊 Timer) ===
 function showBubble(htmlContent, autoHideMs = 0) {
     if (!speechBubble) return;
     
+    // ★ 關鍵：如果有正在倒數的關閉計時器，立刻取消！
+    if (bubbleTimer) {
+        clearTimeout(bubbleTimer);
+        bubbleTimer = null;
+    }
+    
     speechBubble.innerHTML = htmlContent;
     speechBubble.style.display = 'block';
+    
+    // 強制重繪
     void speechBubble.offsetWidth; 
     speechBubble.classList.add('show');
     
     updateBubblePosition();
+    
+    // 如果有設定自動隱藏 (例如 0 代表不隱藏，其他數字代表毫秒)
+    if (autoHideMs > 0) {
+        bubbleTimer = setTimeout(hideBubble, autoHideMs);
+    }
 }
 
 function hideBubble() {
     if (!speechBubble) return;
-    speechBubble.classList.remove('show');
-    setTimeout(() => {
-        speechBubble.style.display = 'none';
-    }, 300);
+    
+    // 只有在氣泡目前是顯示的狀態下才執行隱藏邏輯
+    if (speechBubble.style.display !== 'none') {
+        speechBubble.classList.remove('show');
+        
+        // 延遲關閉，讓動畫播完
+        // 這裡不需要存 timer，因為這是單次動作
+        setTimeout(() => {
+            // 雙重確認：如果這期間又被 showBubble 打開了，就不應該 none
+            if (!speechBubble.classList.contains('show')) {
+                speechBubble.style.display = 'none';
+            }
+        }, 300);
+    }
 }
 
 function updateBubblePosition() {
@@ -7789,7 +7805,6 @@ function playRandomMotion(model) {
     if (targetGroups.length === 0) targetGroups = groups;
     
     const randomGroup = targetGroups[Math.floor(Math.random() * targetGroups.length)];
-    // ★ 確保隨機播放該組內的所有 Motion (如 01, 02... 08)
     motionMgr.startRandomMotion(randomGroup, 3); 
 }
 
