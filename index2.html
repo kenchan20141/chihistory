@@ -7164,7 +7164,7 @@ body.cat-dragging { cursor: grabbing !important; }
 <script>
 
 // =======================================================
-// === Live2D 貓咪系統 (無TTS + 雙重聲效 + 海量題庫) ===
+// === Live2D 貓咪系統 (手機流暢拖曳修復版 + 無TTS) ===
 // =======================================================
 
 let app;
@@ -7375,7 +7375,7 @@ function repositionCats() {
 }
 
 // =======================================================
-// === 全域互動邏輯 ===
+// === 全域互動邏輯 (核心修復) ===
 // =======================================================
 
 function initGlobalInteraction() {
@@ -7416,7 +7416,8 @@ function initGlobalInteraction() {
         }
     }
 
-    // --- 觸控事件 ---
+    // --- 觸控事件 (Touch Events) ---
+    // 注意：passive: false 是關鍵，允許我們調用 preventDefault()
     window.addEventListener('touchstart', (e) => {
         if (canvas.style.display === 'none') return;
 
@@ -7438,7 +7439,9 @@ function initGlobalInteraction() {
         if (e.touches.length === 1) {
             const touch = e.touches[0];
             if (hitTest(touch.clientX, touch.clientY)) {
-                isDragging = false;
+                // ★ 這裡先不設 isDragging 為 true，等移動一段距離後才設，
+                // 但要先記錄起始點，並開始長按計時
+                isDragging = false; 
                 startX = touch.clientX;
                 startY = touch.clientY;
                 containerStartX = modelContainer.x;
@@ -7453,17 +7456,12 @@ function initGlobalInteraction() {
     }, { passive: false });
 
     window.addEventListener('touchmove', (e) => {
+        // 如果沒有標記為互動中，直接忽略，讓頁面正常滾動
         if (canvas.getAttribute('data-interacting') !== 'true') return;
-
-        // 移動容錯 (15px)
-        if (!isPinching && Math.hypot(e.touches[0].clientX - startX, e.touches[0].clientY - startY) > 15) {
-            cancelLongPressTimer();
-            if (!isDragging) isDragging = true;
-        }
 
         // 縮放邏輯
         if (isPinching && e.touches.length === 2) {
-            if (e.cancelable) e.preventDefault();
+            if (e.cancelable) e.preventDefault(); // 阻止瀏覽器縮放
             const currentDist = getPinchDistance(e.touches);
             if (initialPinchDist > 0) {
                 const scaleFactor = currentDist / initialPinchDist;
@@ -7476,15 +7474,25 @@ function initGlobalInteraction() {
             return;
         }
 
+        // 單指拖曳邏輯
         if (!isPinching && e.touches.length === 1) {
-            if (isLongPress) return;
+            if (isLongPress) return; // 如果已經觸發長按，就不移動
 
             const touch = e.touches[0];
             const dx = touch.clientX - startX;
             const dy = touch.clientY - startY;
+            const dist = Math.hypot(dx, dy);
+
+            // ★ 移動容錯 (8px)：防手抖，且一旦超過就視為拖曳
+            if (dist > 8) {
+                cancelLongPressTimer();
+                isDragging = true; // 鎖定為拖曳狀態
+            }
 
             if (isDragging) {
+                // ★ 核心：只有在判定為拖曳狀態時，才阻止瀏覽器滾動
                 if (e.cancelable) e.preventDefault();
+                
                 modelContainer.x = containerStartX + dx;
                 modelContainer.y = containerStartY + dy;
                 updateBubblePosition();
@@ -7502,6 +7510,7 @@ function initGlobalInteraction() {
         }
 
         if (canvas.getAttribute('data-interacting') === 'true') {
+            // 如果互動結束時，不是拖曳也不是長按，那就視為「點擊」
             if (!isDragging && !isLongPress) {
                 handleDoubleTap(); 
             }
@@ -7513,7 +7522,8 @@ function initGlobalInteraction() {
         isLongPress = false;
     });
 
-    // --- 滑鼠事件 ---
+    // --- 滑鼠事件 (Mouse Events) ---
+    // 電腦版通常沒問題，但為保一致性也加上 preventDefault
     window.addEventListener('mousedown', (e) => {
         if (canvas.style.display === 'none') return;
         if (e.button !== 0) return;
@@ -7543,7 +7553,7 @@ function initGlobalInteraction() {
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
-        if (Math.hypot(dx, dy) > 10) {
+        if (Math.hypot(dx, dy) > 8) { // 與手機版一致
             cancelLongPressTimer();
             if (!isDragging) isDragging = true;
         }
