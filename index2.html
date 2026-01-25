@@ -7076,7 +7076,7 @@ read-mode-container {
     height: 100vh;
     z-index: 2147483647; 
     
-    /* 核心：pointer-events 為 none 讓點擊穿透，但 touch-action 為 none 禁止瀏覽器縮放 */
+    /* 核心：讓點擊穿透，但禁止瀏覽器預設的縮放行為 */
     pointer-events: none !important;
     touch-action: none; 
     
@@ -7087,7 +7087,7 @@ read-mode-container {
     display: none; 
 }
 
-/* 點擊時的 Q 彈動畫 */
+/* 點擊時的 Q 彈動畫 (Jelly Effect) */
 @keyframes cat-jelly {
     0% { transform: scale(1, 1); }
     30% { transform: scale(1.1, 0.9); }
@@ -7106,7 +7106,7 @@ read-mode-container {
 body.cat-hovering { cursor: grab !important; }
 body.cat-dragging { cursor: grabbing !important; }
 
-/* 保持其他樣式不變 */
+/* 其他輔助樣式 */
 .report-option-icon { font-size: 2.5rem; margin-bottom: 10px; }
 .cat-sub-menu { display: flex; justify-content: space-around; padding: 10px 5px; background: rgba(0, 0, 0, 0.2); border-radius: 8px; margin: 5px 10px; animation: fadeIn 0.3s ease; }
 .cat-option { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s; background: rgba(255, 255, 255, 0.1); }
@@ -7119,47 +7119,72 @@ body.cat-dragging { cursor: grabbing !important; }
 
 
 // =======================================================
-// === Live2D 貓咪系統 (邊界完美修復 + 雙指縮放 + 雙擊互動) ===
+// === Live2D 貓咪系統 (記憶位置大小 + 無限縮放 + 雙擊互動) ===
 // =======================================================
 
 let app;
 let modelContainer; 
 const CANVAS_ID = 'live2d-canvas';
+const STORAGE_KEY = 'sansi_cat_config_v2'; // 更新 Key 以避免舊資料衝突
 
 const MODEL_PATH_HIJIKI = 'live2d/hijiki/runtime/hijiki.model3.json';
 const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
 
-// --- 互動狀態 ---
+// --- 互動變數 ---
 let isDragging = false;
 let isPinching = false;
 
-// 拖曳變數
+// 拖曳相關
 let startX = 0, startY = 0;
 let containerStartX = 0, containerStartY = 0;
 
-// 縮放變數
+// 縮放相關
 let initialPinchDist = 0;
 let initialScale = 1;
 
-// 雙擊變數
+// 雙擊相關
 let lastTapTime = 0;
 
+// 當前設定 (預設值)
+let currentConfig = {
+    mode: 'none',
+    x: 0,
+    y: 0,
+    scale: 0 // 0 代表尚未初始化
+};
+
 document.addEventListener('DOMContentLoaded', () => {
-    const savedMode = localStorage.getItem('sansi_cat_mode');
-    if (savedMode && savedMode !== 'none') {
-        setTimeout(() => selectCatMode(savedMode, false), 500);
+    // 1. 讀取 LocalStorage
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            currentConfig = JSON.parse(saved);
+        } else {
+            // 相容舊版 Key
+            const oldMode = localStorage.getItem('sansi_cat_mode');
+            if (oldMode) currentConfig.mode = oldMode;
+        }
+    } catch (e) { console.error('讀取貓咪設定失敗', e); }
+
+    // 2. 初始化
+    if (currentConfig.mode && currentConfig.mode !== 'none') {
+        setTimeout(() => selectCatMode(currentConfig.mode, false), 500);
     }
     
     initGlobalInteraction();
     
-    // 監聽轉向/縮放，強制歸位
+    // 3. 監聽視窗變化 (轉向/縮放) -> 自動歸位
     window.addEventListener('resize', () => {
         if (modelContainer && document.getElementById(CANVAS_ID).style.display !== 'none') {
-            setTimeout(repositionCats, 100);
+            setTimeout(() => {
+                repositionCats();
+                saveCatState(); // 歸位後更新儲存
+            }, 200);
         }
     });
 });
 
+// === 1. 初始化 Pixi ===
 async function initLive2DApp() {
     const canvas = document.getElementById(CANVAS_ID);
     if (app) return;
@@ -7176,14 +7201,16 @@ async function initLive2DApp() {
     modelContainer = new PIXI.Container();
     app.stage.addChild(modelContainer);
     
-    // 初始隱藏，定好位再顯示
+    // 初始隱藏
     modelContainer.visible = false;
     modelContainer.alpha = 0;
 }
 
+// === 2. 選擇並載入貓咪 ===
 async function selectCatMode(mode, save = true) {
     if (save) {
-        localStorage.setItem('sansi_cat_mode', mode);
+        currentConfig.mode = mode;
+        saveCatState();
         const modal = document.getElementById('catSelectionModal');
         if(modal) modal.style.display = 'none';
     }
@@ -7199,29 +7226,31 @@ async function selectCatMode(mode, save = true) {
     canvas.style.display = 'block';
     
     modelContainer.removeChildren();
-    modelContainer.scale.set(1);
+    // 先暫時設為 1，稍後根據儲存值調整
+    modelContainer.scale.set(1); 
     modelContainer.alpha = 0; 
 
     try {
-        const isMobile = window.innerWidth < 600;
-        // ★ 再次縮小預設值，確保不佔版面
-        let baseScale = isMobile ? 0.10 : 0.07; 
+        // 為了讓縮放邏輯統一，我們讓內部模型固定一個基礎大小
+        // 手機與電腦統一基礎比例，剩下的由 Container Scale 控制
+        const internalBaseScale = 0.1; 
 
         if (mode === 'hijiki') {
-            await loadModelToContainer(MODEL_PATH_HIJIKI, baseScale, 0); 
+            await loadModelToContainer(MODEL_PATH_HIJIKI, internalBaseScale, 0); 
         } else if (mode === 'tororo') {
-            await loadModelToContainer(MODEL_PATH_TORORO, baseScale, 0);
+            await loadModelToContainer(MODEL_PATH_TORORO, internalBaseScale, 0);
         } else if (mode === 'both') {
-            let offset = isMobile ? 30 : 50;
-            await loadModelToContainer(MODEL_PATH_HIJIKI, baseScale * 0.9, -offset);
-            await loadModelToContainer(MODEL_PATH_TORORO, baseScale * 0.9, offset);
+            // 雙貓間距
+            let offset = 400; // 內部像素距離
+            await loadModelToContainer(MODEL_PATH_HIJIKI, internalBaseScale, -offset);
+            await loadModelToContainer(MODEL_PATH_TORORO, internalBaseScale, offset);
         }
         
-        // ★ 關鍵：等待一小段時間讓 PIXI 計算出模型的寬高，然後再定位
+        // ★ 關鍵：恢復記憶的狀態 ★
         setTimeout(() => {
-            forceInitialPosition(); // 強制設定到右下角
+            restoreState(); 
             
-            // 淡入顯示
+            // 淡入動畫
             let fadeTicker = setInterval(() => {
                 modelContainer.visible = true;
                 modelContainer.alpha += 0.1;
@@ -7230,7 +7259,7 @@ async function selectCatMode(mode, save = true) {
                     clearInterval(fadeTicker);
                 }
             }, 30);
-        }, 300);
+        }, 200);
         
     } catch (err) {
         console.error("模型載入失敗:", err);
@@ -7239,88 +7268,103 @@ async function selectCatMode(mode, save = true) {
 
 async function loadModelToContainer(path, scale, xOffset) {
     const model = await PIXI.live2d.Live2DModel.from(path);
-    model.scale.set(scale);
-    model._baseOffsetX = xOffset;
+    // 這裡設定的是「模型在 Container 內部的相對大小」
+    // 我們保持這個大小固定，縮放時只動 Container
+    model.scale.set(1.0); 
     model.x = xOffset; 
     model.y = 0;
     modelContainer.addChild(model);
 }
 
-// === 1. 初始強制定位 (右下角) ===
-function forceInitialPosition() {
+// === 3. 狀態恢復與定位 (核心) ===
+function restoreState() {
     if (!modelContainer) return;
-    const bounds = modelContainer.getBounds(); // 獲取貓的實際寬高
-    const screenW = window.innerWidth;
-    const screenH = window.innerHeight;
 
-    // 計算 X：螢幕寬 - 貓寬 - 20px邊距
-    let targetX = screenW - bounds.width - 20;
-    // 計算 Y：螢幕高 - 貓高 - 40px邊距
-    let targetY = screenH - bounds.height - 40;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const isMobile = width < 600;
 
-    // 修正錨點偏移 (因為 modelContainer 原點在左上角)
-    // 這裡我們需要把容器的 (0,0) 移動到上述計算出的位置
-    // 但因為子模型可能有 offset，所以這裡直接設定容器位置即可
-    
-    // 如果計算出的位置是負數（代表螢幕太小），就貼齊左上 (0,0)
-    if (targetX < 0) targetX = 0;
-    if (targetY < 0) targetY = 0;
+    // A. 恢復大小 (Scale)
+    if (currentConfig.scale > 0) {
+        // 如果有紀錄，使用紀錄值
+        modelContainer.scale.set(currentConfig.scale);
+    } else {
+        // 如果是第一次 (沒有紀錄)，設定預設大小
+        // 手機預設 0.11，電腦預設 0.08
+        const defaultScale = isMobile ? 0.11 : 0.08;
+        modelContainer.scale.set(defaultScale);
+    }
 
-    modelContainer.x = targetX;
-    modelContainer.y = targetY;
+    // B. 恢復位置 (X, Y)
+    // 我們需要先檢查是否有紀錄，如果沒有紀錄(0,0)，則放到右下角
+    if (currentConfig.x === 0 && currentConfig.y === 0) {
+        // 第一次：強制右下角
+        const bounds = modelContainer.getBounds();
+        const initX = width - bounds.width - 20;
+        const initY = height - bounds.height - 40;
+        modelContainer.position.set(initX, initY);
+    } else {
+        // 有紀錄：恢復位置
+        modelContainer.position.set(currentConfig.x, currentConfig.y);
+    }
+
+    // C. 最後執行一次邊界檢查 (防止紀錄的位置在當前螢幕外)
+    repositionCats();
 }
 
-// === 2. 邊界限制核心 (Clamp) - 防止跑出螢幕 ===
+// === 4. 邊界限制 (防止出界) ===
 function repositionCats() {
     if (!modelContainer || modelContainer.children.length === 0) return;
 
-    const bounds = modelContainer.getBounds();
+    const bounds = modelContainer.getBounds(); // 當前實際佔用範圍
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
-    const padding = 20; // 安全邊距
+    
+    // 容許邊距
+    const padding = 20;
 
-    // 當前的容器位置
     let newX = modelContainer.x;
     let newY = modelContainer.y;
 
-    // --- 右邊界限制 ---
-    // 貓的右邊緣 = newX + 貓的寬度
-    // 如果 (newX + 寬度) > 螢幕寬，就把它推回來
+    // 右邊界：不能讓貓的右側超出螢幕太多
     if (newX + bounds.width > screenW - padding) {
         newX = screenW - bounds.width - padding;
     }
-
-    // --- 下邊界限制 ---
-    // 貓的下邊緣 = newY + 貓的高度
+    // 下邊界：不能讓貓的腳超出螢幕
     if (newY + bounds.height > screenH - padding) {
         newY = screenH - bounds.height - padding;
     }
-
-    // --- 左邊界限制 ---
+    // 左邊界
     if (newX < padding) newX = padding;
-
-    // --- 上邊界限制 ---
+    // 上邊界
     if (newY < padding) newY = padding;
 
     modelContainer.position.set(newX, newY);
 }
 
+// === 5. 儲存狀態到 LocalStorage ===
+function saveCatState() {
+    if (!modelContainer) return;
+    
+    currentConfig.x = modelContainer.x;
+    currentConfig.y = modelContainer.y;
+    currentConfig.scale = modelContainer.scale.x; // 假設等比縮放
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
+}
+
 // =======================================================
-// === 全域互動邏輯 (Touch & Mouse) ===
+// === 全域互動邏輯 (修正版) ===
 // =======================================================
 
 function initGlobalInteraction() {
     const canvas = document.getElementById(CANVAS_ID);
     
-    // --- 輔助：判定是否點中貓 (寬鬆判定) ---
+    // 寬鬆判定
     function hitTest(x, y) {
         if (!modelContainer || modelContainer.children.length === 0) return false;
-        
-        // 取得貓咪在螢幕上的範圍
         const bounds = modelContainer.getBounds();
-        // 擴大判定範圍，讓手指更容易點到
-        const padding = 20; 
-
+        const padding = 30; 
         return (x >= bounds.x - padding && x <= bounds.x + bounds.width + padding &&
                 y >= bounds.y - padding && y <= bounds.y + bounds.height + padding);
     }
@@ -7332,16 +7376,13 @@ function initGlobalInteraction() {
         );
     }
 
-    // ===========================
-    // === 觸控事件 (Touch) ===
-    // ===========================
-
+    // --- 觸控 (Touch) ---
     window.addEventListener('touchstart', (e) => {
         if (canvas.style.display === 'none') return;
 
-        // --- A. 雙指縮放邏輯 ---
+        // 雙指縮放
         if (e.touches.length === 2) {
-            // 只要其中一指在貓附近，就啟動縮放
+            // 只要有一指在貓附近，就啟動縮放
             if (hitTest(e.touches[0].clientX, e.touches[0].clientY) || 
                 hitTest(e.touches[1].clientX, e.touches[1].clientY)) {
                 
@@ -7350,18 +7391,16 @@ function initGlobalInteraction() {
                 initialPinchDist = getPinchDistance(e.touches);
                 initialScale = modelContainer.scale.x;
                 
-                // 標記：讓 CSS 知道正在互動
                 canvas.setAttribute('data-interacting', 'true');
                 return;
             }
         }
 
-        // --- B. 單指拖曳/點擊邏輯 ---
+        // 單指拖曳/點擊
         if (e.touches.length === 1) {
             const touch = e.touches[0];
             if (hitTest(touch.clientX, touch.clientY)) {
-                // 點到了！準備互動
-                isDragging = false; // 先假設是點擊
+                isDragging = false; 
                 startX = touch.clientX;
                 startY = touch.clientY;
                 containerStartX = modelContainer.x;
@@ -7377,7 +7416,7 @@ function initGlobalInteraction() {
     window.addEventListener('touchmove', (e) => {
         if (canvas.getAttribute('data-interacting') !== 'true') return;
 
-        // --- A. 縮放中 ---
+        // 縮放邏輯
         if (isPinching && e.touches.length === 2) {
             if (e.cancelable) e.preventDefault(); // 阻止網頁縮放
 
@@ -7386,27 +7425,27 @@ function initGlobalInteraction() {
                 const scaleFactor = currentDist / initialPinchDist;
                 let newScale = initialScale * scaleFactor;
                 
-                // 限制縮放範圍 (0.05 ~ 0.8)
-                newScale = Math.max(0.05, Math.min(newScale, 0.8));
+                // ★ 限制解除：最小 0.02 (極小)，最大 10.0 (極大)
+                newScale = Math.max(0.02, Math.min(newScale, 10.0));
                 
                 modelContainer.scale.set(newScale);
             }
             return;
         }
 
-        // --- B. 拖曳中 ---
+        // 拖曳邏輯
         if (!isPinching && e.touches.length === 1) {
             const touch = e.touches[0];
             const dx = touch.clientX - startX;
             const dy = touch.clientY - startY;
 
-            // 防手抖：移動超過 10px 才算拖曳
+            // 移動 > 10px 才算拖曳
             if (!isDragging && Math.hypot(dx, dy) > 10) {
                 isDragging = true;
             }
 
             if (isDragging) {
-                if (e.cancelable) e.preventDefault(); // 阻止網頁捲動
+                if (e.cancelable) e.preventDefault(); 
                 
                 modelContainer.x = containerStartX + dx;
                 modelContainer.y = containerStartY + dy;
@@ -7415,36 +7454,30 @@ function initGlobalInteraction() {
     }, { passive: false });
 
     window.addEventListener('touchend', (e) => {
-        // 如果是縮放結束
         if (isPinching && e.touches.length < 2) {
             isPinching = false;
-            // 縮放完也檢查一下邊界
+            // 縮放結束，儲存並歸位
             repositionCats();
+            saveCatState();
             return;
         }
 
-        // 如果是單指互動結束
         if (canvas.getAttribute('data-interacting') === 'true') {
-            // 如果沒發生拖曳，那就是點擊
             if (!isDragging) {
-                handleDoubleTap(); // 檢查雙擊
+                handleDoubleTap(); 
+            } else {
+                // 拖曳結束，儲存並歸位
+                repositionCats();
+                saveCatState();
             }
-            
             isDragging = false;
             canvas.removeAttribute('data-interacting');
-            
-            // ★ 拖曳結束後，執行邊界檢查，把貓推回螢幕內
-            repositionCats();
         }
     });
 
-    // ===========================
-    // === 滑鼠事件 (Mouse) ===
-    // ===========================
-
+    // --- 滑鼠 (Mouse) ---
     window.addEventListener('mousedown', (e) => {
-        if (canvas.style.display === 'none') return;
-        if (e.button !== 0) return; // 只接受左鍵
+        if (canvas.style.display === 'none' || e.button !== 0) return;
 
         if (hitTest(e.clientX, e.clientY)) {
             e.preventDefault();
@@ -7459,7 +7492,6 @@ function initGlobalInteraction() {
     });
 
     window.addEventListener('mousemove', (e) => {
-        // 游標懸停效果
         if (hitTest(e.clientX, e.clientY)) {
             document.body.classList.add('cat-hovering');
         } else {
@@ -7485,40 +7517,57 @@ function initGlobalInteraction() {
         if (canvas.getAttribute('data-interacting') === 'true') {
             if (!isDragging) {
                 handleDoubleTap(); 
+            } else {
+                repositionCats();
+                saveCatState(); // 滑鼠拖曳結束存檔
             }
-            repositionCats(); 
         }
         isDragging = false;
         canvas.removeAttribute('data-interacting');
         document.body.classList.remove('cat-dragging');
     });
+    
+    // 支援滾輪縮放 (電腦版額外功能)
+    window.addEventListener('wheel', (e) => {
+        if (canvas.style.display === 'none') return;
+        // 如果滑鼠在貓上
+        if (hitTest(e.clientX, e.clientY)) {
+            e.preventDefault();
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            let newScale = modelContainer.scale.x * zoomFactor;
+            newScale = Math.max(0.02, Math.min(newScale, 10.0));
+            modelContainer.scale.set(newScale);
+            
+            // 簡單防抖動存檔
+            clearTimeout(window._wheelSaveTimer);
+            window._wheelSaveTimer = setTimeout(() => {
+                repositionCats();
+                saveCatState();
+            }, 500);
+        }
+    }, { passive: false });
 }
 
-// === 雙擊觸發邏輯 (Double Tap) ===
+// === 雙擊邏輯 (Double Tap) ===
 function handleDoubleTap() {
     const currentTime = new Date().getTime();
     const tapLength = currentTime - lastTapTime;
     
-    // 判斷兩次點擊間隔是否在 500ms 內
     if (tapLength < 500 && tapLength > 50) {
-        // --- 確認為雙擊 ---
         triggerCatReaction();
         triggerVisualEffect(); 
         lastTapTime = 0; 
     } else {
-        // 這是第一次點擊 (不動作)
         lastTapTime = currentTime;
     }
 }
 
-// 觸發反應
 function triggerCatReaction() {
     if (!modelContainer) return;
     modelContainer.children.forEach(cat => { playRandomMotion(cat); });
-    if (navigator.vibrate) navigator.vibrate([50, 50, 50]); // 強震動
+    if (navigator.vibrate) navigator.vibrate([50, 50, 50]); 
 }
 
-// 觸發 CSS 視覺效果
 function triggerVisualEffect() {
     const canvas = document.getElementById(CANVAS_ID);
     canvas.classList.remove('cat-active-click');
@@ -7540,7 +7589,7 @@ function playRandomMotion(model) {
     motionMgr.startRandomMotion(randomGroup, 3);
 }
 
-// 選單相關
+// 選單
 function openCatMenu() {
     const sideMenu = document.getElementById('sideMenu');
     if(sideMenu) { sideMenu.classList.remove('active'); document.getElementById('sideMenuToggle').classList.remove('active'); }
