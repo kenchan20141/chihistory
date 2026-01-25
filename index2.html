@@ -7334,177 +7334,207 @@ async function initLive2DApp() {
     });
 }
 
-// 4. 載入模型與綁定動作 (解決點擊無反應問題)
+// 2. 載入模型 (移除舊的點擊綁定)
 async function loadAndSetupModel(path, scale, x, y) {
     const model = await PIXI.live2d.Live2DModel.from(path);
     app.stage.addChild(model);
     
-    // 儲存引用以便後續縮放
     currentModel = model;
 
-    // 設定初始大小與位置
     model.scale.set(scale);
     model.x = x;
     model.y = y;
     
-    // 開啟互動
+    // 開啟互動 (讓 containsPoint 能夠運作)
     model.interactive = true;
-    model.buttonMode = true;
-
-    // ★ 解決問題三：強制綁定點擊事件 ★
-    // 我們不依賴 HitArea，而是直接綁定整個模型的點擊
-    model.on('pointerdown', (e) => {
-        // 1. 播放動作
-        playRandomMotion(model);
-        
-        // 2. 震動回饋
-        if (navigator.vibrate) navigator.vibrate(20);
-        
-        // 3. (選用) 播放音效
-        // const audio = new Audio('meow.mp3'); audio.play();
-        
-        console.log("貓咪被點擊！");
-    });
+    
+    // ★ 關鍵修改：這裡移除了原本的 'pointerdown' 監聽器 ★
+    // 因為我們已經把點擊邏輯移到了 initSmartInteraction 的 onEnd 裡面了
+    // 這樣才不會跟拖曳衝突。
+    
+    console.log("模型載入成功:", path);
 }
 
-// ★ 輔助：強制播放隨機動作 ★
+// 3. 播放動作 (針對檔案結構優化)
 function playRandomMotion(model) {
-    // 獲取內部動作管理器
+    if (!model || !model.internalModel || !model.internalModel.motionManager) {
+        console.warn("無法獲取動作管理器");
+        return;
+    }
+
     const motionMgr = model.internalModel.motionManager;
     
-    // 獲取所有定義的動作群組名稱 (通常是 'TapBody', 'Idle', '00', '01' 等)
+    // 獲取所有動作群組
+    // Live2D 根據 model3.json，通常群組是 "Idle", "TapBody" 等，或者有時直接是 "0", "1"
     const definitions = motionMgr.definitions;
     const groups = Object.keys(definitions);
     
-    if (groups.length > 0) {
-        // 隨機選一個群組
-        const randomGroup = groups[Math.floor(Math.random() * groups.length)];
-        // 播放該群組
-        console.log("播放動作群組:", randomGroup);
-        motionMgr.startRandomMotion(randomGroup);
-    } else {
-        console.warn("未發現動作定義");
-    }
-}
+    console.log("可用動作群組:", groups);
 
+    if (groups.length === 0) return;
+
+    // ★ 智慧篩選邏輯 ★
+    // 1. 我們不想點擊後只是播放 "Idle" (00_idle.motion3)，因為那看起來像沒反應
+    // 2. 我們優先找 "Tap", "TapBody" 或者除了 "Idle" 以外的群組
+    let targetGroups = groups.filter(g => 
+        !g.toLowerCase().includes('idle') &&  // 排除 idle
+        !g.toLowerCase().includes('loop')     // 排除 loop
+    );
+
+    // 如果篩選完沒東西了 (例如只有 Idle)，那就只好從全部裡面選
+    if (targetGroups.length === 0) {
+        targetGroups = groups;
+    }
+
+    // 隨機選一個群組
+    const randomGroup = targetGroups[Math.floor(Math.random() * targetGroups.length)];
+    
+    console.log("執行動作:", randomGroup);
+    
+    // 強制播放 (第二個參數 priority = 3，確保權重最高，打斷當前動作)
+    motionMgr.startRandomMotion(randomGroup, 3);
+}
 // =======================================================
 // === 解決問題一 & 二：智慧互動與縮放 ===
 // =======================================================
 
+// 1. 初始化互動邏輯 (核心修正)
 function initSmartInteraction() {
     const canvas = document.getElementById(CANVAS_ID);
     
-    // --- A. 解決遮擋：智慧穿透邏輯 ---
-    // 監聽全局滑鼠移動
+    // 狀態變數
+    let initialDistance = 0;
+    let initialScale = 1;
+    
+    // 判定點擊 vs 拖曳的變數
+    let isPressing = false;      // 是否按住
+    let isDragging = false;      // 是否正在拖曳 (移動距離超過閾值)
+    let startX, startY;          // 按下時的座標
+    let modelStartX, modelStartY;// 貓咪的原始位置
+
+    // ----------------------------------------------------
+    // A. 智慧穿透邏輯 (滑鼠移動偵測)
+    // ----------------------------------------------------
     window.addEventListener('mousemove', (e) => {
         if (!currentModel || !app) return;
 
-        // 計算滑鼠在 Canvas 內的座標
+        // 如果正在拖曳或按住，強制保持可互動，防止甩飛
+        if (isDragging || isPressing) {
+            canvas.classList.add('interactive');
+            return; 
+        }
+
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // 檢查是否「擊中」了貓咪的模型範圍
-        // containsPoint 是 PixiJS 的方法，會計算縮放和位置
+        // 檢查滑鼠是否在貓身上
         const hit = currentModel.containsPoint(new PIXI.Point(x, y));
 
         if (hit) {
-            // 如果摸到貓，讓 Canvas 可點擊 (啟用互動)
             canvas.classList.add('interactive');
         } else {
-            // 如果摸到空白處，讓 Canvas 穿透 (可以點後面的按鈕)
             canvas.classList.remove('interactive');
         }
     });
 
-    // --- B. 解決縮放：雙指觸控 (Pinch to Zoom) ---
-    // 同時整合了單指拖曳
-    let initialDistance = 0;
-    let initialScale = 1;
-    let isDragging = false;
-    let dragStartX, dragStartY;
-    let modelStartX, modelStartY;
+    // ----------------------------------------------------
+    // B. 觸控/滑鼠 按下 (Start)
+    // ----------------------------------------------------
+    const onStart = (x, y) => {
+        if (canvas.classList.contains('interactive') && currentModel) {
+            isPressing = true;       // 標記為按住中
+            isDragging = false;      // 尚未開始拖曳 (直到移動)
+            
+            startX = x;
+            startY = y;
+            modelStartX = currentModel.x;
+            modelStartY = currentModel.y;
+        }
+    };
 
-    // 觸控開始
     canvas.addEventListener('touchstart', (e) => {
         if (!currentModel) return;
-
-        // 1. 雙指：縮放模式
+        // 雙指縮放邏輯
         if (e.touches.length === 2) {
             initialDistance = getDistance(e.touches);
             initialScale = currentModel.scale.x;
-            e.preventDefault(); // 防止頁面縮放
+            e.preventDefault();
         } 
-        // 2. 單指：拖曳模式
+        // 單指操作
         else if (e.touches.length === 1) {
-            // 檢查是否點到貓 (只允許拖曳貓，不允許拖曳空白處)
-            // 這裡簡單處理：只要 Canvas 是 interactive 狀態就允許拖
-            if (canvas.classList.contains('interactive')) {
-                isDragging = true;
-                dragStartX = e.touches[0].clientX;
-                dragStartY = e.touches[0].clientY;
-                modelStartX = currentModel.x;
-                modelStartY = currentModel.y;
-            }
+            onStart(e.touches[0].clientX, e.touches[0].clientY);
         }
     }, { passive: false });
 
-    // 觸控移動
+    canvas.addEventListener('mousedown', (e) => {
+        onStart(e.clientX, e.clientY);
+    });
+
+    // ----------------------------------------------------
+    // C. 觸控/滑鼠 移動 (Move) - 判定拖曳
+    // ----------------------------------------------------
+    const onMove = (x, y) => {
+        if (!isPressing || !currentModel) return;
+
+        const dx = x - startX;
+        const dy = y - startY;
+
+        // ★ 核心邏輯：移動超過 5px 才視為拖曳，否則視為手抖或點擊
+        if (!isDragging && Math.sqrt(dx*dx + dy*dy) > 5) {
+            isDragging = true;
+        }
+
+        if (isDragging) {
+            currentModel.x = modelStartX + dx;
+            currentModel.y = modelStartY + dy;
+        }
+    };
+
     canvas.addEventListener('touchmove', (e) => {
         if (!currentModel) return;
-
-        // 1. 雙指縮放
+        // 雙指縮放
         if (e.touches.length === 2) {
             const currentDistance = getDistance(e.touches);
             if (initialDistance > 0) {
                 const scaleFactor = currentDistance / initialDistance;
-                // 限制縮放範圍 (0.05 ~ 0.5)
                 let newScale = initialScale * scaleFactor;
                 newScale = Math.max(0.05, Math.min(newScale, 0.5));
-                
                 currentModel.scale.set(newScale);
             }
             e.preventDefault();
         } 
-        // 2. 單指拖曳
-        else if (e.touches.length === 1 && isDragging) {
-            const dx = e.touches[0].clientX - dragStartX;
-            const dy = e.touches[0].clientY - dragStartY;
-            currentModel.x = modelStartX + dx;
-            currentModel.y = modelStartY + dy;
-            e.preventDefault();
+        // 單指移動
+        else if (e.touches.length === 1) {
+            onMove(e.touches[0].clientX, e.touches[0].clientY);
+            if (isDragging) e.preventDefault(); // 防止拖曳時捲動網頁
         }
     }, { passive: false });
 
-    // 觸控結束
-    canvas.addEventListener('touchend', () => {
-        isDragging = false;
-        initialDistance = 0;
-    });
-
-    // --- C. 電腦版滑鼠拖曳 (保留) ---
-    canvas.addEventListener('mousedown', (e) => {
-        if (canvas.classList.contains('interactive')) {
-            isDragging = true;
-            dragStartX = e.clientX;
-            dragStartY = e.clientY;
-            modelStartX = currentModel.x;
-            modelStartY = currentModel.y;
-        }
-    });
-
     window.addEventListener('mousemove', (e) => {
-        if (isDragging && currentModel) {
-            const dx = e.clientX - dragStartX;
-            const dy = e.clientY - dragStartY;
-            currentModel.x = modelStartX + dx;
-            currentModel.y = modelStartY + dy;
-        }
+        onMove(e.clientX, e.clientY);
     });
 
-    window.addEventListener('mouseup', () => {
-        isDragging = false;
-    });
+    // ----------------------------------------------------
+    // D. 觸控/滑鼠 放開 (End) - 判定點擊
+    // ----------------------------------------------------
+    const onEnd = () => {
+        if (isPressing) {
+            // ★ 如果剛才「沒有」進入拖曳狀態，那就是點擊！
+            if (!isDragging) {
+                console.log("判定為點擊：觸發動作");
+                playRandomMotion(currentModel);
+                if (navigator.vibrate) navigator.vibrate(20);
+            }
+            // 重置狀態
+            isPressing = false;
+            isDragging = false;
+        }
+        initialDistance = 0;
+    };
+
+    canvas.addEventListener('touchend', onEnd);
+    window.addEventListener('mouseup', onEnd);
 }
 
 // 計算兩指距離的輔助函式
