@@ -65,16 +65,16 @@ form-action 'self';
 <!-- 新增這行：Firebase Authentication -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
-<!-- 1. Cubism 2 核心 (解決 Could not find Cubism 2 runtime 報錯) -->
+<!-- 1. Cubism 2 核心 -->
 <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
 
-<!-- 2. Cubism 4 核心 (貓咪模型實際需要的庫) -->
-<script src="https://cdn.jsdelivr.net/gh/Arisuria/Live2D-Core@main/live2dcubismcore.min.js"></script>
+<!-- 2. Cubism 4 核心 (更換為 dylanNew 版本，這個版本的變數掛載最標準) -->
+<script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2dcubismcore.min.js"></script>
 
 <!-- 3. PixiJS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.8/browser/pixi.min.js"></script>
 
-<!-- 4. Pixi Live2D Plugin (鎖定 0.4.0) -->
+<!-- 4. Pixi Live2D Plugin (0.4.0) -->
 <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
 
 
@@ -7125,7 +7125,6 @@ read-mode-container {
 // --- Live2D 整合邏輯 ---
 
 // --- Live2D 整合邏輯 (修正版) ---
-
 let app;
 let models = {}; // 儲存模型實例
 let isLive2DVisible = false;
@@ -7134,73 +7133,91 @@ async function initLive2D() {
     const canvas = document.getElementById('live2d-canvas');
     if (!canvas) return;
 
-    // --- 強化版檢查 ---
-    // 檢查 Cubism 4 核心是否存在 (相容多種命名方式)
-    const core4 = window.Live2DCubismCore || window.live2dcubismcore;
-    
-    if (!core4) {
-        console.error("Live2D 核心庫 (Cubism 4) 尚未載入。");
-        alert("Live2D 初始化失敗：核心庫未載入。請嘗試關閉 AdBlock 或換個瀏覽器。");
+    // 1. 【關鍵修復】強制對接核心變數
+    // 有些 CDN 版本會使用小寫名稱，這裡強制將其導向插件需要的「Live2DCubismCore」
+    window.Live2DCubismCore = window.Live2DCubismCore || window.live2dcubismcore;
+
+    if (!window.Live2DCubismCore) {
+        console.error("❌ 錯誤：找不到 Live2DCubismCore。請檢查 HTML 中的 script 標籤是否正確載入。");
+        alert("Live2D 初始化失敗：核心組件未就緒。");
         return;
     }
 
-    // 確保插件已掛載到 PIXI
+    // 2. 確保插件已正確掛載到 PIXI
     if (!window.PIXI.live2d) {
         if (window.PixiLive2dDisplay) {
             window.PIXI.live2d = window.PixiLive2dDisplay;
         } else {
-            console.error("找不到 Live2D 插件。");
+            console.error("❌ 錯誤：找不到 PixiLive2dDisplay 插件。");
             return;
         }
     }
 
-    // 2. 安全檢查：確認 Pixi 與 Plugin 是否連結
-    if (!window.PIXI || !window.PIXI.live2d) {
-        console.warn("PIXI.live2d 尚未就緒，嘗試手動註冊...");
-        // 如果插件載入但未掛載，有時需要手動觸發 (通常換了 script tag 後不需要這步，但保留作保險)
-        if (window.PixiLive2dDisplay) {
-            window.PIXI.live2d = window.PixiLive2dDisplay;
-        } else {
-            console.error("無法找到 Live2D 插件，請確認 script 標籤是否正確。");
-            return;
-        }
-    }
-
-    // 3. 初始化 Pixi 應用 (確保只初始化一次)
+    // 3. 初始化 Pixi 應用程式 (若尚未建立)
     if (!app) {
-        app = new PIXI.Application({
-            view: canvas,
-            autoStart: true,
-            backgroundAlpha: 0, 
-            width: 500,         
-            height: 400,        
-            resolution: window.devicePixelRatio || 1,
-        });
+        try {
+            app = new PIXI.Application({
+                view: canvas,
+                autoStart: true,
+                backgroundAlpha: 0, // 透明背景
+                width: 500,         // 畫布寬度
+                height: 400,        // 畫布高度
+                resolution: window.devicePixelRatio || 1,
+                antialias: true
+            });
+        } catch (e) {
+            console.error("❌ PixiJS 初始化失敗:", e);
+            return;
+        }
     }
 
-    // 4. 設定模型路徑
+    // 4. 設定模型路徑 (請確保檔案存在於您的主機目錄)
     const modelPathHijiki = 'live2d/hijiki/runtime/hijiki.model3.json';
     const modelPathTororo = 'live2d/tororo/runtime/tororo.model3.json';
 
     try {
-        console.log("開始載入 Live2D 模型...");
-        
-        // 載入黑貓 (Hijiki)
-        const hijiki = await PIXI.live2d.Live2DModel.from(modelPathHijiki);
-        setupModel(hijiki, 0.5, 80, 100); 
+        console.log("📥 正在載入貓咪模型...");
+
+        // 同時開始載入兩個模型以節省時間
+        const [hijiki, tororo] = await Promise.all([
+            PIXI.live2d.Live2DModel.from(modelPathHijiki),
+            PIXI.live2d.Live2DModel.from(modelPathTororo)
+        ]);
+
+        // 設定黑貓 (Hijiki)
+        setupModel(hijiki, 0.2, 80, 50); // 縮放, X座標, Y座標
         models.hijiki = hijiki;
 
-        // 載入白貓 (Tororo)
-        const tororo = await PIXI.live2d.Live2DModel.from(modelPathTororo);
-        setupModel(tororo, 0.5, 220, 100); 
+        // 設定白貓 (Tororo)
+        setupModel(tororo, 0.2, 220, 50);
         models.tororo = tororo;
 
-        console.log("貓咪模型載入成功！");
+        console.log("✅ Live2D 載入完成！");
 
     } catch (error) {
-        console.error("Live2D 模型載入失敗:", error);
-        console.error("請確認 'live2d/' 資料夾是否已上傳至網站根目錄，且路徑正確。");
+        console.error("❌ 模型載入失敗，請檢查檔案路徑或網絡:", error);
+        console.log("建議檢查：", modelPathHijiki);
     }
+}
+
+// 模型設定輔助函式 (保持與之前一致)
+function setupModel(model, scale, x, y) {
+    if (!app || !model) return;
+
+    app.stage.addChild(model);
+    model.scale.set(scale);
+    model.x = x;
+    model.y = y;
+    
+    // 開啟互動
+    model.interactive = true;
+
+    // 點擊事件：播放動作
+    model.on('pointerdown', () => {
+        // 觸發隨機動作
+        model.motion('TapBody'); 
+        if (navigator.vibrate) navigator.vibrate(20); // 震動回饋
+    });
 }
 
 // 模型設定輔助函式
