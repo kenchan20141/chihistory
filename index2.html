@@ -7184,7 +7184,6 @@ body.cat-dragging { cursor: grabbing !important; }
     color: #2A9689 !important;
     transform: scale(1.1);
 }
-
 	
 
 	
@@ -8102,8 +8101,7 @@ function closeCatMenu(e) { if(e.target.id === 'catSelectionModal') e.target.styl
             <div style="text-align:center; color:#999; padding:20px;">載入中...</div>
         </div>
 
-        <!-- 分頁控制 -->
-        <!-- 分頁控制 (修訂版) -->
+       <!-- 分頁控制 (修訂版) -->
 <div class="pagination-controls" style="gap: 15px;"> <!-- 稍微縮小間距 -->
     <!-- [新增] 一鍵回首頁按鈕 (雙箭頭圖示) -->
     <button id="firstPageBtn" onclick="goToFirstPage()" title="回到第 1 頁" style="display: none; margin-right: -10px;">
@@ -20722,14 +20720,8 @@ async function fetchArticles() {
         // ★★★ 解析 JSON ★★★
         const jsonResponse = await response.json();
         
-        // ★ 在 F12 Console 顯示效能數據
+        // --- (選用) 簡化後的 Log，移除舊的緩存檢查邏輯 ---
         console.log("------------------------------------------------");
-        if (jsonResponse.status === "HIT") {
-            console.log(`%c🚀 緩存命中!`, "color: white; background: green; font-size: 14px; padding: 4px;");
-        } else {
-            console.log(`%c🐌 緩存未命中 (下載中...)`, "color: white; background: orange; font-size: 14px; padding: 4px;");
-        }
-        console.log(`GAS 處理耗時: ${jsonResponse.processTime}`);
         console.log(`資料來源: ${jsonResponse.source}`);
         console.log("------------------------------------------------");
 
@@ -20887,6 +20879,7 @@ function renderArticleList() {
 }
 
 
+
 // === [新增] 一鍵回到第 1 頁 ===
 function goToFirstPage() {
     if (currentArticlePage === 1) return;
@@ -20954,7 +20947,6 @@ function executePageJump(val, maxPage) {
         updatePagination(maxPage);
     }
 }
-
 
 	
 // [修訂版] 更新分頁按鈕狀態 (控制回首頁按鈕的顯示)
