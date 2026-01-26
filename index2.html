@@ -20976,19 +20976,25 @@ function toggleFeaturedChat() {
 }
 
 
-// === [新增] 文萃詳情頁置頂功能 ===
-// === [修訂] 文萃詳情頁置頂功能 (加入失焦邏輯) ===
+// === [修訂] 文萃詳情頁置頂功能 (加入強制重置顏色邏輯) ===
 function scrollToArticleTop() {
     const detailView = document.getElementById('featuredDetailView');
     if (detailView) {
         detailView.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // === [新增] 強制移除焦點 ===
-    // 這會讓按鈕在點擊後立刻「忘記」被點過的狀態，變回原本的白色/透明色
     const btn = document.getElementById('detailTopBtn');
     if (btn) {
-        btn.blur(); 
+        btn.blur(); // 1. 移除焦點
+        
+        // 2. ★★★ 關鍵修復：暫時禁用滑鼠/觸控事件 ★★★
+        // 這會強制瀏覽器認為滑鼠已經離開按鈕，從而移除 :hover 的綠色背景
+        btn.style.pointerEvents = 'none';
+        
+        // 3. 短暫延遲後恢復按鈕功能 (500ms 剛好配合滾動開始)
+        setTimeout(() => {
+            btn.style.pointerEvents = 'auto'; 
+        }, 500);
     }
 }
 
