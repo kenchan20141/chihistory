@@ -21237,10 +21237,25 @@ function initSlowReaderEvents() {
     overlay.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); return false; });
 }
 
-// 2. 啟動慢讀
+// 2. 啟動慢讀 (修復版：清除 HTML 標籤)
 function startSlowRead(encodedContent) {
-    const rawContent = decodeURIComponent(encodedContent);
+    let rawContent = decodeURIComponent(encodedContent);
     
+    // === [新增] 清洗 HTML 標籤邏輯 ===
+    
+    // 1. 移除開頭的詩歌標記 <br> (不分大小寫)
+    rawContent = rawContent.replace(/^\s*<br\s*\/?>/i, '');
+
+    // 2. 將文中其餘的 <br> 轉換為換行符號 \n
+    // 這樣慢讀系統會將其視為段落分隔，讀起來會停頓，符合詩歌節奏
+    rawContent = rawContent.replace(/<br\s*\/?>/gi, '\n');
+
+    // 3. 移除粗體標籤 <b>, </b>, <strong>, </strong>
+    // 慢讀強調文字本身，直接移除標籤碼以免顯示出來
+    rawContent = rawContent.replace(/<\/?b>/gi, '').replace(/<\/?strong>/gi, '');
+
+    // === [清洗結束] ===
+
     // A. 斷句處理 (參考 Slow Reader 邏輯)
     // 統一引號並加入段落標記
     const correctedText = rawContent.replace(/“/g, '「').replace(/”/g, '」');
