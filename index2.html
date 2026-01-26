@@ -21210,13 +21210,12 @@ function backToArticleList() {
 let readerState = {
     segments: [],
     currentIndex: 0,
-    timerSeconds: 7, 
+    timerSeconds: 7, // 預設 7 秒
     timerInterval: null,
     isReading: false,
     pressTimer: null,
     visualPauseTimer: null,
-    lastTouchTime: 0,
-    isPoetry: false // ★★★ 新增這個旗標 ★★★
+    lastTouchTime: 0
 };
 
 // 1. 初始化慢讀設定 (頁面載入時執行一次)
@@ -21242,60 +21241,46 @@ function initSlowReaderEvents() {
 function startSlowRead(encodedContent) {
     let rawContent = decodeURIComponent(encodedContent);
     
-    // 1. 偵測是否為詩歌 (以 <br> 開頭)
-    readerState.isPoetry = /^\s*<br\s*\/?>/i.test(rawContent);
-
-    // 2. 清洗標籤
-    // A. 移除開頭標記
+    // === [新增] 清洗 HTML 標籤邏輯 ===
+    
+    // 1. 移除開頭的詩歌標記 <br> (不分大小寫)
     rawContent = rawContent.replace(/^\s*<br\s*\/?>/i, '');
-    // B. 將文中 <br> 轉為換行符號 \n (這是詩歌分行的關鍵)
+
+    // 2. 將文中其餘的 <br> 轉換為換行符號 \n
+    // 這樣慢讀系統會將其視為段落分隔，讀起來會停頓，符合詩歌節奏
     rawContent = rawContent.replace(/<br\s*\/?>/gi, '\n');
-    // C. 移除粗體標籤 (慢讀只顯示純文字)
+
+    // 3. 移除粗體標籤 <b>, </b>, <strong>, </strong>
+    // 慢讀強調文字本身，直接移除標籤碼以免顯示出來
     rawContent = rawContent.replace(/<\/?b>/gi, '').replace(/<\/?strong>/gi, '');
-    // D. 處理轉義換行
-    rawContent = rawContent.replace(/\\n/g, '\n');
 
-    // 3. 切分邏輯分流
-    if (readerState.isPoetry) {
-        // === 詩歌專用切分模式 ===
-        // 直接按「換行」切分，每一行就是慢讀的一頁
-        // filter(line => line.trim()) 會過濾掉純空行，如果你想保留空行停頓，可以移除 filter
-        const lines = rawContent.split('\n');
-        readerState.segments = [];
-        
-        lines.forEach((line, index) => {
-            if (line.trim()) { // 只保留有字的行
-                readerState.segments.push({
-                    text: line.trim(),
-                    paraNumber: null // 詩歌通常不顯示段落號
-                });
-            }
-        });
+    // === [清洗結束] ===
 
-    } else {
-        // === 散文原有切分模式 ===
-        // 統一引號並加入段落標記
-        const correctedText = rawContent.replace(/“/g, '「').replace(/”/g, '」');
-        const textWithMarkers = '__NEW_PARA__' + correctedText.replace(/\n\s*/g, '__NEW_PARA__');
-        segmentTextForReader(textWithMarkers);
-    }
+    // A. 斷句處理 (參考 Slow Reader 邏輯)
+    // 統一引號並加入段落標記
+    const correctedText = rawContent.replace(/“/g, '「').replace(/”/g, '」');
+    const textWithMarkers = '__NEW_PARA__' + correctedText.replace(/\n\s*/g, '__NEW_PARA__');
+    
+    // 執行切分
+    segmentTextForReader(textWithMarkers);
     
     if (readerState.segments.length === 0) {
         alert("文章內容過短，無法慢讀。");
         return;
     }
 
-    // 4. 重置狀態與啟動
+    // B. 重置狀態
     readerState.currentIndex = 0;
     readerState.isReading = true;
     
+    // C. 顯示介面
     const overlay = document.getElementById('slowReaderOverlay');
     overlay.style.display = 'flex';
     
+    // D. 開始播放
     displayReaderSegment(0);
     startReaderAutoPage();
 }
-
 
 // 3. 關閉慢讀
 function closeSlowRead() {
@@ -21430,41 +21415,6 @@ function displayReaderSegment(index) {
         setTimeout(() => {
             paraNum.textContent = seg.paraNumber !== null ? seg.paraNumber : '';
             textDisplay.textContent = seg.text;
-            
-            // === [新增] 詩歌排版與縮放邏輯 ===
-            if (readerState.isPoetry) {
-                // 1. 強制不換行設定
-                textDisplay.style.whiteSpace = 'pre'; // 或 'nowrap'
-                textDisplay.style.textAlign = 'center'; // 詩歌居中比較美觀
-                textDisplay.style.wordBreak = 'keep-all';
-                textDisplay.style.lineHeight = '1.5';
-                
-                // 2. 重置字體大小 (每次翻頁都要重置，因為每句長度不同)
-                // 預設慢讀字體較大，這裡設為 2.5rem (約 40px)
-                let fontSize = 40; 
-                textDisplay.style.fontSize = fontSize + 'px';
-                
-                // 3. 獲取容器寬度 (給予一點內邊距緩衝)
-                // 我們取視窗寬度的 90% 作為安全範圍
-                const maxWidth = window.innerWidth * 0.9;
-                
-                // 4. 縮小迴圈
-                // 當 文字實際寬度 (scrollWidth) > 容器安全寬度
-                let safety = 0;
-                while (textDisplay.scrollWidth > maxWidth && fontSize > 14 && safety < 100) {
-                    fontSize -= 1; // 每次縮小 1px
-                    textDisplay.style.fontSize = fontSize + 'px';
-                    safety++;
-                }
-            } else {
-                // === 散文模式 (恢復原狀) ===
-                textDisplay.style.whiteSpace = 'normal';
-                textDisplay.style.textAlign = 'left'; // 散文靠左
-                textDisplay.style.wordBreak = 'normal';
-                textDisplay.style.fontSize = '2rem'; // 散文固定大小
-                textDisplay.style.lineHeight = '1.8';
-            }
-
             displayWrapper.classList.remove('fade-out');
             
             // 更新進度條
@@ -21473,6 +21423,7 @@ function displayReaderSegment(index) {
         }, 600);
     }
 }
+
 // 7. 自動翻頁控制
 function startReaderAutoPage() {
     stopReaderAutoPage();
