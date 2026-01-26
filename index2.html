@@ -21009,11 +21009,10 @@ function showArticleDetail(index) {
         let cleanContent = article.content.replace(/^\s*<br\s*\/?>/i, '').trim();
         cleanContent = cleanContent.replace(/\\n/g, '\n');
 
+        // 使用 white-space: pre 保留原格式
         contentHtml = `<div style="width: 100%; display: flex; justify-content: center;"><div id="poetryContent" style="white-space: pre; word-wrap: normal; display: inline-block; text-align: left; line-height: 1.7; font-family: 'Noto Serif TC', serif; margin-top: 0px;">${cleanContent}</div></div>`;
     } else {
         // --- 一般散文模式 ---
-        // 這裡會保留你在 Google Sheet 寫入的 <b>...</b> 標籤
-        // 並將每一行文字包裝在 <p> 標籤中
         contentHtml = article.content.split('\n').filter(p => p.trim()).map((p, i) => {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
         }).join('');
@@ -21047,15 +21046,15 @@ function showArticleDetail(index) {
                 100% { opacity: 1; transform: scale(1) rotate(-3deg); } 
             }
 
-            /* === [核心修訂] 全局粗體增強樣式 === */
-            /* 無論是在 <p> (散文) 還是 <div> (詩歌) 內，所有的 b 和 strong 標籤都會生效 */
+            /* === [修復] 文藝風粗體樣式 === */
             #fullArticleBody b, 
             #fullArticleBody strong,
             #poetryContent b,
             #poetryContent strong {
-                font-weight: 900 !important;       /* 強制最粗字重 */
-                color: #000000 !important;         /* 強制純黑，增加對比 */
-                text-shadow: 0.5px 0 0 currentColor; /* 模擬加粗：讓字體稍微橫向暈染，解決某些字體沒有粗體檔的問題 */
+                font-weight: bold !important;      /* 回歸標準粗體 (700)，不再用 900 特黑 */
+                color: #2c3e50 !important;        /* 深灰藍色，比內文深一點，但不是死黑 */
+                text-shadow: none !important;     /* 移除人工陰影，保持字體邊緣乾淨 */
+                font-family: 'Noto Serif TC', serif; /* 確保字體一致 */
             }
         </style>
 
