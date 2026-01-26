@@ -20977,10 +20977,18 @@ function toggleFeaturedChat() {
 
 
 // === [新增] 文萃詳情頁置頂功能 ===
+// === [修訂] 文萃詳情頁置頂功能 (加入失焦邏輯) ===
 function scrollToArticleTop() {
     const detailView = document.getElementById('featuredDetailView');
     if (detailView) {
         detailView.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // === [新增] 強制移除焦點 ===
+    // 這會讓按鈕在點擊後立刻「忘記」被點過的狀態，變回原本的白色/透明色
+    const btn = document.getElementById('detailTopBtn');
+    if (btn) {
+        btn.blur(); 
     }
 }
 
