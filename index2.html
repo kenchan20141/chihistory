@@ -21007,18 +21007,20 @@ function showArticleDetail(index) {
         const cleanPoem = article.content.replace(/^\s*<br>\s*/i, '');
         
         // 2. 生成詩歌專用 HTML
-        // white-space: pre 確保不自動換行，保留詩歌原貌
-        // display: inline-block 讓 fitTextToContainer 能正確計算文字實際寬度
+        // ★★★ 關鍵修改 ★★★
+        // white-space: pre -> 強制保留 Google Sheet 的換行，且「禁止」因寬度不足而自動換行。
+        // 當文字過長時，寬度會撐開，這時下方的 fitTextToContainer 偵測到寬度溢出，就會自動縮小字體。
         contentHtml = `
         <div style="width: 100%; overflow-x: hidden; text-align: center; margin: 20px 0;">
             <div id="detailPoetryContent" class="auto-fit-title" 
-                 style="display: inline-block; white-space: pre; text-align: center; line-height: 2; color: #4a4a4a; font-family: 'Noto Serif TC', serif; font-weight: bold;">
+                 style="display: inline-block; white-space: pre; text-align: left; line-height: 1.8; color: #4a4a4a; font-family: 'Noto Serif TC', serif; font-weight: bold;">
 ${cleanPoem}
             </div>
         </div>`;
     } else {
         // --- 原有散文模式 ---
-        contentHtml = article.content.split('\n').filter(p => p.trim()).map((p, i) => {
+        // 處理一般文章的換行
+        contentHtml = article.content.split(/\r?\n/).filter(p => p.trim() !== '').map((p, i) => {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
         }).join('');
     }
@@ -21026,7 +21028,7 @@ ${cleanPoem}
     // 處理賞析 (保持不變)
     let analysisHtmlBlock = '';
     if (article.analysis && article.analysis.trim() !== '') {
-        const analysisText = article.analysis.split('\n').filter(p => p.trim()).map((p, i) => {
+        const analysisText = article.analysis.split(/\r?\n/).filter(p => p.trim() !== '').map((p, i) => {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
         }).join('');
         analysisHtmlBlock = `
@@ -21124,8 +21126,9 @@ ${cleanPoem}
         // 2. [新增] 如果是詩歌模式，縮放詩歌本體
         if (isPoetryMode) {
             const poemEl = document.getElementById('detailPoetryContent');
-            // 設定詩歌字體範圍：最小 12px，最大 22px
-            if (poemEl) fitTextToContainer(poemEl, 12, 22);
+            // 設定詩歌字體範圍：最小 10px，最大 22px
+            // 允許縮得更小 (10px)，確保長句能塞進去
+            if (poemEl) fitTextToContainer(poemEl, 10, 22);
         }
     }, 50);
 
@@ -21152,7 +21155,6 @@ ${cleanPoem}
         }
     };
 }
-
 
 	
 // 6. 修訂：返回列表時刷新 (處理書籤變更)
