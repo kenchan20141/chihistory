@@ -21039,6 +21039,7 @@ function showArticleDetail(index) {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
         }).join('');
         
+        // ★★★ 修改處：加入了 id="articleAnalysisSection" ★★★
         analysisHtmlBlock = `
         <div id="articleAnalysisSection" class="analysis-container" style="margin-top: 50px !important; padding-top: 40px !important; border-top: 1px dashed #d1cdc5;">
             <div class="analysis-header" style="text-align: center; font-size: 1.4rem; font-weight: bold; color: #8d6e63; margin-bottom: 20px !important; line-height: 1.2; letter-spacing: 2px;">文章賞析</div>
@@ -21062,14 +21063,13 @@ function showArticleDetail(index) {
                 100% { opacity: 1; transform: scale(1) rotate(-3deg); } 
             }
 
-            /* === [關鍵修復] 文藝風粗體樣式 === */
-            /* 將 font-weight 從 900 改為 700 (bold)，因為 Noto Serif TC 只載入了 700 */
+            /* === [修復] 文藝風粗體樣式 === */
             #fullArticleBody b, 
             #fullArticleBody strong,
             #poetryContent b,
             #poetryContent strong {
-                font-weight: 700 !important;  /* 改為 700 */
-                color: #000000 !important;    /* 改為純黑，讓粗體對比更明顯 */
+                font-weight: bold !important;
+                color: #2c3e50 !important;
                 text-shadow: none !important;
                 font-family: 'Noto Serif TC', serif;
             }
