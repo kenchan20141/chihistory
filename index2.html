@@ -21001,17 +21001,6 @@ function scrollToArticleTop() {
     }
 }
 
-// === [新增] 自動滾動至賞析區塊 ===
-function scrollToAnalysis() {
-    const analysisSection = document.getElementById('articleAnalysisSection');
-    
-    if (analysisSection) {
-        // 平滑滾動到賞析區塊的頂部
-        analysisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-        alert("此文章暫無賞析內容。");
-    }
-}
 
 
 
