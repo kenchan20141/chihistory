@@ -21000,25 +21000,20 @@ function showArticleDetail(index) {
     currentContextReview = "（這是精選文章的閱讀討論）"; 
     
     // === [詩歌判斷邏輯] ===
-    // 偵測 <br> (不分大小寫)
     const isPoetry = /^\s*<br\s*\/?>/i.test(article.content);
     
     let contentHtml = '';
 
     if (isPoetry) {
         // --- 詩歌模式 ---
-        // 1. 移除開頭的 <br> 標記
         let cleanContent = article.content.replace(/^\s*<br\s*\/?>/i, '').trim();
-        
-        // 2. 處理轉義換行
         cleanContent = cleanContent.replace(/\\n/g, '\n');
 
-        // 3. 生成 HTML
-        // 注意：這裡的 white-space: pre 會保留你在 Sheet 裡的分行
-        // 內部的 <b> 標籤會被瀏覽器正常解析為粗體
         contentHtml = `<div style="width: 100%; display: flex; justify-content: center;"><div id="poetryContent" style="white-space: pre; word-wrap: normal; display: inline-block; text-align: left; line-height: 1.7; font-family: 'Noto Serif TC', serif; margin-top: 0px;">${cleanContent}</div></div>`;
     } else {
         // --- 一般散文模式 ---
+        // 這裡會保留你在 Google Sheet 寫入的 <b>...</b> 標籤
+        // 並將每一行文字包裝在 <p> 標籤中
         contentHtml = article.content.split('\n').filter(p => p.trim()).map((p, i) => {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
         }).join('');
@@ -21051,11 +21046,16 @@ function showArticleDetail(index) {
                 80% { transform: scale(1.05) rotate(-3deg); } 
                 100% { opacity: 1; transform: scale(1) rotate(-3deg); } 
             }
-            /* === [新增] 針對文章內容的粗體優化 === */
-            /* 確保在文藝字體下，粗體足夠明顯 */
-            #fullArticleBody b, #fullArticleBody strong {
-                font-weight: 900 !important; /* 強制特粗 */
-                color: #2c3e50; /* 稍微加深顏色，增加對比 */
+
+            /* === [核心修訂] 全局粗體增強樣式 === */
+            /* 無論是在 <p> (散文) 還是 <div> (詩歌) 內，所有的 b 和 strong 標籤都會生效 */
+            #fullArticleBody b, 
+            #fullArticleBody strong,
+            #poetryContent b,
+            #poetryContent strong {
+                font-weight: 900 !important;       /* 強制最粗字重 */
+                color: #000000 !important;         /* 強制純黑，增加對比 */
+                text-shadow: 0.5px 0 0 currentColor; /* 模擬加粗：讓字體稍微橫向暈染，解決某些字體沒有粗體檔的問題 */
             }
         </style>
 
@@ -21125,17 +21125,15 @@ function showArticleDetail(index) {
         const titleEl = document.getElementById('detailTitleText');
         if (titleEl) fitTextToContainer(titleEl, 24, 38);
 
-        // === [詩歌字體縮放邏輯] ===
+        // 詩歌縮放邏輯
         if (isPoetry) {
             const poetryEl = document.getElementById('poetryContent');
             if (poetryEl) {
-                // 初始設定：一般字體大小 (約 20px)
                 let fontSize = 1.25 * 16; 
                 poetryEl.style.fontSize = fontSize + 'px';
                 
                 const containerWidth = poetryEl.parentElement.clientWidth;
                 
-                // 迴圈檢測：如果內容 (包含粗體後的寬度) 超過容器，自動縮小
                 let safety = 0;
                 while (poetryEl.scrollWidth > containerWidth && fontSize > 11 && safety < 100) {
                     fontSize -= 0.5;
