@@ -211,17 +211,9 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 <!-- 側邊選單底部：貓咪按鈕 -->
 <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 5px 10px;"></div>
 <button class="side-menu-item" onclick="openCatMenu()" title="呼喚貓咪">
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;">
-        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="currentColor" fill-opacity="0.1"/>
-        <path d="M8.5 8C9.32843 8 10 7.32843 10 6.5C10 5.67157 9.32843 5 8.5 5C7.67157 5 7 5.67157 7 6.5C7 7.32843 7.67157 8 8.5 8Z" fill="currentColor"/>
-        <path d="M15.5 8C16.3284 8 17 7.32843 17 6.5C17 5.67157 16.3284 5 15.5 5C14.6716 5 14 5.67157 14 6.5C14 7.32843 14.6716 8 15.5 8Z" fill="currentColor"/>
-        <path d="M12 18C14.5 18 16.5 16 16.5 13.5H7.5C7.5 16 9.5 18 12 18Z" fill="currentColor"/>
-        <path d="M12 13.5L9 10.5M12 13.5L15 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    </svg>
+    <i class="fas fa-cat" style="font-size: 24px;"></i>
     <span>Live2D</span>
 </button>
-
-
 
 
 		  
@@ -7164,7 +7156,7 @@ body.cat-dragging { cursor: grabbing !important; }
 <script>
 
 // =======================================================
-// === Live2D 貓咪系統 (手機流暢拖曳修復版 + 無TTS) ===
+// === Live2D 貓咪系統 (預設白貓 + 無TTS + 雙重聲效 + 海量題庫) ===
 // =======================================================
 
 let app;
@@ -7176,8 +7168,9 @@ const MODEL_PATH_TORORO = 'live2d/tororo/runtime/tororo.model3.json';
 
 // 隨機貓叫聲效庫
 const CAT_SOUNDS = [
-    'https://taira-komori.net/sound_os2/animals01/cat1a.mp3', 
-    'https://taira-komori.net/sound_os2/animals01/cat_sweet_voice1.mp3'
+    '貓叫一.mp3', 
+    '貓叫二.mp3', 
+    '貓叫三.mp3'
 ];
 
 // --- 互動狀態 ---
@@ -7206,7 +7199,13 @@ let speechBubble = null;
 let bubbleTimer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    const savedMode = localStorage.getItem('sansi_cat_mode');
+    let savedMode = localStorage.getItem('sansi_cat_mode');
+    
+    // ★ 修改：如果沒有紀錄 (第一次進入)，預設為白貓 (tororo)
+    if (!savedMode) {
+        savedMode = 'tororo';
+    }
+
     if (savedMode && savedMode !== 'none') {
         setTimeout(() => selectCatMode(savedMode, false), 500);
     }
@@ -7219,8 +7218,176 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(repositionCats, 100);
         }
     });
+
+
+// 靜默預載 (頁面載入 5 秒後執行，不影響當前操作)
+    setTimeout(() => {
+        // 檢查快取函數是否存在，避免報錯
+        if (typeof fetchWithCache === 'function') {
+            console.log("🐈 [Live2D] 開始背景靜默預載...");
+            fetchWithCache(MODEL_PATH_HIJIKI); // 預載黑貓
+            fetchWithCache(MODEL_PATH_TORORO); // 預載白貓
+        }
+    }, 1500);
+
+
+
+	
 });
 
+
+// ==========================================
+// === Live2D IndexedDB 快取管理器 (加速核心) ===
+// ==========================================
+
+const CACHE_DB_NAME = 'SansiLive2DCache';
+const CACHE_STORE_NAME = 'files';
+const CACHE_VERSION = 1;
+
+// 1. 初始化資料庫
+function openCacheDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(CACHE_DB_NAME, CACHE_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(CACHE_STORE_NAME)) {
+                db.createObjectStore(CACHE_STORE_NAME);
+            }
+        };
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = (e) => reject(e);
+    });
+}
+
+// 2. 核心：獲取檔案 (優先查庫，無則下載並寫庫)
+async function fetchWithCache(url) {
+    try {
+        const db = await openCacheDB();
+        const tx = db.transaction(CACHE_STORE_NAME, 'readonly');
+        const store = tx.objectStore(CACHE_STORE_NAME);
+        
+        // 嘗試從資料庫讀取
+        const cachedFile = await new Promise((resolve) => {
+            const req = store.get(url);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        });
+
+        if (cachedFile) {
+            // console.log(`[Cache Hit] 從本地讀取: ${url}`);
+            return cachedFile; // 直接回傳 Blob
+        }
+
+        // 資料庫沒有，從網絡下載
+        // console.log(`[Network] 下載中: ${url}`);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Network response was not ok for ${url}`);
+        const blob = await response.blob();
+
+        // 寫入資料庫 (非同步執行，不阻擋回傳)
+        const writeTx = db.transaction(CACHE_STORE_NAME, 'readwrite');
+        writeTx.objectStore(CACHE_STORE_NAME).put(blob, url);
+
+        return blob;
+
+    } catch (err) {
+        console.warn("快取系統出錯 (降級為普通下載):", err);
+        const response = await fetch(url);
+        return await response.blob();
+    }
+}
+
+// 輔助函式：將 Blob 轉為 Base64 DataURI (避開 Blob URL 權限問題)
+function blobToDataURL(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+	// 3. Live2D 模型載入器 (Base64 內嵌版 - 終極修復)
+async function loadCachedLive2DModel(modelUrl) {
+    // A. 下載並解析 model3.json
+    const jsonBlob = await fetchWithCache(modelUrl);
+    const jsonText = await jsonBlob.text();
+    const modelData = JSON.parse(jsonText);
+
+    // B. 計算基礎路徑
+    const basePath = modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
+
+    // C. 建立 Promise 陣列
+    const promises = [];
+
+    // 輔助：將路徑替換為 Base64 Data URI
+    const replacePathWithBase64 = async (obj, key) => {
+        const relativePath = obj[key];
+        if (!relativePath) return;
+
+        const fullUrl = basePath + relativePath;
+        const blob = await fetchWithCache(fullUrl);
+        
+        // ★ 關鍵改變：轉成 Base64 字串，而不是 Blob URL
+        const dataUrl = await blobToDataURL(blob);
+        obj[key] = dataUrl;
+    };
+
+    // D. 掃描並替換所有資源
+    if (modelData.FileReferences) {
+        // 1. Moc 檔 (核心模型)
+        if (modelData.FileReferences.Moc) {
+            promises.push(replacePathWithBase64(modelData.FileReferences, 'Moc'));
+        }
+        // 2. Physics 檔 (物理)
+        if (modelData.FileReferences.Physics) {
+            promises.push(replacePathWithBase64(modelData.FileReferences, 'Physics'));
+        }
+        // 3. Textures (貼圖陣列)
+        if (modelData.FileReferences.Textures) {
+            modelData.FileReferences.Textures.forEach((tex, index) => {
+                const fullUrl = basePath + tex;
+                promises.push((async () => {
+                    const blob = await fetchWithCache(fullUrl);
+                    const dataUrl = await blobToDataURL(blob);
+                    modelData.FileReferences.Textures[index] = dataUrl;
+                })());
+            });
+        }
+        // 4. Motions (動作)
+        if (modelData.FileReferences.Motions) {
+            const groups = modelData.FileReferences.Motions;
+            for (const groupName in groups) {
+                groups[groupName].forEach(motion => {
+                    if (motion.File) {
+                        const fullUrl = basePath + motion.File;
+                        promises.push((async () => {
+                            const blob = await fetchWithCache(fullUrl);
+                            const dataUrl = await blobToDataURL(blob);
+                            motion.File = dataUrl;
+                        })());
+                    }
+                });
+            }
+        }
+    }
+
+    // 等待所有檔案都轉成 Base64 字串
+    await Promise.all(promises);
+
+    // E. 設定必要屬性以滿足插件檢查
+    // 雖然現在所有資源都是 Data URI，插件仍需要一個 url 欄位來通過格式驗證
+    modelData.url = modelUrl;
+
+    // F. 載入模型
+    // 由於所有路徑都變成了 "data:image/png;base64,..." 這種格式，
+    // 插件會直接解析字串數據，完全不會發出網絡請求。
+    return await PIXI.live2d.Live2DModel.from(modelData);
+}
+
+
+
+	
 function createSpeechBubble() {
     if (document.getElementById('catSpeechBubble')) return;
     speechBubble = document.createElement('div');
@@ -7233,6 +7400,10 @@ function createSpeechBubble() {
 async function initLive2DApp() {
     const canvas = document.getElementById(CANVAS_ID);
     if (app) return;
+
+    // ★★★ 優化：手機端防滾動關鍵設定 ★★★
+    // 這行 CSS 會告訴瀏覽器：在這個畫布上禁止預設的滑動/縮放行為
+    canvas.style.touchAction = 'none'; 
 
     app = new PIXI.Application({
         view: canvas,
@@ -7277,15 +7448,27 @@ async function selectCatMode(mode, save = true) {
     modelContainer.alpha = 0; 
 
     try {
-        const isMobile = window.innerWidth < 600;
-        let baseScale = isMobile ? 0.10 : 0.07; 
+        // ★★★ 修改開始：三段式大小判斷 ★★★
+        const screenW = window.innerWidth;
+        let baseScale;
+
+        if (screenW < 600) {
+            baseScale = 0.10; // 手機 (不變)
+        } else if (screenW <= 1024) {
+            baseScale = 0.15; // 平板 (不變)
+        } else {
+            baseScale = 0.15; // 電腦 (放大一倍)
+        }
+        // ★★★ 修改結束 ★★★
 
         if (mode === 'hijiki') {
             await loadModelToContainer(MODEL_PATH_HIJIKI, baseScale, 0); 
         } else if (mode === 'tororo') {
             await loadModelToContainer(MODEL_PATH_TORORO, baseScale, 0);
         } else if (mode === 'both') {
-            let offset = isMobile ? 30 : 50;
+            // 雙貓模式時，位置偏移量也要根據裝置調整，避免重疊或太開
+            let offset = screenW < 600 ? 30 : (screenW <= 1024 ? 50 : 80);
+            
             await loadModelToContainer(MODEL_PATH_HIJIKI, baseScale * 0.9, -offset);
             await loadModelToContainer(MODEL_PATH_TORORO, baseScale * 0.9, offset);
         }
@@ -7310,13 +7493,29 @@ async function selectCatMode(mode, save = true) {
     }
 }
 
+// === 修訂版：支援 IndexedDB 快取的載入函數 ===
 async function loadModelToContainer(path, scale, xOffset) {
-    const model = await PIXI.live2d.Live2DModel.from(path);
-    model.scale.set(scale);
-    model._baseOffsetX = xOffset;
-    model.x = xOffset; 
-    model.y = 0;
-    modelContainer.addChild(model);
+    try {
+        // 1. 使用快取加載器 (這會回傳已經組裝好的 Model 物件)
+        const model = await loadCachedLive2DModel(path);
+        
+        // 2. 設定模型參數
+        model.scale.set(scale);
+        model._baseOffsetX = xOffset;
+        model.x = xOffset; 
+        model.y = 0;
+        
+        // 3. 加入舞台
+        modelContainer.addChild(model);
+        
+    } catch (e) {
+        console.error("快取載入失敗，嘗試直接載入...", e);
+        // Fallback: 如果快取邏輯失敗，退回原本的直接網絡載入
+        const model = await PIXI.live2d.Live2DModel.from(path);
+        model.scale.set(scale);
+        model.x = xOffset;
+        modelContainer.addChild(model);
+    }
 }
 
 function forceInitialPosition() {
@@ -7375,18 +7574,29 @@ function repositionCats() {
 }
 
 // =======================================================
-// === 全域互動邏輯 (核心修復) ===
+// === 全域互動邏輯 (已針對手機流暢度優化) ===
 // =======================================================
 
 function initGlobalInteraction() {
     const canvas = document.getElementById(CANVAS_ID);
     
-    function hitTest(x, y) {
+   function hitTest(x, y) {
         if (!modelContainer || modelContainer.children.length === 0) return false;
         const bounds = modelContainer.getBounds();
         const padding = 20; 
-        return (x >= bounds.x - padding && x <= bounds.x + bounds.width + padding &&
-                y >= bounds.y - padding && y <= bounds.y + bounds.height + padding);
+
+        // ★★★ 修改重點：縮減點擊判定範圍 ★★★
+        // 許多 Live2D 模型上方有大量留白。
+        // 這裡設定忽略頂部 30% 的高度，讓點擊區更貼近貓頭/身體
+        const topOffset = bounds.height * 0.15; 
+
+        // 計算有效範圍：
+        // X 軸保持不變 (左右)
+        // Y 軸從 (bounds.y + topOffset) 開始算起
+        return (x >= bounds.x - padding && 
+                x <= bounds.x + bounds.width + padding &&
+                y >= bounds.y + topOffset && 
+                y <= bounds.y + bounds.height + padding);
     }
 
     function getPinchDistance(touches) {
@@ -7417,7 +7627,6 @@ function initGlobalInteraction() {
     }
 
     // --- 觸控事件 (Touch Events) ---
-    // 注意：passive: false 是關鍵，允許我們調用 preventDefault()
     window.addEventListener('touchstart', (e) => {
         if (canvas.style.display === 'none') return;
 
@@ -7426,6 +7635,8 @@ function initGlobalInteraction() {
             cancelLongPressTimer();
             if (hitTest(e.touches[0].clientX, e.touches[0].clientY) || 
                 hitTest(e.touches[1].clientX, e.touches[1].clientY)) {
+                // ★ 防止縮放時觸發瀏覽器縮放
+                if (e.cancelable) e.preventDefault();
                 isPinching = true;
                 isDragging = false;
                 initialPinchDist = getPinchDistance(e.touches);
@@ -7439,9 +7650,10 @@ function initGlobalInteraction() {
         if (e.touches.length === 1) {
             const touch = e.touches[0];
             if (hitTest(touch.clientX, touch.clientY)) {
-                // ★ 這裡先不設 isDragging 為 true，等移動一段距離後才設，
-                // 但要先記錄起始點，並開始長按計時
-                isDragging = false; 
+                // ★ 關鍵優化：一旦確認點到貓，立刻禁止預設事件（防止頁面滾動）
+                if (e.cancelable) e.preventDefault();
+                
+                isDragging = false;
                 startX = touch.clientX;
                 startY = touch.clientY;
                 containerStartX = modelContainer.x;
@@ -7453,15 +7665,24 @@ function initGlobalInteraction() {
                 canvas.removeAttribute('data-interacting');
             }
         }
-    }, { passive: false });
+    }, { passive: false }); // passive: false 允許我們使用 preventDefault
 
     window.addEventListener('touchmove', (e) => {
-        // 如果沒有標記為互動中，直接忽略，讓頁面正常滾動
-        if (canvas.getAttribute('data-interacting') !== 'true') return;
+        // ★ 核心優化：如果正在與貓互動，無條件、立即阻止頁面滾動
+        if (canvas.getAttribute('data-interacting') === 'true') {
+            if (e.cancelable) e.preventDefault();
+        } else {
+            return;
+        }
+
+        // 移動容錯 (15px)
+        if (!isPinching && Math.hypot(e.touches[0].clientX - startX, e.touches[0].clientY - startY) > 15) {
+            cancelLongPressTimer();
+            if (!isDragging) isDragging = true;
+        }
 
         // 縮放邏輯
         if (isPinching && e.touches.length === 2) {
-            if (e.cancelable) e.preventDefault(); // 阻止瀏覽器縮放
             const currentDist = getPinchDistance(e.touches);
             if (initialPinchDist > 0) {
                 const scaleFactor = currentDist / initialPinchDist;
@@ -7474,25 +7695,15 @@ function initGlobalInteraction() {
             return;
         }
 
-        // 單指拖曳邏輯
+        // 拖曳邏輯
         if (!isPinching && e.touches.length === 1) {
-            if (isLongPress) return; // 如果已經觸發長按，就不移動
+            if (isLongPress) return;
 
             const touch = e.touches[0];
             const dx = touch.clientX - startX;
             const dy = touch.clientY - startY;
-            const dist = Math.hypot(dx, dy);
-
-            // ★ 移動容錯 (8px)：防手抖，且一旦超過就視為拖曳
-            if (dist > 8) {
-                cancelLongPressTimer();
-                isDragging = true; // 鎖定為拖曳狀態
-            }
 
             if (isDragging) {
-                // ★ 核心：只有在判定為拖曳狀態時，才阻止瀏覽器滾動
-                if (e.cancelable) e.preventDefault();
-                
                 modelContainer.x = containerStartX + dx;
                 modelContainer.y = containerStartY + dy;
                 updateBubblePosition();
@@ -7510,7 +7721,6 @@ function initGlobalInteraction() {
         }
 
         if (canvas.getAttribute('data-interacting') === 'true') {
-            // 如果互動結束時，不是拖曳也不是長按，那就視為「點擊」
             if (!isDragging && !isLongPress) {
                 handleDoubleTap(); 
             }
@@ -7523,7 +7733,6 @@ function initGlobalInteraction() {
     });
 
     // --- 滑鼠事件 (Mouse Events) ---
-    // 電腦版通常沒問題，但為保一致性也加上 preventDefault
     window.addEventListener('mousedown', (e) => {
         if (canvas.style.display === 'none') return;
         if (e.button !== 0) return;
@@ -7553,7 +7762,7 @@ function initGlobalInteraction() {
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
-        if (Math.hypot(dx, dy) > 8) { // 與手機版一致
+        if (Math.hypot(dx, dy) > 10) {
             cancelLongPressTimer();
             if (!isDragging) isDragging = true;
         }
@@ -7594,6 +7803,9 @@ function initGlobalInteraction() {
     }, { passive: false });
 }
 
+
+	
+
 // === 雙擊邏輯 (播放隨機音效 + 隱藏氣泡) ===
 function handleDoubleTap() {
     const currentTime = new Date().getTime();
@@ -7623,13 +7835,13 @@ function playRandomCatSound() {
     audio.play().catch(e => console.log("音效播放受阻:", e));
 }
 
-// === 長按對話邏輯 (無 TTS) ===
+// === 長按對話邏輯 (已修改為使用 gemini-fast) ===
 async function triggerCatChat() {
     // 強制重置/顯示氣泡
     showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); 
     triggerCatReaction();
 
-// 1. 海量分類庫 (多元化中文知識 - 適合中學生)
+    // 1. 海量分類庫 (多元化中文知識 - 適合中學生)
     const categories = [
         '甲骨文的動物形象', '象形字的演變', '指事字的奧秘', '會意字的趣味組合', '形聲字的聲旁規律',
         '漢字的造字傳說', '倉頡造字的故事', '金文與青銅器', '小篆的藝術美', '隸書的統一',
@@ -7728,7 +7940,8 @@ async function triggerCatChat() {
     `;
 
     try {
-        const text = await callAPI(prompt, 0.99); 
+        // ★★★ 修改處：改為呼叫 callCatAPI，鎖定 gemini-fast ★★★
+        const text = await callCatAPI(prompt, 0.99); 
         showBubble(text, 0); 
     } catch (e) {
         console.error("API Error", e);
@@ -10106,36 +10319,12 @@ refreshBtn.addEventListener('click', fetchHitokoto);
 
 <!-- 音樂播放器 HTML (已更換圖示) -->
 <!-- 音樂播放器 HTML (已移除懸浮按鈕) -->
+<!-- 音樂播放器 HTML -->
 <div id="music-player">
     <div class="controls">
         <select id="music-select">
             <option value="">選擇音樂</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Battle-Abysswalker.mp3">The Abysswalker</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Battle-Rosemoon.mp3">死せる都の戰乙女</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Battle-deadly.mp3">五大罪</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Battle-rapier.mp3">繼承劍的少女</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Ariadne-Battle.mp3">不屈意志之刃</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/battle-arms.mp3">西部戰鬥</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Battle.mp3">Battle Theme</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Wanderers-City.mp3">流浪城鎮</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Remotest-Liblary.mp3">沉睡的記憶</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Nostalgia.mp3">麥田懷舊</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/sunbeams.mp3">放學後</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/village.mp3">鄉村生活</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Take-a-Rest.mp3">休息一下</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/winter-snow.mp3">雪鄉</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Forgotten-Place.mp3">被遺忘的地方</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Rest-in-Peace.mp3">安息</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Farewell.mp3">告別</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/reminiscence.mp3">回憶</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/starry-night.mp3">星夜</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/last-wish.mp3">當思念傳到某人耳畔</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/sorrow.mp3">超越悲傷</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/hotarumichi.mp3">螢火蟲之路</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Sky-Airship.mp3">飛艇</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/Voyage_SE.mp3">跨越神秘之海</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/main-theme01.mp3">盼望</option>
-            <option value="https://youfulca.com/wp-content/uploads/2022/08/saikai637.mp3">約定之地</option>
+            <!-- 其他選項已被移除，將由 JS 動態載入 -->
         </select>
         <button id="play-pause" title="播放/暫停"><i class="fas fa-play"></i></button>
     </div>
@@ -10154,9 +10343,8 @@ refreshBtn.addEventListener('click', fetchHitokoto);
     <button class="hide-btn" id="hide-player" title="關閉播放器"><i class="fas fa-chevron-down"></i></button>
 </div>
 
-<!-- 必須保留這個 audio 標籤，否則無法播放音樂 -->
-<audio id="audio" preload="auto"></audio>
-
+<!-- 將 preload 改為 none，避免頁面載入時下載音訊 -->
+<audio id="audio" preload="none"></audio>
 <!-- === 歷史紀錄容器 (最終版) === -->
 <div id="historyContainer" class="box" style="display: none;">
     
@@ -10374,7 +10562,7 @@ refreshBtn.addEventListener('click', fetchHitokoto);
 <div class="sub-group-title">實用工具</div>
 <div class="node level-2"><a href="toolbox/WCT.html" data-tool-id="zhuoyu">琢玉</a></div>
 <div class="node level-2"><a href="toolbox/quizbuzzer.html" data-tool-id="quizbuzzer">搶答器</a></div>
-	<div class="node level-2"><a href="toolbox/pulseqa.html">脈問堂</a></div>
+	<div class="node level-2"><a href="toolbox/pulseqa.html" data-tool-id="pulseqa">脈問堂</a></div>
 <div class="node level-2"><a href="https://www.i2ocr.com/free-online-chinese-traditional-ocr" data-tool-id="ocr">手寫文字轉換 (OCR)</a></div>
 <div class="node level-2"><a href="toolbox/epub.html" data-tool-id="epub">電子書閱讀器</a></div>
 	<div class="node level-2"><a href="toolbox/decibelmeter.html" data-tool-id="decibelmeter">分貝計</a></div>
@@ -10798,93 +10986,6 @@ async function sendCanvasMessage() {
 	
 
 
-/* --------------------------------------
-   音樂播放器 JS (無懸浮按鈕版)
-   -------------------------------------- */
-const audio = document.getElementById('audio');
-const playPauseBtn = document.getElementById('play-pause');
-const musicSelect = document.getElementById('music-select');
-const progressBarMusic = document.getElementById('progress-bar-music');
-const playMode = document.getElementById('play-mode');
-const hidePlayerBtn = document.getElementById('hide-player');
-const musicPlayer = document.getElementById('music-player');
-
-let isPlaying = false;
-let currentMusic = '';
-
-// 音樂選擇
-musicSelect.addEventListener('change', function() {
-    const selectedMusic = this.value;
-    if (selectedMusic) {
-        audio.src = selectedMusic;
-        audio.load();
-        currentMusic = selectedMusic;
-        audio.play().then(() => {
-            isPlaying = true;
-            playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
-        }).catch(error => console.error('自動播放失敗:', error));
-    }
-});
-
-// 確保可以播放時自動播放
-audio.addEventListener('canplay', function() {
-    if (isPlaying) audio.play();
-});
-
-// 播放/暫停按鈕點擊
-playPauseBtn.addEventListener('click', function() {
-    if (isPlaying) {
-        audio.pause();
-        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
-    } else {
-        if (currentMusic) {
-            audio.play();
-            playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
-        } else {
-            alert('請先選擇音樂');
-        }
-    }
-    isPlaying = !isPlaying;
-});
-
-// 進度條更新
-audio.addEventListener('timeupdate', function() {
-    if (!audio.duration) return;
-    const progress = (audio.currentTime / audio.duration) * 100;
-    progressBarMusic.value = progress;
-});
-
-progressBarMusic.addEventListener('input', function() {
-    const time = (this.value / 100) * audio.duration;
-    audio.currentTime = time;
-});
-
-// 自動播放下一首邏輯
-audio.addEventListener('ended', function() {
-    if (playMode.value === 'loop') {
-        audio.currentTime = 0;
-        audio.play();
-    } else if (playMode.value === 'next') {
-        const options = musicSelect.options;
-        for (let i = 0; i < options.length; i++) {
-            if (options[i].value === currentMusic) {
-                let nextIndex = (i + 1) % options.length;
-                if (nextIndex === 0) nextIndex = 1;
-                currentMusic = options[nextIndex].value;
-                musicSelect.value = currentMusic;
-                audio.src = currentMusic;
-                audio.load();
-                audio.play();
-                break;
-            }
-        }
-    }
-});
-
-// 隱藏播放器 (這會直接把播放器關掉，不再顯示懸浮按鈕)
-hidePlayerBtn.addEventListener('click', function() {
-    musicPlayer.style.display = 'none';
-});
 
 // 注意：打開播放器的功能現在完全由側邊選單的 toggleMusicPlayer() 負責
 
@@ -11578,7 +11679,7 @@ function toggleReadingFunction() {
     
     // 新增：處理「訓練」選項，直接跳轉
     if (readingFunction === "training") {
-        window.location.href = "https://kenchan20141.github.io/interpretation/";
+        window.location.href = "toolbox/interpretation.html";
         return;  // 立即返回，避免執行後續邏輯
     }
     
@@ -12556,6 +12657,84 @@ async function callLlama3API(input, temperature = null) {
         throw error;
     }
 }
+
+
+
+// ==========================================
+// === [新增] 貓咪對話專用 API (Gemini Fast) ===
+// ==========================================
+async function callCatAPI(input, temperature = null) {
+    const user = firebase.auth().currentUser;
+    // 如果未登入，不阻擋貓咪賣萌，但後端可能會擋，這裡保留基本檢查
+    if (!user) {
+        // 如果你希望訪客也能玩貓，可以註解掉下面這行；如果要強制登入則保留
+        // document.getElementById('loginRequiredModal').style.display = 'flex';
+        // throw new Error("請先登入學校帳號 (Client blocked)");
+    }
+    
+    const token = user ? await user.getIdToken() : null;
+
+    const TIMEOUT_MS = 60000; // 貓咪對話可以快一點，設 60 秒超時
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+ 
+    try {
+        let requestBody = {};
+ 
+        // ★★★ 核心修改：強制鎖定模型為 gemini-fast ★★★
+        if (typeof input === 'string') {
+            requestBody = {
+                token: token,
+                model: "gemini-fast", // 指定名稱，絕對不改
+                messages: [{ role: "user", content: input }],
+                max_tokens: 1000 // 貓咪說話短，不需要太大
+            };
+        }
+ 
+        if (temperature !== null) {
+            requestBody.temperature = temperature;
+        }
+ 
+        // 使用與原本相同的 API_URL (Worker 網址)
+        const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+        });
+ 
+        clearTimeout(timeoutId);
+ 
+        if (!response.ok) {
+            throw new Error(`Cat API 調用失敗: ${response.status}`);
+        }
+ 
+        const data = await response.json();
+
+        if (data.error && data.error.includes("Unauthorized")) {
+            throw new Error(data.error);
+        }
+
+        // 這裡不呼叫 logProviderInfo 以免洗版 Console
+        // logProviderInfo(data, "Cat API");
+
+        if (!data.choices || data.choices.length === 0) {
+             throw new Error("API 回傳格式異常");
+        }
+ 
+        let content = data.choices[0].message.content.trim();
+        // 清理可能出現的思維鏈標籤
+        return content.replace(/<think\s*>.*?<\/think\s*>|<think\s*\/>|<think\s*>|<\/think\s*>/gis, '').trim();
+ 
+    } catch (error) {
+        clearTimeout(timeoutId);
+        console.error("callCatAPI Error:", error);
+        throw error;
+    }
+}
+
+
+	
 
 /**
  * 【全新函式】應用 Llama-3 驗證模型的內容與結構分數差距規則。
@@ -15822,20 +16001,166 @@ function openToolsFromSideMenu() {
     document.getElementById('expandToolsBtn2').click(); // 觸發原有的工具一覽邏輯
 }
 
-// 切換音樂播放器顯示/隱藏
+/* --------------------------------------
+   音樂播放器 JS (Lazy Loading 優化版)
+   -------------------------------------- */
+// 1. 定義音樂清單數據 (原本 HTML 中的選項移到這裡)
+const musicPlaylist = [
+    { name: "The Abysswalker", url: "https://youfulca.com/wp-content/uploads/2022/08/Battle-Abysswalker.mp3" },
+    { name: "死せる都の戰乙女", url: "https://youfulca.com/wp-content/uploads/2022/08/Battle-Rosemoon.mp3" },
+    { name: "五大罪", url: "https://youfulca.com/wp-content/uploads/2022/08/Battle-deadly.mp3" },
+    { name: "繼承劍的少女", url: "https://youfulca.com/wp-content/uploads/2022/08/Battle-rapier.mp3" },
+    { name: "不屈意志之刃", url: "https://youfulca.com/wp-content/uploads/2022/08/Ariadne-Battle.mp3" },
+    { name: "西部戰鬥", url: "https://youfulca.com/wp-content/uploads/2022/08/battle-arms.mp3" },
+    { name: "Battle Theme", url: "https://youfulca.com/wp-content/uploads/2022/08/Battle.mp3" },
+    { name: "流浪城鎮", url: "https://youfulca.com/wp-content/uploads/2022/08/Wanderers-City.mp3" },
+    { name: "沉睡的記憶", url: "https://youfulca.com/wp-content/uploads/2022/08/Remotest-Liblary.mp3" },
+    { name: "麥田懷舊", url: "https://youfulca.com/wp-content/uploads/2022/08/Nostalgia.mp3" },
+    { name: "放學後", url: "https://youfulca.com/wp-content/uploads/2022/08/sunbeams.mp3" },
+    { name: "鄉村生活", url: "https://youfulca.com/wp-content/uploads/2022/08/village.mp3" },
+    { name: "休息一下", url: "https://youfulca.com/wp-content/uploads/2022/08/Take-a-Rest.mp3" },
+    { name: "雪鄉", url: "https://youfulca.com/wp-content/uploads/2022/08/winter-snow.mp3" },
+    { name: "被遺忘的地方", url: "https://youfulca.com/wp-content/uploads/2022/08/Forgotten-Place.mp3" },
+    { name: "安息", url: "https://youfulca.com/wp-content/uploads/2022/08/Rest-in-Peace.mp3" },
+    { name: "告別", url: "https://youfulca.com/wp-content/uploads/2022/08/Farewell.mp3" },
+    { name: "回憶", url: "https://youfulca.com/wp-content/uploads/2022/08/reminiscence.mp3" },
+    { name: "星夜", url: "https://youfulca.com/wp-content/uploads/2022/08/starry-night.mp3" },
+    { name: "當思念傳到某人耳畔", url: "https://youfulca.com/wp-content/uploads/2022/08/last-wish.mp3" },
+    { name: "超越悲傷", url: "https://youfulca.com/wp-content/uploads/2022/08/sorrow.mp3" },
+    { name: "螢火蟲之路", url: "https://youfulca.com/wp-content/uploads/2022/08/hotarumichi.mp3" },
+    { name: "飛艇", url: "https://youfulca.com/wp-content/uploads/2022/08/Sky-Airship.mp3" },
+    { name: "跨越神秘之海", url: "https://youfulca.com/wp-content/uploads/2022/08/Voyage_SE.mp3" },
+    { name: "盼望", url: "https://youfulca.com/wp-content/uploads/2022/08/main-theme01.mp3" },
+    { name: "約定之地", url: "https://youfulca.com/wp-content/uploads/2022/08/saikai637.mp3" }
+];
+
+let musicPlayerInitialized = false;
+let isPlaying = false;
+let currentMusic = '';
+
+// 2. 初始化函數：只在第一次打開時執行
+function initMusicPlayer() {
+    if (musicPlayerInitialized) return;
+
+    const audio = document.getElementById('audio');
+    const playPauseBtn = document.getElementById('play-pause');
+    const musicSelect = document.getElementById('music-select');
+    const progressBarMusic = document.getElementById('progress-bar-music');
+    const playMode = document.getElementById('play-mode');
+    const hidePlayerBtn = document.getElementById('hide-player');
+    const musicPlayer = document.getElementById('music-player');
+
+    // A. 動態生成選項
+    const fragment = document.createDocumentFragment();
+    musicPlaylist.forEach(song => {
+        const option = document.createElement('option');
+        option.value = song.url;
+        option.textContent = song.name;
+        fragment.appendChild(option);
+    });
+    musicSelect.appendChild(fragment);
+
+    // B. 綁定事件監聽器 (邏輯與之前相同)
+    
+    // 音樂選擇
+    musicSelect.addEventListener('change', function() {
+        const selectedMusic = this.value;
+        if (selectedMusic) {
+            audio.src = selectedMusic;
+            audio.load();
+            currentMusic = selectedMusic;
+            audio.play().then(() => {
+                isPlaying = true;
+                playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+            }).catch(error => console.error('自動播放失敗:', error));
+        }
+    });
+
+    // 確保可以播放時自動播放
+    audio.addEventListener('canplay', function() {
+        if (isPlaying) audio.play();
+    });
+
+    // 播放/暫停按鈕
+    playPauseBtn.addEventListener('click', function() {
+        if (isPlaying) {
+            audio.pause();
+            playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+        } else {
+            if (currentMusic) {
+                audio.play();
+                playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+            } else {
+                alert('請先選擇音樂');
+            }
+        }
+        isPlaying = !isPlaying;
+    });
+
+    // 進度條更新
+    audio.addEventListener('timeupdate', function() {
+        if (!audio.duration) return;
+        const progress = (audio.currentTime / audio.duration) * 100;
+        progressBarMusic.value = progress;
+    });
+
+    progressBarMusic.addEventListener('input', function() {
+        const time = (this.value / 100) * audio.duration;
+        audio.currentTime = time;
+    });
+
+    // 自動播放下一首邏輯
+    audio.addEventListener('ended', function() {
+        if (playMode.value === 'loop') {
+            audio.currentTime = 0;
+            audio.play();
+        } else if (playMode.value === 'next') {
+            const options = musicSelect.options;
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].value === currentMusic) {
+                    let nextIndex = (i + 1) % options.length;
+                    if (nextIndex === 0) nextIndex = 1;
+                    currentMusic = options[nextIndex].value;
+                    musicSelect.value = currentMusic;
+                    audio.src = currentMusic;
+                    audio.load();
+                    audio.play();
+                    break;
+                }
+            }
+        }
+    });
+
+    // 隱藏播放器
+    hidePlayerBtn.addEventListener('click', function() {
+        musicPlayer.style.display = 'none';
+    });
+
+    musicPlayerInitialized = true;
+    console.log("音樂播放器已初始化 (Lazy Load)");
+}
+
+	// 切換音樂播放器顯示/隱藏 (包含 Lazy Loading 觸發)
 function toggleMusicPlayer() {
+    // 1. 在顯示前，先嘗試初始化 (如果已經初始化過，內部會自動跳過)
+    if (typeof initMusicPlayer === 'function') {
+        initMusicPlayer();
+    }
+
     const musicPlayer = document.getElementById('music-player');
     
     if (musicPlayer.style.display === 'none' || musicPlayer.style.display === '') {
         musicPlayer.style.display = 'flex';
-        // 移除下面這行：showPlayerBtn.style.display = 'none';
     } else {
         musicPlayer.style.display = 'none';
-        // 移除下面這行：showPlayerBtn.style.display = 'block';
     }
     
     // 收起側邊選單
-    document.getElementById('sideMenu').classList.remove('active');
+    const sideMenu = document.getElementById('sideMenu');
+    if (sideMenu) {
+        sideMenu.classList.remove('active');
+        document.getElementById('sideMenuToggle').classList.remove('active');
+    }
 }
 
 // === 優化版：帶動畫的返回主頁 ===
@@ -20643,6 +20968,17 @@ function toggleFeaturedChat() {
         }, 800); 
     }
 }
+
+
+// === [新增] 文萃詳情頁置頂功能 ===
+function scrollToArticleTop() {
+    const detailView = document.getElementById('featuredDetailView');
+    if (detailView) {
+        detailView.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+
 	
 function showArticleDetail(index) {
     const article = filteredArticles[index];
@@ -20660,12 +20996,34 @@ function showArticleDetail(index) {
     currentContextType = 'featured_discussion';
     currentContextReview = "（這是精選文章的閱讀討論）"; 
     
-    // 處理正文
-    const contentHtml = article.content.split('\n').filter(p => p.trim()).map((p, i) => {
-        return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
-    }).join('');
+    // === [修改] 內容處理邏輯：判斷是否為詩歌 ===
+    // 檢查內容是否以 <br> 開頭 (忽略前後空白)
+    const isPoetryMode = article.content.trim().startsWith('<br>');
+    let contentHtml = '';
 
-    // 處理賞析
+    if (isPoetryMode) {
+        // --- 詩歌模式 ---
+        // 1. 移除開頭的 <br> 標記
+        const cleanPoem = article.content.replace(/^\s*<br>\s*/i, '');
+        
+        // 2. 生成詩歌專用 HTML
+        // white-space: pre 確保不自動換行，保留詩歌原貌
+        // display: inline-block 讓 fitTextToContainer 能正確計算文字實際寬度
+        contentHtml = `
+        <div style="width: 100%; overflow-x: hidden; text-align: center; margin: 20px 0;">
+            <div id="detailPoetryContent" class="auto-fit-title" 
+                 style="display: inline-block; white-space: pre; text-align: center; line-height: 2; color: #4a4a4a; font-family: 'Noto Serif TC', serif; font-weight: bold;">
+${cleanPoem}
+            </div>
+        </div>`;
+    } else {
+        // --- 原有散文模式 ---
+        contentHtml = article.content.split('\n').filter(p => p.trim()).map((p, i) => {
+            return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
+        }).join('');
+    }
+
+    // 處理賞析 (保持不變)
     let analysisHtmlBlock = '';
     if (article.analysis && article.analysis.trim() !== '') {
         const analysisText = article.analysis.split('\n').filter(p => p.trim()).map((p, i) => {
@@ -20687,13 +21045,12 @@ function showArticleDetail(index) {
     chatHTML = chatHTML.replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？'); 
 
     detailView.innerHTML = `
-        <!-- ★★★ 注入落款動畫專用 CSS ★★★ -->
         <style>
             @keyframes stamp-slam {
-                0% { opacity: 0; transform: scale(3) rotate(-5deg); } /* 懸空高處 */
-                60% { opacity: 1; transform: scale(0.9) rotate(-3deg); } /* 用力砸下 (輕微壓扁) */
-                80% { transform: scale(1.05) rotate(-3deg); } /* 輕微回彈 */
-                100% { opacity: 1; transform: scale(1) rotate(-3deg); } /* 定格 */
+                0% { opacity: 0; transform: scale(3) rotate(-5deg); } 
+                60% { opacity: 1; transform: scale(0.9) rotate(-3deg); } 
+                80% { transform: scale(1.05) rotate(-3deg); } 
+                100% { opacity: 1; transform: scale(1) rotate(-3deg); } 
             }
         </style>
 
@@ -20701,14 +21058,17 @@ function showArticleDetail(index) {
 
         <!-- 右上角懸浮按鈕群組 -->
         <div class="detail-action-group">
-            <button id="detailBookmarkBtn" class="detail-float-btn ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤">
+            <button id="detailBookmarkBtn" class="detail-float-btn scroll-hide-target ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤">
                 <i class="fas fa-bookmark"></i>
             </button>
-            <button class="detail-float-btn" onclick="startSlowRead('${safeContent}')" title="開始慢讀">
+            <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀">
                 <i class="fas fa-book-reader"></i>
             </button>
-            <button class="detail-float-btn" onclick="openReaderSettings()" title="慢讀設定">
+            <button class="detail-float-btn scroll-hide-target" onclick="openReaderSettings()" title="慢讀設定">
                 <i class="fas fa-cog"></i>
+            </button>
+            <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;">
+                <i class="fas fa-arrow-up"></i>
             </button>
             <button class="detail-float-btn close-mode" onclick="backToArticleList()" title="返回列表">
                 <i class="fas fa-times"></i>
@@ -20731,61 +21091,23 @@ function showArticleDetail(index) {
             </div>
             ${analysisHtmlBlock}
             
-            <!-- ★★★ [新設計] 討論區觸發按鈕 (落款版) ★★★ -->
             <div style="margin-top: 80px; margin-bottom: 30px;">
-                
-                <!-- 1. 按鈕容器 -->
                 <div id="chatToggleButtonContainer" style="text-align: center;">
-                    
-                    <!-- 裝飾線 -->
                     <div style="height: 1px; background: linear-gradient(to right, transparent, #e0ddd7, transparent); width: 50%; margin: 0 auto 30px auto;"></div>
-
                     <button id="showFeaturedChatBtn" onclick="toggleFeaturedChat()" 
-                        style="
-                            /* 印章核心樣式 (初始狀態：空心) */
-                            width: 60px; 
-                            height: 60px; 
-                            background-color: transparent; 
-                            color: #d69a92; /* 莫蘭迪紅 */
-                            border: 3px solid #d69a92;
-                            border-radius: 8px; 
-                            
-                            /* 文字排版 (水平) */
-                            font-family: 'Noto Serif TC', serif;
-                            font-size: 1.1rem;
-                            font-weight: 900; 
-                            line-height: 1;   
-                            padding: 0;
-                            
-                            /* 初始角度 */
-                            transform: rotate(-3deg); 
-                            
-                            /* 互動 */
-                            cursor: pointer;
-                            transition: all 0.3s ease;
-                            display: inline-flex;
-                            align-items: center;
-                            justify-content: center;
-                        "
+                        style="width: 60px; height: 60px; background-color: transparent; color: #d69a92; border: 3px solid #d69a92; border-radius: 8px; font-family: 'Noto Serif TC', serif; font-size: 1.1rem; font-weight: 900; line-height: 1; padding: 0; transform: rotate(-3deg); cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; justify-content: center;"
                         onmouseover="this.style.transform='rotate(0deg) scale(1.1)';"
                         onmouseout="this.style.transform='rotate(-3deg) scale(1)';"
                         title="點擊落款"
-                    >
-                        討論
-                    </button>
-                    
+                    >討論</button>
                     <div style="margin-top: 15px; color: #a1887f; font-size: 0.8rem; font-family: 'Noto Serif TC', serif; opacity: 0.6; letter-spacing: 2px; transform: scale(0.9); transition: opacity 0.5s;">
                         [ 點 擊 落 款 ]
                     </div>
                 </div>
-
-                <!-- 2. 隱藏的聊天室容器 -->
                 <div id="featuredChatArea" style="display: none; text-align: left; animation: fadeIn 1s ease; margin-top: 30px;">
-                    <!-- 分隔線 (顯示聊天室時才出現) -->
                     <div style="height: 1px; background: linear-gradient(to right, transparent, #e0ddd7, transparent); width: 80%; margin: 0 auto 30px auto;"></div>
                     ${chatHTML}
                 </div>
-
             </div>
         </div>
     `;
@@ -20793,12 +21115,20 @@ function showArticleDetail(index) {
     detailView.style.display = 'block';
     document.body.style.overflow = 'hidden'; 
 
+    // === [修改] 自動縮放邏輯 ===
     setTimeout(() => {
+        // 1. 縮放標題
         const titleEl = document.getElementById('detailTitleText');
         if (titleEl) fitTextToContainer(titleEl, 24, 38);
+
+        // 2. [新增] 如果是詩歌模式，縮放詩歌本體
+        if (isPoetryMode) {
+            const poemEl = document.getElementById('detailPoetryContent');
+            // 設定詩歌字體範圍：最小 12px，最大 22px
+            if (poemEl) fitTextToContainer(poemEl, 12, 22);
+        }
     }, 50);
 
-    // 滾動監聽
     detailView.onscroll = function() {
         const scrollTop = detailView.scrollTop;
         const docHeight = detailView.scrollHeight;
@@ -20810,13 +21140,15 @@ function showArticleDetail(index) {
         if(progressBar) progressBar.style.width = scrollPercent + "%";
         if(progressContainer) progressContainer.style.opacity = scrollTop > 10 ? '1' : '0';
 
-        const actionGroup = document.querySelector('.detail-action-group');
-        if (actionGroup) {
-            if (scrollTop > 50) { 
-                actionGroup.classList.add('hidden');
-            } else {
-                actionGroup.classList.remove('hidden');
-            }
+        const hideTargets = document.querySelectorAll('.scroll-hide-target'); 
+        const topBtn = document.getElementById('detailTopBtn');              
+
+        if (scrollTop > 100) { 
+            hideTargets.forEach(btn => btn.style.display = 'none');
+            if (topBtn) topBtn.style.display = 'flex';
+        } else {
+            hideTargets.forEach(btn => btn.style.display = 'flex');
+            if (topBtn) topBtn.style.display = 'none';
         }
     };
 }
@@ -21420,7 +21752,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div id="catSelectionModal" class="report-menu-overlay" onclick="closeCatMenu(event)" style="z-index: 20010;">
     <!-- 增加 max-width 讓四個選項在電腦版能並排 -->
     <div class="report-menu-content" style="max-width: 800px;">
-        <div class="report-menu-title" style="color: #5d4037;">選擇你的學習夥伴</div>
+        <div class="report-menu-title" style="color: #5d4037;">選擇你的貓書僮</div>
         
         <!-- 使用 grid 佈局，電腦版 4 欄，手機版 2 欄 -->
         <div class="report-options-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
@@ -21449,7 +21781,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="fas fa-cat" style="font-size: 1.5rem; color: #333;"></i>
                     <i class="fas fa-cat" style="font-size: 1.5rem; color: #f0f0f0; text-shadow: 0 0 2px #999;"></i>
                 </div>
-                <span class="report-option-text">兩隻都要</span>
+                <span class="report-option-text">小朋友才選擇，<br>大人都要。</br></span>
             </div>
 
         </div>
