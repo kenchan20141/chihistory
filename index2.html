@@ -21008,13 +21008,22 @@ function showArticleDetail(index) {
         const cleanContent = article.content.replace('<br>', '').trim();
         
         // 2. 生成 HTML
-        // 使用 id="poetryContent" 方便稍後 JS 抓取
-        // white-space: pre -> 保留所有空格和換行，且絕對不自動換行
-        // display: inline-block -> 讓寬度隨文字撐開，方便計算是否溢出
-        // line-height: 1.6 -> 詩歌行距稍緊一點比較好看
+        // id="poetryContent": 用於 JS 抓取
+        // white-space: pre !important: 強制保留 Google Sheet 的換行，並禁止自動換行
+        // word-wrap: normal !important: 禁止長單字強制斷行
+        // display: inline-block: 讓 div 寬度根據文字內容自動撐開，方便 JS 計算實際寬度
         contentHtml = `
-            <div style="width: 100%; display: flex; justify-content: center; overflow: hidden;">
-                <div id="poetryContent" style="white-space: pre; display: inline-block; text-align: left; line-height: 1.6; font-family: 'Noto Serif TC', serif;">${cleanContent}</div>
+            <div style="width: 100%; overflow-x: auto; overflow-y: hidden; text-align: center;">
+                <div id="poetryContent" style="
+                    white-space: pre !important; 
+                    word-wrap: normal !important; 
+                    word-break: keep-all !important;
+                    display: inline-block; 
+                    text-align: left; 
+                    line-height: 1.6; 
+                    font-family: 'Noto Serif TC', serif;
+                    transform-origin: left top;
+                ">${cleanContent}</div>
             </div>`;
     } else {
         // --- 一般散文模式 (原有機制) ---
@@ -21120,29 +21129,30 @@ function showArticleDetail(index) {
         const titleEl = document.getElementById('detailTitleText');
         if (titleEl) fitTextToContainer(titleEl, 24, 38);
 
-        // 2. === [新增] 詩歌字體自動縮放邏輯 ===
+        // 2. === [修正] 詩歌字體自動縮放邏輯 ===
         if (isPoetry) {
             const poetryEl = document.getElementById('poetryContent');
             if (poetryEl) {
                 // 起始字體大小 (與一般散文一致)
-                let fontSize = 1.15 * 16; // 1.15rem ~= 18.4px
-                
-                // 設定初始大小
+                let fontSize = 1.15 * 16; // 約 18.4px
                 poetryEl.style.fontSize = fontSize + 'px';
                 
-                // 獲取容器可用寬度 (即 .read-mode-container 的內部寬度)
-                // 我們抓上一層的寬度比較準確
-                const containerWidth = poetryEl.parentElement.clientWidth;
+                // 獲取容器可用寬度 (即 .article-body 的寬度，需考慮 padding)
+                // 我們取上一層 div 的寬度
+                const parentEl = poetryEl.parentElement;
                 
-                // 迴圈檢測：如果詩歌內容寬度 (scrollWidth) 超過容器寬度，就縮小字體
-                // 最小縮到 12px，避免看不見
-                while (poetryEl.scrollWidth > containerWidth && fontSize > 12) {
+                // 強制迴圈檢測：
+                // 當「內容實際寬度 (scrollWidth)」大於「容器可見寬度 (clientWidth)」時，縮小字體
+                // 最小縮到 10px (為手機優化)
+                let safetyLoop = 0;
+                while (poetryEl.scrollWidth > parentEl.clientWidth && fontSize > 10 && safetyLoop < 50) {
                     fontSize -= 0.5; // 每次縮小 0.5px
                     poetryEl.style.fontSize = fontSize + 'px';
+                    safetyLoop++;
                 }
             }
         }
-    }, 50);
+    }, 100); // 延遲時間稍微增加到 100ms 以確保渲染完成
 
     // 滾動監聽邏輯 (保持不變)
     detailView.onscroll = function() {
@@ -21168,7 +21178,6 @@ function showArticleDetail(index) {
         }
     };
 }
-
 	
 // 6. 修訂：返回列表時刷新 (處理書籤變更)
 function backToArticleList() {
