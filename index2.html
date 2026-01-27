@@ -7229,7 +7229,18 @@ body.cat-dragging { cursor: grabbing !important; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
 	
-	
+	/* 請將 .article-content 替換成你實際包裹文章內容的 class 名稱 */
+.article-content::after {
+  content: "本文僅供校內教學研習之用。原文版權歸原作者/出版社所有。";
+  display: block;          /* 讓它自成一行 */
+  margin-top: 30px;        /* 與文章內容的距離 */
+  padding-top: 10px;       /* 上方留白 */
+  border-top: 1px solid #eee; /* (選用) 加一條淺灰分隔線 */
+  font-size: 12px;         /* 小字 */
+  color: #888;             /* 淺灰色 */
+  text-align: center;      /* 文字置中，若要靠右改 right */
+  font-style: italic;      /* (選用) 斜體 */
+}
 
 	
 </style>
