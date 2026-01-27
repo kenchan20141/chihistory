@@ -20752,47 +20752,54 @@ function toggleBookmarkMode() {
 // 注意：請確保你已經引入了 Firebase SDK 並執行了 firebase.initializeApp()
 // 這段程式碼應該放在 firebase.auth().onAuthStateChanged 監聽器內，或確認使用者已登入後執行
  
-/**
-* 安全獲取文章列表函數
-*/
-function fetchProtectedArticles() {
-  const database = firebase.database();
-  
-  // 1. 從受保護的 Firebase 節點讀取 CSV URL
-  // 如果使用者沒有登入或非 @ccckyc.edu.hk，這裡會直接報 Permission Denied 錯誤
-  database.ref('/secured_config/articles_url').once('value')
-    .then((snapshot) => {
-      const csvUrl = snapshot.val();
-      
-      if (!csvUrl) {
-        throw new Error("找不到文章連結配置");
-      }
+// ✅【請貼上這一段 (Firebase 安全版)】✅
  
-      console.log("驗證成功，正在下載文章...");
-      
-      // 2. 拿到 URL 後，直接用 fetch 抓取 CSV 內容
-      // Google Sheet Pub Link 支援 CORS，所以這裡可以直接 fetch
-      return fetch(csvUrl);
-    })
-    .then(response => {
-      if (!response.ok) throw new Error("網路連線錯誤");
-      return response.text();
-    })
-    .then(csvText => {
-      // 3. 成功拿到 CSV 文字，執行你的解析與渲染邏輯
-      console.log("文章下載完成，開始處理...");
-      parseAndDisplayCSV(csvText); // ★ 請呼叫你原本的 CSV 解析函數
-    })
-    .catch((error) => {
-      console.error("無法獲取文章:", error);
-      
-      // 這裡可以顯示友善的錯誤訊息給使用者
-      if (error.code === 'PERMISSION_DENIED') {
-        alert("權限不足：您必須使用 @ccckyc.edu.hk 學校帳號登入才能閱讀文章。");
-      } else {
-        alert("載入失敗：" + error.message);
-      }
-    });
+// 2. 從 Firebase 獲取安全連結並下載資料
+async function fetchArticles() {
+    const listContainer = document.getElementById('articleListContainer');
+    listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#8fa398;"><i class="fas fa-circle-notch fa-spin"></i> 正在驗證權限並讀取文章...</div>';
+ 
+    try {
+        // A. 權限檢查：從 Firebase 資料庫讀取受保護的 URL
+        // 如果使用者未登入或非學校帳號，這裡會直接報錯 (Permission Denied)
+        const snapshot = await database.ref('/secured_config/articles_url').once('value');
+        const secureUrl = snapshot.val();
+ 
+        if (!secureUrl) {
+            throw new Error("無法獲取文章配置，請聯絡管理員。");
+        }
+ 
+        console.log("✅ 權限驗證通過，正在下載加密內容...");
+ 
+        // B. 拿到 URL 後，直接下載 CSV (Google Sheet 發布連結支援 CORS)
+        const response = await fetch(secureUrl);
+        if (!response.ok) throw new Error(`無法下載文章數據 (${response.status})`);
+ 
+        const csvData = await response.text();
+ 
+        // C. 解析 CSV (使用你原本的 parseCSV 函數)
+        allArticles = parseCSV(csvData).reverse();
+        console.log("【文章數量】:", allArticles.length);
+ 
+        // D. 渲染列表
+        filteredArticles = allArticles;
+        currentArticlePage = 1;
+        renderArticleList();
+ 
+    } catch (error) {
+        console.error("載入失敗:", error);
+        let errorMsg = error.message;
+        
+        // 針對權限錯誤顯示更友善的訊息
+        if (error.code === 'PERMISSION_DENIED' || errorMsg.includes('permission_denied')) {
+            errorMsg = "權限不足：此內容僅限 @ccckyc.edu.hk 學校帳號存取。<br>請重新登入或檢查您的帳號。";
+        }
+ 
+        listContainer.innerHTML = `<div style="text-align:center; color:#d69a92; padding:20px;">
+            <i class="fas fa-exclamation-triangle"></i><br>
+            ${errorMsg}
+        </div>`;
+    }
 }
  
 /**
