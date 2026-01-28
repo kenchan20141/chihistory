@@ -16785,7 +16785,8 @@ async function smartSyncHistory() {
         // ==================================================
         // 檢查雲端有，但本地 Map 裡沒有的 key
        // ==================================================
-// 步驟 C: 下載缺失資料 (含 ID 合併邏輯 + 即時遷移)
+// ==================================================
+// 步驟 C: 下載缺失資料 (含 ID 合併邏輯 + 原子遷移 + 防重疊)
 // ==================================================
 const missingLocally = cloudKeys.filter(key => !localTimestampMap.has(key));
  
@@ -16793,8 +16794,11 @@ if (missingLocally.length > 0) {
     console.log(`⬇️ [Download] 下載 ${missingLocally.length} 筆...`);
     const downloadedRecords = [];
     
-    // 用來收集「遷移指令」的物件 (同時刪舊 + 建新)
+    // 遷移指令集 (收集所有 Firebase 操作)
     const migrationUpdates = {};
+    
+    // ★★★ 關鍵：微秒計數器，防止迴圈跑太快導致時間戳重疊 ★★★
+    let uniqueOffset = 0;
  
     // 逐筆下載
     await Promise.all(missingLocally.map(async (key) => {
@@ -16803,24 +16807,18 @@ if (missingLocally.length > 0) {
             const r = snap.val();
             if (r) {
                 const keyNum = Number(key);
-                let isMigrationNeeded = false;
  
-                // ★★★ 兼容性遷移邏輯 (Migration Logic) ★★★
-                if (keyNum > 1600000000000) {
-                    // --- 情況 A: 新格式 (正常下載) ---
-                    r.timestamp = keyNum;
-                    r.isSynced = true;
-                    r.hasBeenSynced = true;
-                }
-                else {
-                    // --- 情況 B: 舊格式 (即時遷移) ---
-                    console.log(`🔧 [Migration] 發現舊格式 Key: ${key}，正在即時轉換...`);
+                // --- 判斷：是否為舊格式 (Key 小於 2020年的時間戳) ---
+                if (keyNum < 1600000000000 || isNaN(keyNum)) {
+                    console.log(`🔧 [Migration] 轉換舊資料 Key: ${key}`);
                     
-                    // 1. 補全時間戳
-                    if (!r.timestamp) r.timestamp = new Date().getTime();
+                    // 1. 補全時間戳 (加上 offset 確保唯一)
+                    if (!r.timestamp) {
+                        r.timestamp = new Date().getTime() + uniqueOffset;
+                        uniqueOffset += 10; // 每筆資料間隔 10ms，確保絕對不重複
+                    }
                     
-                    // 2. ★關鍵修改★：因為我們馬上就要手動上傳了，所以本地標記為「已同步」
-                    // 這樣下次同步時，步驟 B 就不會重複上傳它
+                    // 2. 標記為「已同步」 (因為我們馬上就要手動寫入雲端了)
                     r.isSynced = true;
                     r.hasBeenSynced = true;
  
@@ -16829,8 +16827,12 @@ if (missingLocally.length > 0) {
  
                     // 4. 準備 Firebase 指令：寫入新 Key
                     migrationUpdates[`${basePath}/${r.timestamp}`] = r;
-                    
-                    isMigrationNeeded = true;
+                }
+                else {
+                    // --- 新格式 (正常下載) ---
+                    r.timestamp = keyNum;
+                    r.isSynced = true;
+                    r.hasBeenSynced = true;
                 }
  
                 // ... ID 合併邏輯 (保持不變) ...
@@ -16838,7 +16840,7 @@ if (missingLocally.length > 0) {
                 if (existingLocal && existingLocal.id) {
                     r.id = existingLocal.id;
                 } else {
-                    delete r.id;
+                    delete r.id; // 移除舊 ID，讓 IndexedDB 生成新的
                 }
                 
                 downloadedRecords.push(r);
@@ -16848,13 +16850,24 @@ if (missingLocally.length > 0) {
         }
     }));
  
-    // ★★★ 執行即時遷移 (Atomic Update) ★★★
-    // 如果有舊資料需要轉換，這裡會一次過發送「刪除舊+寫入新」的指令
-    if (Object.keys(migrationUpdates).length > 0) {
-        console.log(`🚀 [Migration] 正在執行雲端即時遷移 (${Object.keys(migrationUpdates).length / 2} 筆)...`);
-        await database.ref().update(migrationUpdates);
-        console.log("✅ [Migration] 雲端遷移完成");
+    // ★★★ 1. 先寫入本地資料庫 (確保使用者馬上看得到) ★★★
+    if (downloadedRecords.length > 0) {
+        const writeTx = db.transaction([STORE_NAME], 'readwrite');
+        const writeStore = writeTx.objectStore(STORE_NAME);
+        downloadedRecords.forEach(r => writeStore.put(r));
+        // 等待本地寫入完成
+        await new Promise(resolve => writeTx.oncomplete = resolve);
+        console.log(`✅ [Local] 已寫入 ${downloadedRecords.length} 筆資料`);
     }
+ 
+    // ★★★ 2. 再執行雲端遷移 (原子更新) ★★★
+    if (Object.keys(migrationUpdates).length > 0) {
+        console.log(`🚀 [Migration] 執行雲端原子更新...`);
+        // 這行指令會同時「刪除舊的」並「建立新的」，保證同步
+        await database.ref().update(migrationUpdates);
+        console.log("✅ [Migration] 雲端同步完成");
+    }
+}
  
     // 寫入本地資料庫
     if (downloadedRecords.length > 0) {
