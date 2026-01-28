@@ -21615,14 +21615,14 @@ function goToNextReaderPage() {
 }
  
 	
-// 6. 修訂：返回列表時刷新 (處理書籤變更)
+// 6. 修訂：返回列表時刷新 (確保已讀狀態立即更新)
 function backToArticleList() {
     const detailView = document.getElementById('featuredDetailView');
     detailView.style.display = 'none';
     document.body.style.overflow = 'auto';
     
-    // 如果目前正在「只看書籤」模式，返回時強制刷新列表
-    // 這樣如果使用者剛剛取消了收藏，那篇文章就會從列表中消失
+    // 1. 如果目前正在「只看書籤」模式，需重新過濾資料
+    // (這樣如果使用者剛剛取消了收藏，該文章就會從列表中立即消失)
     if (isBookmarkMode) {
         const bookmarks = getBookmarkedTitles();
         filteredArticles = allArticles.filter(a => bookmarks.includes(a.title));
@@ -21636,12 +21636,15 @@ function backToArticleList() {
                 a.author.toLowerCase().includes(query)
             );
         }
-        
-        renderArticleList();
     }
+    
+    // 2. ★★★ 關鍵修改：無論是否為書籤模式，都強制重新渲染列表 ★★★
+    // 這會讀取最新的 LocalStorage，將剛看完的文章立即變成「暖灰岩色」
+    renderArticleList();
     
     document.getElementById('featuredListView').style.display = 'block';
 }
+ 
 // 更新：在全域的 returnToHome 函式中加入隱藏 featuredContainer
 // 請記得在你的 window.returnToHome = function() {...} 裡面的 containers 陣列加入 'featuredContainer'
 
