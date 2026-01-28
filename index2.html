@@ -16791,6 +16791,10 @@ async function smartSyncHistory() {
             const downloadedRecords = [];
  
           // 逐筆下載
+// 1. 定義一個陣列來收集需要刪除的舊 Key
+const oldCloudKeysToDelete = [];
+ 
+// 逐筆下載
 await Promise.all(missingLocally.map(async (key) => {
     try {
         const snap = await database.ref(`${basePath}/${key}`).once('value');
@@ -16816,10 +16820,12 @@ await Promise.all(missingLocally.map(async (key) => {
                 r.isSynced = false;
                 
                 // 3. 標記為「未曾同步」
-                // 防止它被誤刪
                 r.hasBeenSynced = false;
                 
-                console.log(`🔧 [Migration] 自動修復舊格式資料: ${r.title}`);
+                console.log(`🔧 [Migration] 自動修復舊格式資料: ${r.title} (準備刪除舊 Key: ${key})`);
+ 
+                // ★★★ 新增：將舊 Key 加入刪除名單 ★★★
+                oldCloudKeysToDelete.push(key);
             }
  
             // ... ID 合併邏輯 (保持不變) ...
@@ -16836,6 +16842,19 @@ await Promise.all(missingLocally.map(async (key) => {
         console.error(`下載失敗 Key: ${key}`, err);
     }
 }));
+ 
+// ★★★ 新增：批量刪除雲端上的舊格式資料 ★★★
+if (oldCloudKeysToDelete.length > 0) {
+    const updates = {};
+    oldCloudKeysToDelete.forEach(oldKey => {
+        // 將該路徑設為 null 即為刪除
+        updates[`${basePath}/${oldKey}`] = null;
+    });
+    
+    // 執行刪除
+    await database.ref().update(updates);
+    console.log(`🗑️ [Migration] 已從雲端移除 ${oldCloudKeysToDelete.length} 筆舊格式資料`);
+}
  
             if (downloadedRecords.length > 0) {
                 const writeTx = db.transaction([STORE_NAME], 'readwrite');
