@@ -7264,11 +7264,11 @@ body.cat-dragging { cursor: grabbing !important; }
     opacity: 0.8;
 }
 
-	/* ========================================= */
-/* === [新增] 專注模式/防睡監測樣式 === */
+/* ========================================= */
+/* === [修訂版] 專注模式/防睡監測樣式 === */
 /* ========================================= */
 
-/* 隱藏的攝像頭與畫布 (在背景運算，不顯示給學生看) */
+/* 隱藏的攝像頭 */
 #eye-tracker-hidden-layer {
     position: fixed;
     top: 0; left: 0;
@@ -7278,57 +7278,58 @@ body.cat-dragging { cursor: grabbing !important; }
     z-index: -1;
 }
 
-/* 指示燈基礎樣式 (圓點) */
+/* 指示燈基礎樣式 */
 .monitor-led {
-    width: 10px;
-    height: 10px;
+    width: 12px; /* 稍微加大 */
+    height: 12px;
     border-radius: 50%;
-    background-color: #ccc; /* 預設灰色 (未啟動) */
+    background-color: #ccc; /* 預設灰色 */
     margin-right: 0;
-    transition: all 0.3s ease;
-    box-shadow: 0 0 2px rgba(0,0,0,0.2);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid rgba(0,0,0,0.1);
 }
 
-/* 狀態：開眼/正常 (莫蘭迪綠) - 靜止 */
+/* 狀態：開眼/正常 (莫蘭迪綠) */
 .monitor-led.status-ok {
-    background-color: #8fa398;
-    box-shadow: 0 0 6px #8fa398;
+    background-color: #8fa398 !important;
+    box-shadow: 0 0 8px #8fa398;
+    transform: scale(1);
 }
 
-/* 狀態：警告中/閉眼未達5秒 (莫蘭迪橙黃) - 呼吸燈 */
+/* 狀態：警告中 (莫蘭迪橙黃) - 呼吸燈 */
 .monitor-led.status-warning {
-    background-color: #e6d0a6; 
-    box-shadow: 0 0 8px #e6d0a6;
-    animation: led-pulse 1.5s infinite ease-in-out;
+    background-color: #e6d0a6 !important;
+    box-shadow: 0 0 10px #e6d0a6;
+    animation: led-pulse 1s infinite ease-in-out;
 }
 
-/* 狀態：違規/閉眼超過5秒 (莫蘭迪紅) - 急促閃爍 */
+/* 狀態：違規 (莫蘭迪紅) - 急促閃爍 */
 .monitor-led.status-alert {
-    background-color: #d69a92;
-    box-shadow: 0 0 15px #d69a92;
-    animation: led-flash 0.3s infinite;
+    background-color: #d69a92 !important;
+    box-shadow: 0 0 20px #d69a92;
+    animation: led-flash 0.2s infinite;
 }
 
 /* 呼吸動畫 */
 @keyframes led-pulse {
-    0% { opacity: 0.4; transform: scale(0.9); }
-    50% { opacity: 1; transform: scale(1.1); }
-    100% { opacity: 0.4; transform: scale(0.9); }
+    0% { opacity: 0.6; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.2); }
+    100% { opacity: 0.6; transform: scale(0.9); }
 }
 
 /* 警報閃爍動畫 */
 @keyframes led-flash {
-    0% { opacity: 1; }
-    50% { opacity: 0.2; }
-    100% { opacity: 1; }
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(1.3); }
+    100% { opacity: 1; transform: scale(1); }
 }
 
-/* 按鈕內佈局調整：讓燈號和眼睛圖示並排 */
+/* 按鈕內佈局 */
 #eyeTrackerBtn {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
 }
 
 	
@@ -22392,7 +22393,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 // =======================================================
-// === [新增] 專注閱讀監測系統 (閉眼/離席偵測) ===
+// === [修訂版] 專注閱讀監測系統 (修復靈敏度與音效) ===
 // =======================================================
 
 const EyeTracker = {
@@ -22406,16 +22407,16 @@ const EyeTracker = {
     alarmActive: false,
     checkInterval: null,
     
-    // 參數設定
-    EAR_THRESHOLD: 0.22,  // 閉眼閾值 (小於此值視為閉眼)
-    TIME_THRESHOLD: 5000, // 觸發警報時間 (5秒)
+    // 參數設定 (已調整)
+    EAR_THRESHOLD: 0.30,  // ★ 修訂：提高閾值 (原本0.22)，讓閉眼更容易被偵測
+    TIME_THRESHOLD: 5000, // 5秒
     audio: null,
 
     // 1. 初始化與模型預載
     async init() {
         if (this.modelsLoaded) return true;
         
-        // 建立隱藏的 Video 元素 (如果不存在)
+        // 建立隱藏的 Video
         if (!document.getElementById('eye-tracker-video')) {
             const container = document.createElement('div');
             container.id = 'eye-tracker-hidden-layer';
@@ -22424,15 +22425,21 @@ const EyeTracker = {
             this.video = document.getElementById('eye-tracker-video');
         }
 
-        // 準備警報音效
-        if (!this.audio) {
-            this.audio = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
-            this.audio.loop = true;
-            this.audio.volume = 1.0;
+        // 建立 Audio 元素 (比 new Audio() 更穩定)
+        if (!document.getElementById('monitor-alarm-sound')) {
+            const audioEl = document.createElement('audio');
+            audioEl.id = 'monitor-alarm-sound';
+            audioEl.src = 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg';
+            audioEl.loop = true;
+            audioEl.preload = 'auto';
+            audioEl.volume = 1.0;
+            document.body.appendChild(audioEl);
+            this.audio = audioEl;
+        } else {
+            this.audio = document.getElementById('monitor-alarm-sound');
         }
 
         try {
-            // 載入輕量級模型 (Tiny Face Detector & Landmark 68)
             const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
             console.log("正在載入眼動偵測模型...");
             
@@ -22446,7 +22453,7 @@ const EyeTracker = {
             return true;
         } catch (e) {
             console.error("模型載入失敗", e);
-            alert("無法載入監測組件，請檢查網絡連線。");
+            alert("無法載入監測組件，請檢查網絡連線 (可能是 CSP 或 防火牆阻擋)。");
             return false;
         }
     },
@@ -22458,19 +22465,31 @@ const EyeTracker = {
         const icon = btn.querySelector('i');
 
         if (this.isMonitoring) {
-            // 關閉功能
+            // === 關閉功能 ===
             this.stop();
             
             // UI 重置
-            btn.style.backgroundColor = ""; // 恢復原樣
-            led.className = 'monitor-led'; // 灰色燈
+            btn.style.backgroundColor = "";
+            led.className = 'monitor-led';
             icon.className = 'fas fa-eye';
             btn.title = "開啟專注監測 (防睡)";
         } else {
-            // 啟動功能
+            // === 啟動功能 ===
             
-            // iOS 必須在用戶點擊時解鎖音效
-            this.unlockAudio();
+            // ★ 關鍵修復：在點擊的當下 (同步) 立即觸發音效解鎖，不要等待 async
+            if (this.audio) {
+                this.audio.muted = true;
+                this.audio.play().then(() => {
+                    this.audio.pause();
+                    this.audio.currentTime = 0;
+                    this.audio.muted = false; // 解除靜音準備
+                    console.log("🔊 音效權限已解鎖");
+                }).catch(e => console.warn("音效解鎖失敗:", e));
+            } else {
+                // 如果還沒建立 audio，先建立一個暫時的來解鎖
+                const tempAudio = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
+                tempAudio.play().then(() => tempAudio.pause()).catch(()=>{});
+            }
             
             // UI 顯示載入中
             icon.className = 'fas fa-spinner fa-spin';
@@ -22478,14 +22497,13 @@ const EyeTracker = {
             const success = await this.init();
             if (success) {
                 await this.start();
-                if (this.isMonitoring) { // 確認 start 成功
+                if (this.isMonitoring) {
                     // UI 激活狀態
-                    led.className = 'monitor-led status-ok'; // 初始綠燈
+                    led.className = 'monitor-led status-ok';
                     icon.className = 'fas fa-eye';
                     btn.title = "關閉專注監測";
-                    this.lastOpenEyesTime = Date.now(); // 重置計時
+                    this.lastOpenEyesTime = Date.now();
                 } else {
-                    // Start 失敗 (例如拒絕權限)
                     icon.className = 'fas fa-eye-slash';
                 }
             } else {
@@ -22503,19 +22521,18 @@ const EyeTracker = {
             });
             this.video.srcObject = this.stream;
             
-            // 等待影像準備好
             await new Promise(resolve => this.video.onloadedmetadata = resolve);
             this.video.play();
 
             this.isMonitoring = true;
-            this.lastOpenEyesTime = Date.now(); // 初始視為開眼
+            this.lastOpenEyesTime = Date.now();
             
-            // 開始循環偵測 (每 250ms 檢查一次，平衡效能)
-            this.checkInterval = setInterval(() => this.detect(), 250); 
+            // 縮短檢查間隔以提高反應速度
+            this.checkInterval = setInterval(() => this.detect(), 200); 
             
         } catch (err) {
-            console.error("攝像頭權限被拒或錯誤:", err);
-            alert("請允許使用攝像頭以啟用監測功能 (影像僅在本地運算，不會上傳)。");
+            console.error("攝像頭錯誤:", err);
+            alert("請允許使用攝像頭以啟用監測功能。");
             this.isMonitoring = false;
         }
     },
@@ -22526,7 +22543,6 @@ const EyeTracker = {
         clearInterval(this.checkInterval);
         this.stopAlarm();
         
-        // 釋放攝像頭
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
@@ -22540,8 +22556,8 @@ const EyeTracker = {
     async detect() {
         if (!this.video || this.video.paused || this.video.ended) return;
 
-        // 使用 TinyFaceDetector 進行偵測
-        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+        // 使用較寬鬆的參數，確保能抓到臉
+        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 });
         const detection = await faceapi.detectSingleFace(this.video, options).withFaceLandmarks();
         
         const now = Date.now();
@@ -22559,46 +22575,44 @@ const EyeTracker = {
             const rightEAR = this.getEAR(rightEye);
             const avgEAR = (leftEAR + rightEAR) / 2;
 
-            // 判斷是否張開 (EAR > 閾值)
+            // 除錯用：在 Console 顯示目前的 EAR 值，方便你調整
+            // console.log("EAR:", avgEAR.toFixed(2)); 
+
+            // 判斷是否張開
             if (avgEAR > this.EAR_THRESHOLD) {
                 isEyesOpen = true;
             }
         } 
-        // 若 detection 為 null，表示「離開鏡頭範圍」，視同閉眼/違規
-
+        
         // === 狀態機邏輯 ===
+        // 有臉 且 眼睛張開 -> 安全
         if (hasFace && isEyesOpen) {
-            // 情況 A: 有人且張眼 -> 安全
-            this.lastOpenEyesTime = now; // 更新最後安全時間
+            this.lastOpenEyesTime = now; // 刷新計時器
             this.updateStatus('ok');
             if (this.alarmActive) this.stopAlarm();
-        } else {
-            // 情況 B: 沒人 或 閉眼 -> 計算持續時間
+        } 
+        // 沒臉 (離開) 或 閉眼 -> 開始累計時間
+        else {
             const timeClosed = now - this.lastOpenEyesTime;
-            
+            // console.log("閉眼/離席時間:", (timeClosed/1000).toFixed(1), "秒");
+
             if (timeClosed > this.TIME_THRESHOLD) {
-                // 超過 5 秒 -> 觸發紅燈與警報
+                // 超過 5 秒 -> 警報
                 this.updateStatus('alert');
                 if (!this.alarmActive) this.triggerAlarm();
             } else {
-                // 未滿 5 秒 -> 觸發橙燈警告
+                // 未滿 5 秒 -> 警告
                 this.updateStatus('warning');
             }
         }
     },
 
-    // 6. 計算 EAR (Eye Aspect Ratio) 數學公式
+    // 6. 計算 EAR 公式
     getEAR(eye) {
-        // 歐幾里得距離公式
         const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
-        
-        // 垂直距離 (p2-p6, p3-p5)
         const A = dist(eye[1], eye[5]);
         const B = dist(eye[2], eye[4]);
-        // 水平距離 (p1-p4)
         const C = dist(eye[0], eye[3]);
-
-        // EAR = (A + B) / (2 * C)
         return (A + B) / (2.0 * C);
     },
 
@@ -22607,38 +22621,50 @@ const EyeTracker = {
         const led = document.getElementById('monitorLed');
         if (!led) return;
 
-        // 移除舊狀態
-        led.classList.remove('status-ok', 'status-warning', 'status-alert');
-        
-        // 加入新狀態
+        // 強制重繪 class
+        led.className = 'monitor-led'; 
+        void led.offsetWidth; // Trigger reflow
+
         if (status === 'ok') led.classList.add('status-ok');
         else if (status === 'warning') led.classList.add('status-warning');
         else if (status === 'alert') led.classList.add('status-alert');
     },
 
-    // 8. 觸發警報 (聲音 + 震動)
+    // 8. 觸發警報
     triggerAlarm() {
         this.alarmActive = true;
-        // 播放聲音
-        this.audio.play().catch(e => console.warn("音效播放被阻擋 (需先互動)", e));
         
-        // 手機長震動 (500ms震, 200ms停, ...)
-        if (navigator.vibrate) {
-            navigator.vibrate([1000, 200, 1000, 200, 1000]); 
+        // 播放聲音
+        if (this.audio) {
+            // 再次嘗試解除靜音並播放
+            this.audio.muted = false; 
+            const playPromise = this.audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                    console.warn("警報播放失敗:", e);
+                });
+            }
         }
-        console.log("🚨 瞌睡警報觸發！");
+        
+        // 手機震動 (注意：iPhone 不支援 navigator.vibrate)
+        if (navigator.vibrate) {
+            navigator.vibrate([800, 200, 800, 200, 800]); 
+        }
     },
 
     // 9. 停止警報
     stopAlarm() {
         this.alarmActive = false;
-        this.audio.pause();
-        this.audio.currentTime = 0;
-        if (navigator.vibrate) navigator.vibrate(0); // 停止震動
+        if (this.audio) {
+            this.audio.pause();
+            this.audio.currentTime = 0;
+        }
+        if (navigator.vibrate) navigator.vibrate(0);
     },
     
-    // 10. iOS 音效解鎖 hack
+    // 10. iOS 解鎖 (輔助)
     unlockAudio() {
+        // 此函式已整合進 toggle 邏輯中，保留以防萬一
         if (this.audio) {
             this.audio.muted = true;
             this.audio.play().then(() => {
@@ -22649,7 +22675,6 @@ const EyeTracker = {
         }
     }
 };
-
 	
 </script>
 
