@@ -17565,134 +17565,107 @@ async function downloadHistoryHTML(id) {
 }
 	
 	
-// 9. 刪除與清空 (保持類似)
+// ==========================================
+// === 修正版：刪除紀錄 (手術刀式 - 不會影響其他 Key) ===
+// ==========================================
 async function deleteHistoryItem(id) {
     if (!confirm("確定要刪除這條紀錄嗎？\n(注意：雲端備份也會同步刪除)")) return;
     
-    // 檢查登入狀態
     const s = JSON.parse(localStorage.getItem('studentProfile'));
-
+ 
     try {
         const db = await openHistoryDB();
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         
-        // 1. 先獲取這筆資料的詳情 (為了拿到 timestamp 去雲端比對)
-        const recordRequest = store.get(id);
+        // 1. 先獲取這筆資料 (為了拿到 Timestamp)
+        const getReq = store.get(id);
         
-        recordRequest.onsuccess = async function(event) {
-            const recordToDelete = event.target.result;
+        getReq.onsuccess = async function(e) {
+            const record = e.target.result;
             
-            // 2. 執行本地刪除
+            // 2. 刪除本地
             store.delete(id);
             
-            // 3. 執行雲端刪除 (如果已登入)
-            if (s && recordToDelete) {
-                const path = `students/${s.grade}/${s.class}/${s.name}/history`;
+            // 3. 刪除雲端 (精準刪除)
+            if (s && record && record.timestamp) {
+                const cloudKey = record.timestamp.toString();
+                // ★★★ 關鍵修改：直接指向該 Key 進行刪除，不影響旁邊的資料 ★★★
+                const path = `students/${s.grade}/${s.class}/${s.name}/history/${cloudKey}`;
                 
-                // 我們讀取一次雲端，過濾掉該筆資料，然後寫回 (這樣最安全)
-                const snapshot = await database.ref(path).once('value');
-                const cloudData = snapshot.val();
-                let cloudRecords = [];
-                
-                if (cloudData) {
-                    if (Array.isArray(cloudData)) {
-                        cloudRecords = cloudData.filter(item => item !== null);
-                    } else if (typeof cloudData === 'object') {
-                        cloudRecords = Object.values(cloudData);
-                    }
-                }
-                
-                // 過濾掉我們要刪除的那一筆 (利用 timestamp 比對)
-                const updatedRecords = cloudRecords.filter(r => r.timestamp !== recordToDelete.timestamp);
-                
-                // 將剩下的資料寫回雲端
-                await database.ref(path).set(updatedRecords);
-                console.log("雲端同步刪除成功");
+                await database.ref(path).remove();
+                console.log(`🗑️ 雲端 Key [${cloudKey}] 已精準移除`);
+            } else if (s && (!record || !record.timestamp)) {
+                console.warn("找不到 Timestamp，無法刪除雲端對應資料 (可能已是幽靈檔案)");
             }
-
+ 
             // 4. 刷新介面
-            // 如果是在列表中，刷新列表；如果是在詳情頁，可能需要關閉
-            if (typeof currentSubFunctionFilter !== 'undefined') {
-                enterHistoryList(currentSubFunctionFilter);
-            }
+            // (使用 setTimeout 確保 DB 刪除動作已完成)
+            setTimeout(() => {
+                if (document.getElementById('historyLevel3').style.display !== 'none' && typeof currentSubFunctionFilter !== 'undefined') {
+                    // 如果正在列表頁，重新讀取
+                    const themeIndex = typeof currentThemeIndex !== 'undefined' ? currentThemeIndex : 1;
+                    enterHistoryList(currentSubFunctionFilter, themeIndex);
+                }
+            }, 100);
         };
         
-    } catch (e) { 
-        console.error("刪除失敗:", e); 
+    } catch (e) {
+        console.error("刪除失敗:", e);
         alert("刪除失敗，請重試。");
     }
 }
 	
-// === 修改版：清空所有紀錄 (加入即時刷新邏輯) ===
+// ==========================================
+// === 修正版：清空所有紀錄 (直接設為空物件) ===
+// ==========================================
 async function clearAllHistory() {
     if (!confirm("確定要清空所有歷史紀錄嗎？")) return;
     
     const s = JSON.parse(localStorage.getItem('studentProfile'));
     const level3 = document.getElementById('historyLevel3');
-
-    // 1. 視覺反饋：如果正在看列表，先強制清空內容並顯示 Loading
-    // 這裡改用 !== 'none' 確保捕捉到 grid 或 flex 狀態
+ 
+    // UI 反饋
     if (level3 && level3.style.display !== 'none') {
         level3.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:#999;"><i class="fas fa-circle-notch fa-spin"></i> 正在清空...</div>';
     }
-
+ 
     try {
         const db = await openHistoryDB();
         
-        // 2. 等待本地資料庫完全清空
-        await new Promise((resolve, reject) => {
-            const transaction = db.transaction([STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.clear();
-            
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = (e) => reject(e);
-        });
-
-        // 3. 清空雲端資料
+        // 1. 清空本地
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        store.clear();
+ 
+        // 2. 清空雲端 (設為 null 即可完全移除節點，不會留下 array 結構)
         if (s) {
             const path = `students/${s.grade}/${s.class}/${s.name}/history`;
-            await database.ref(path).set([]);
+            await database.ref(path).remove(); // 使用 remove() 比 set([]) 更乾淨
             console.log("雲端同步清空成功");
         }
-
-        // 4. ★★★ 關鍵修訂：寬鬆的顯示判斷 ★★★
-        
-        // 檢查 Level 3 (紀錄列表) 是否顯示中 (無論是 grid 還是 flex)
-        if (document.getElementById('historyLevel3').style.display !== 'none') {
-            // 重新載入列表 -> 因為 DB 空了，這裡會自動顯示「無紀錄」
-            const themeIndex = typeof currentThemeIndex !== 'undefined' ? currentThemeIndex : 1;
-            // 確保有過濾器變數，如果沒有則回到主選單
-            if (typeof currentSubFunctionFilter !== 'undefined') {
-                enterHistoryList(currentSubFunctionFilter, themeIndex);
-            } else {
-                renderHistoryCategories(); // 變數遺失，退回主層
-            }
-        } 
-        // 檢查 Level 2 (子功能選單) 是否顯示中
-        else if (document.getElementById('historyLevel2').style.display !== 'none') {
-            // 刷新子選單 -> 數字會變 (0)
-            if (typeof currentCategory !== 'undefined') {
-                renderLevel2(currentCategory);
+ 
+        // 3. 刷新介面
+        setTimeout(() => {
+            if (document.getElementById('historyLevel3').style.display !== 'none') {
+                const themeIndex = typeof currentThemeIndex !== 'undefined' ? currentThemeIndex : 1;
+                if (typeof currentSubFunctionFilter !== 'undefined') {
+                    enterHistoryList(currentSubFunctionFilter, themeIndex);
+                } else {
+                    renderHistoryCategories();
+                }
             } else {
                 renderHistoryCategories();
             }
-        } 
-        else {
-            // 其他情況 (例如在主選單)，刷新主選單
-            renderHistoryCategories();
-        }
-
-        alert("✅ 所有紀錄已清空");
-
-    } catch (e) { 
-        console.error("清空錯誤:", e); 
+            alert("✅ 所有紀錄已清空");
+        }, 200);
+ 
+    } catch (e) {
+        console.error("清空錯誤:", e);
         alert("清空失敗，請重試。");
-        // 發生錯誤時嘗試恢復畫面
-        if (document.getElementById('historyLevel3').style.display !== 'none') {
-             const themeIndex = typeof currentThemeIndex !== 'undefined' ? currentThemeIndex : 1;
-             enterHistoryList(currentSubFunctionFilter, themeIndex);
+        // 恢復畫面
+        if (typeof currentSubFunctionFilter !== 'undefined') {
+             enterHistoryList(currentSubFunctionFilter);
         }
     }
 }
