@@ -16580,44 +16580,45 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
 }
 
 
-	// === [新增] 輕量級上傳 (只上傳單筆新資料，不下載舊資料) ===
-// 這是節省流量的關鍵！
+// ==========================================
+// === 修復版：輕量級上傳 (ID 更新保護) ===
+// ==========================================
 async function quickUploadToFirebase(record) {
     const s = JSON.parse(localStorage.getItem('studentProfile'));
     if (!s) return;
- 
-    // 使用 timestamp 作為唯一的 Key
-    // 這樣我們可以精準地只更新這一筆，而不影響其他資料
     const recordKey = record.timestamp.toString();
     const path = `students/${s.grade}/${s.class}/${s.name}/history/${recordKey}`;
- 
-    // 標記為已同步
+    // 準備上傳雲端的物件 (注意：雲端不需要存本地 ID，所以可以過濾掉，或者保留也沒關係)
+    // 這裡我們直接上傳整個 record
     const recordToUpload = {
         ...record,
         isSynced: true,
         hasBeenSynced: true
     };
- 
     try {
-        // 使用 update 只寫入這一筆
-        // 注意：我們構建一個 update object，路徑精確到該筆紀錄
+        // 1. 上傳 Firebase (update)
         const updates = {};
         updates[path] = recordToUpload;
- 
         await database.ref().update(updates);
-        console.log(`✅ [省流模式] 單筆紀錄上傳成功: ${record.title}`);
- 
-        // 上傳成功後，更新本地的同步狀態 (避免下次全量同步時衝突)
-        const db = await openHistoryDB();
-        const tx = db.transaction([STORE_NAME], 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put(recordToUpload);
- 
+        
+        console.log(`✅ [省流模式] 單筆上傳成功`);
+        // 2. 更新本地 IndexedDB 狀態
+        // ★★★ 關鍵：確保使用原本的 ID 進行更新 (Put) ★★★
+        if (record.id) {
+            const db = await openHistoryDB();
+            const tx = db.transaction([STORE_NAME], 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            
+            // 這裡傳入的 record 必須包含 'id' 欄位
+            // IndexedDB 看到有 id，就會執行 Update 而不是 Insert
+            store.put(recordToUpload);
+        } else {
+            console.warn("⚠️ 警告：上傳函式收到無 ID 的紀錄，跳過本地狀態更新以防重複");
+        }
     } catch (e) {
         console.error("單筆上傳失敗 (將在下次全量同步時補傳):", e);
     }
 }
-
 
 	
 	
