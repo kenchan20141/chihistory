@@ -56,6 +56,11 @@ form-action 'self';
 <link rel="apple-touch-icon" sizes="120x120" href="神思圖標.png">
 
 
+
+<!-- 引入 Face-API 用於眼動偵測 -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+	
 <!-- 引入 Chart.js 以繪製雷達圖 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -7258,6 +7263,74 @@ body.cat-dragging { cursor: grabbing !important; }
     margin-left: 8px;
     opacity: 0.8;
 }
+
+	/* ========================================= */
+/* === [新增] 專注模式/防睡監測樣式 === */
+/* ========================================= */
+
+/* 隱藏的攝像頭與畫布 (在背景運算，不顯示給學生看) */
+#eye-tracker-hidden-layer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 1px; height: 1px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* 指示燈基礎樣式 (圓點) */
+.monitor-led {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #ccc; /* 預設灰色 (未啟動) */
+    margin-right: 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 2px rgba(0,0,0,0.2);
+}
+
+/* 狀態：開眼/正常 (莫蘭迪綠) - 靜止 */
+.monitor-led.status-ok {
+    background-color: #8fa398;
+    box-shadow: 0 0 6px #8fa398;
+}
+
+/* 狀態：警告中/閉眼未達5秒 (莫蘭迪橙黃) - 呼吸燈 */
+.monitor-led.status-warning {
+    background-color: #e6d0a6; 
+    box-shadow: 0 0 8px #e6d0a6;
+    animation: led-pulse 1.5s infinite ease-in-out;
+}
+
+/* 狀態：違規/閉眼超過5秒 (莫蘭迪紅) - 急促閃爍 */
+.monitor-led.status-alert {
+    background-color: #d69a92;
+    box-shadow: 0 0 15px #d69a92;
+    animation: led-flash 0.3s infinite;
+}
+
+/* 呼吸動畫 */
+@keyframes led-pulse {
+    0% { opacity: 0.4; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0.4; transform: scale(0.9); }
+}
+
+/* 警報閃爍動畫 */
+@keyframes led-flash {
+    0% { opacity: 1; }
+    50% { opacity: 0.2; }
+    100% { opacity: 1; }
+}
+
+/* 按鈕內佈局調整：讓燈號和眼睛圖示並排 */
+#eyeTrackerBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
 	
 </style>
 
@@ -16290,6 +16363,14 @@ const performReturnToHomeLogic = window.returnToHome || function() {}; // 備份
 // === 優化版：帶動畫的返回主頁 (修復滾動鎖定與視窗殘留) ===
 // === 優化版：帶動畫的返回主頁 (已修復：加入 featuredContainer 隱藏) ===
 window.returnToHome = function() {
+
+
+ // ★ [新增] 強制停止眼動追蹤
+    if (typeof EyeTracker !== 'undefined' && EyeTracker.isMonitoring) {
+        EyeTracker.stop();
+    }
+
+	
     // 1. 找出當前正在顯示的容器 (加入 featuredContainer)
     const activeContainer = document.querySelector(
         '#writingContainer[style*="display: block"], ' +
@@ -21379,12 +21460,12 @@ function scrollToAnalysis() {
     }
 }
 
-// === [修訂版] 顯示文章詳情 (加入已讀判定邏輯) ===
+// === [修訂版] 顯示文章詳情 (加入防睡監測按鈕) ===
 function showArticleDetail(index) {
     const article = filteredArticles[index];
     if (!article) return;
  
-    // ★★★ 新增 1: 記錄當前標題 (供判定使用) ★★★
+    // 新增 1: 記錄當前標題
     currentReadingArticleTitle = article.title;
  
     const isSaved = isArticleBookmarked(article.title);
@@ -21444,6 +21525,15 @@ function showArticleDetail(index) {
     chatHTML = chatHTML.replace('閱卷員追問區', '與陳SIR討論');
     chatHTML = chatHTML.replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？');
  
+    // ★★★ [新增] 監測按鈕 HTML ★★★
+    // 包含一個用作指示燈的 div 和一個圖示
+    const monitorBtnHtml = `
+        <button id="eyeTrackerBtn" class="detail-float-btn scroll-hide-target" onclick="EyeTracker.toggle()" title="開啟專注監測 (防睡)">
+            <div id="monitorLed" class="monitor-led"></div>
+            <i class="fas fa-eye"></i>
+        </button>
+    `;
+
     detailView.innerHTML = `
         <style>
             @keyframes stamp-slam {
@@ -21457,14 +21547,21 @@ function showArticleDetail(index) {
             }
         </style>
         <div id="readingProgressBarContainer"><div id="readingProgressBar"></div></div>
+        
         <div class="detail-action-group">
+            <!-- ★★★ 插入監測按鈕 ★★★ -->
+            ${monitorBtnHtml}
+            
             <button id="detailBookmarkBtn" class="detail-float-btn scroll-hide-target ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤"><i class="fas fa-bookmark"></i></button>
             ${analysisBtnHtml}
             <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀"><i class="fas fa-book-reader"></i></button>
             <button class="detail-float-btn scroll-hide-target" onclick="openReaderSettings()" title="慢讀設定"><i class="fas fa-cog"></i></button>
             <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;"><i class="fas fa-arrow-up"></i></button>
-            <button class="detail-float-btn close-mode" onclick="backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
+            
+            <!-- ★★★ 修改：點擊返回時，強制停止監測 (EyeTracker.stop()) ★★★ -->
+            <button class="detail-float-btn close-mode" onclick="EyeTracker.stop(); backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
         </div>
+
         <div class="read-mode-container">
             <div class="detail-header-group" style="display: flex; flex-direction: column; align-items: center; border-bottom: 2px dashed #e0ddd7; margin-bottom: 25px !important; padding-bottom: 15px !important;">
                 <div class="detail-title-text auto-fit-title" id="detailTitleText" style="color: ${titleColor}; font-weight: bold; margin-bottom: 20px; text-align: center; width: 100%;">
@@ -21524,7 +21621,7 @@ function showArticleDetail(index) {
         }
     }, 50);
  
-    // ★★★ 新增 2: 修改 onscroll 邏輯 (判定手動滾動到賞析) ★★★
+    // 修改 onscroll 邏輯 (判定手動滾動到賞析)
     detailView.onscroll = function() {
         const scrollTop = detailView.scrollTop;
         const docHeight = detailView.scrollHeight;
@@ -21548,9 +21645,7 @@ function showArticleDetail(index) {
             if (topBtn) topBtn.style.display = 'none';
         }
  
-        // ==========================================
-        // ★★★ [核心] 判定是否讀到賞析部分 ★★★
-        // ==========================================
+        // [核心] 判定是否讀到賞析部分
         const analysisSection = document.getElementById('articleAnalysisSection');
         
         // 條件：
@@ -22292,6 +22387,276 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 	
+
+<script>
+
+
+// =======================================================
+// === [新增] 專注閱讀監測系統 (閉眼/離席偵測) ===
+// =======================================================
+
+const EyeTracker = {
+    stream: null,
+    video: null,
+    isMonitoring: false,
+    modelsLoaded: false,
+    
+    // 狀態追蹤
+    lastOpenEyesTime: 0, // 上一次偵測到張開眼睛的時間
+    alarmActive: false,
+    checkInterval: null,
+    
+    // 參數設定
+    EAR_THRESHOLD: 0.22,  // 閉眼閾值 (小於此值視為閉眼)
+    TIME_THRESHOLD: 5000, // 觸發警報時間 (5秒)
+    audio: null,
+
+    // 1. 初始化與模型預載
+    async init() {
+        if (this.modelsLoaded) return true;
+        
+        // 建立隱藏的 Video 元素 (如果不存在)
+        if (!document.getElementById('eye-tracker-video')) {
+            const container = document.createElement('div');
+            container.id = 'eye-tracker-hidden-layer';
+            container.innerHTML = '<video id="eye-tracker-video" playsinline muted autoplay></video>';
+            document.body.appendChild(container);
+            this.video = document.getElementById('eye-tracker-video');
+        }
+
+        // 準備警報音效
+        if (!this.audio) {
+            this.audio = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
+            this.audio.loop = true;
+            this.audio.volume = 1.0;
+        }
+
+        try {
+            // 載入輕量級模型 (Tiny Face Detector & Landmark 68)
+            const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+            console.log("正在載入眼動偵測模型...");
+            
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL) 
+            ]);
+            
+            this.modelsLoaded = true;
+            console.log("👁️ 專注監測模型已載入完成");
+            return true;
+        } catch (e) {
+            console.error("模型載入失敗", e);
+            alert("無法載入監測組件，請檢查網絡連線。");
+            return false;
+        }
+    },
+
+    // 2. 啟動/關閉切換按鈕邏輯
+    async toggle() {
+        const btn = document.getElementById('eyeTrackerBtn');
+        const led = document.getElementById('monitorLed');
+        const icon = btn.querySelector('i');
+
+        if (this.isMonitoring) {
+            // 關閉功能
+            this.stop();
+            
+            // UI 重置
+            btn.style.backgroundColor = ""; // 恢復原樣
+            led.className = 'monitor-led'; // 灰色燈
+            icon.className = 'fas fa-eye';
+            btn.title = "開啟專注監測 (防睡)";
+        } else {
+            // 啟動功能
+            
+            // iOS 必須在用戶點擊時解鎖音效
+            this.unlockAudio();
+            
+            // UI 顯示載入中
+            icon.className = 'fas fa-spinner fa-spin';
+            
+            const success = await this.init();
+            if (success) {
+                await this.start();
+                if (this.isMonitoring) { // 確認 start 成功
+                    // UI 激活狀態
+                    led.className = 'monitor-led status-ok'; // 初始綠燈
+                    icon.className = 'fas fa-eye';
+                    btn.title = "關閉專注監測";
+                    this.lastOpenEyesTime = Date.now(); // 重置計時
+                } else {
+                    // Start 失敗 (例如拒絕權限)
+                    icon.className = 'fas fa-eye-slash';
+                }
+            } else {
+                icon.className = 'fas fa-exclamation-triangle';
+            }
+        }
+    },
+
+    // 3. 開始攝影機串流
+    async start() {
+        try {
+            this.stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: 320, height: 240, facingMode: 'user' },
+                audio: false 
+            });
+            this.video.srcObject = this.stream;
+            
+            // 等待影像準備好
+            await new Promise(resolve => this.video.onloadedmetadata = resolve);
+            this.video.play();
+
+            this.isMonitoring = true;
+            this.lastOpenEyesTime = Date.now(); // 初始視為開眼
+            
+            // 開始循環偵測 (每 250ms 檢查一次，平衡效能)
+            this.checkInterval = setInterval(() => this.detect(), 250); 
+            
+        } catch (err) {
+            console.error("攝像頭權限被拒或錯誤:", err);
+            alert("請允許使用攝像頭以啟用監測功能 (影像僅在本地運算，不會上傳)。");
+            this.isMonitoring = false;
+        }
+    },
+
+    // 4. 停止功能
+    stop() {
+        this.isMonitoring = false;
+        clearInterval(this.checkInterval);
+        this.stopAlarm();
+        
+        // 釋放攝像頭
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+        }
+        if (this.video) {
+            this.video.srcObject = null;
+        }
+    },
+
+    // 5. 核心偵測循環
+    async detect() {
+        if (!this.video || this.video.paused || this.video.ended) return;
+
+        // 使用 TinyFaceDetector 進行偵測
+        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+        const detection = await faceapi.detectSingleFace(this.video, options).withFaceLandmarks();
+        
+        const now = Date.now();
+        let isEyesOpen = false;
+        let hasFace = false;
+
+        if (detection) {
+            hasFace = true;
+            const landmarks = detection.landmarks;
+            const leftEye = landmarks.getLeftEye();
+            const rightEye = landmarks.getRightEye();
+
+            // 計算兩眼的 EAR
+            const leftEAR = this.getEAR(leftEye);
+            const rightEAR = this.getEAR(rightEye);
+            const avgEAR = (leftEAR + rightEAR) / 2;
+
+            // 判斷是否張開 (EAR > 閾值)
+            if (avgEAR > this.EAR_THRESHOLD) {
+                isEyesOpen = true;
+            }
+        } 
+        // 若 detection 為 null，表示「離開鏡頭範圍」，視同閉眼/違規
+
+        // === 狀態機邏輯 ===
+        if (hasFace && isEyesOpen) {
+            // 情況 A: 有人且張眼 -> 安全
+            this.lastOpenEyesTime = now; // 更新最後安全時間
+            this.updateStatus('ok');
+            if (this.alarmActive) this.stopAlarm();
+        } else {
+            // 情況 B: 沒人 或 閉眼 -> 計算持續時間
+            const timeClosed = now - this.lastOpenEyesTime;
+            
+            if (timeClosed > this.TIME_THRESHOLD) {
+                // 超過 5 秒 -> 觸發紅燈與警報
+                this.updateStatus('alert');
+                if (!this.alarmActive) this.triggerAlarm();
+            } else {
+                // 未滿 5 秒 -> 觸發橙燈警告
+                this.updateStatus('warning');
+            }
+        }
+    },
+
+    // 6. 計算 EAR (Eye Aspect Ratio) 數學公式
+    getEAR(eye) {
+        // 歐幾里得距離公式
+        const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        
+        // 垂直距離 (p2-p6, p3-p5)
+        const A = dist(eye[1], eye[5]);
+        const B = dist(eye[2], eye[4]);
+        // 水平距離 (p1-p4)
+        const C = dist(eye[0], eye[3]);
+
+        // EAR = (A + B) / (2 * C)
+        return (A + B) / (2.0 * C);
+    },
+
+    // 7. 更新 LED UI 狀態
+    updateStatus(status) {
+        const led = document.getElementById('monitorLed');
+        if (!led) return;
+
+        // 移除舊狀態
+        led.classList.remove('status-ok', 'status-warning', 'status-alert');
+        
+        // 加入新狀態
+        if (status === 'ok') led.classList.add('status-ok');
+        else if (status === 'warning') led.classList.add('status-warning');
+        else if (status === 'alert') led.classList.add('status-alert');
+    },
+
+    // 8. 觸發警報 (聲音 + 震動)
+    triggerAlarm() {
+        this.alarmActive = true;
+        // 播放聲音
+        this.audio.play().catch(e => console.warn("音效播放被阻擋 (需先互動)", e));
+        
+        // 手機長震動 (500ms震, 200ms停, ...)
+        if (navigator.vibrate) {
+            navigator.vibrate([1000, 200, 1000, 200, 1000]); 
+        }
+        console.log("🚨 瞌睡警報觸發！");
+    },
+
+    // 9. 停止警報
+    stopAlarm() {
+        this.alarmActive = false;
+        this.audio.pause();
+        this.audio.currentTime = 0;
+        if (navigator.vibrate) navigator.vibrate(0); // 停止震動
+    },
+    
+    // 10. iOS 音效解鎖 hack
+    unlockAudio() {
+        if (this.audio) {
+            this.audio.muted = true;
+            this.audio.play().then(() => {
+                this.audio.pause();
+                this.audio.currentTime = 0;
+                this.audio.muted = false;
+            }).catch(e => {});
+        }
+    }
+};
+
+	
+</script>
+
+
+
+
+
 	
 
 
