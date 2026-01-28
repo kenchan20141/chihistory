@@ -22378,7 +22378,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 // =======================================================
-// === [修訂版 V7] 專注閱讀監測系統 (三色燈 + 完美還原) ===
+// === [修訂版 V8] 專注閱讀監測系統 (自訂警報音效版) ===
 // =======================================================
 
 const EyeTracker = {
@@ -22393,7 +22393,7 @@ const EyeTracker = {
     checkInterval: null,
     
     // === 參數設定 ===
-    EAR_THRESHOLD: 0.29,  // 您的指定數值
+    EAR_THRESHOLD: 0.29,  // 鎖定閾值
     
     // 時間門檻 (毫秒)
     TIME_ORANGE: 1000,    // 1秒變橙
@@ -22413,9 +22413,10 @@ const EyeTracker = {
             this.video = document.getElementById('eye-tracker-video');
         }
 
+        // ★★★ 修改處：更換為自訂音效 ★★★
         if (!this.audio) {
-            this.audio = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
-            this.audio.loop = true;
+            this.audio = new Audio('閉眼警告.mp3');
+            this.audio.loop = true; // 循環播放直到眼睛張開
             this.audio.volume = 1.0;
         }
 
@@ -22448,7 +22449,7 @@ const EyeTracker = {
         this.showPrivacyModal();
     },
 
-    // 顯示提示窗 (無括號，簡潔版)
+    // 顯示提示窗
     showPrivacyModal() {
         let modal = document.getElementById('eyePrivacyModal');
         if (!modal) {
@@ -22481,7 +22482,7 @@ const EyeTracker = {
         
         const btn = document.getElementById('eyeTrackerBtn');
         const icon = btn ? btn.querySelector('i') : null;
-        if(icon) icon.className = 'fas fa-spinner fa-spin'; // Loading 動畫
+        if(icon) icon.className = 'fas fa-spinner fa-spin'; // Loading
 
         this.unlockAudio();
         
@@ -22489,7 +22490,6 @@ const EyeTracker = {
         if (success) {
             await this.start();
             if (this.isMonitoring) {
-                // 啟動成功：馬上變綠燈
                 this.updateStatus('ok');
                 if(icon) icon.className = 'fas fa-eye';
                 if(btn) btn.title = "點擊關閉監測";
@@ -22526,7 +22526,7 @@ const EyeTracker = {
         }
     },
 
-    // 4. 停止與完美還原 (重點修復)
+    // 4. 停止與完美還原
     stop() {
         this.isMonitoring = false;
         if (this.checkInterval) {
@@ -22541,22 +22541,13 @@ const EyeTracker = {
         }
         if (this.video) this.video.srcObject = null;
         
-        // ★★★ 徹底清除樣式 ★★★
+        // 徹底清除樣式
         const btn = document.getElementById('eyeTrackerBtn');
         if (btn) {
-            // 1. 移除所有狀態 Class
             btn.classList.remove('status-ok', 'status-warning', 'status-alert', 'mini-mode');
-            
-            // 2. 徹底移除 inline style (背景、邊框、陰影全消)
-            btn.removeAttribute('style');
-            
-            // 3. 確保只保留最原始的 class
+            btn.removeAttribute('style'); // 清除背景色、陰影
             btn.className = 'detail-float-btn scroll-hide-target';
-            
-            // 4. 恢復提示文字
             btn.title = "開啟專注監測";
-            
-            // 5. 恢復眼睛圖示
             const icon = btn.querySelector('i');
             if (icon) {
                 icon.className = 'fas fa-eye';
@@ -22565,7 +22556,7 @@ const EyeTracker = {
         }
     },
 
-    // 5. 偵測與三色燈邏輯 (重點修復)
+    // 5. 偵測邏輯 (綠 -> 橙 -> 紅)
     async detect() {
         if (!this.video || this.video.paused || this.video.ended) return;
 
@@ -22581,25 +22572,23 @@ const EyeTracker = {
             const rightEAR = this.getEAR(landmarks.getRightEye());
             const avgEAR = (leftEAR + rightEAR) / 2;
 
-            // 判斷是否張眼
             if (avgEAR > this.EAR_THRESHOLD) {
                 isEyesOpen = true;
             }
         } 
         
-        // === 三色燈狀態機 ===
         if (isEyesOpen) {
-            // 眼睛張開 -> 更新安全時間 -> 綠燈
+            // 張眼：綠燈
             this.lastSafeTime = now; 
             this.updateStatus('ok');
             if (this.alarmActive) this.stopAlarm();
         } 
         else {
-            // 閉眼或人不在 -> 計算持續時間
+            // 閉眼/離開
             const timeClosed = now - this.lastSafeTime;
             
             if (timeClosed < this.TIME_ORANGE) {
-                // < 1秒：視為眨眼 -> 保持綠燈
+                // < 1秒：綠燈 (眨眼)
                 this.updateStatus('ok');
             } 
             else if (timeClosed >= this.TIME_ORANGE && timeClosed < this.TIME_RED) {
@@ -22607,7 +22596,7 @@ const EyeTracker = {
                 this.updateStatus('warning');
             } 
             else {
-                // > 5秒：紅燈 + 警報
+                // > 5秒：紅燈 + 聲音
                 this.updateStatus('alert');
                 if (!this.alarmActive) this.triggerAlarm();
             }
@@ -22620,23 +22609,18 @@ const EyeTracker = {
         return (dist(eye[1], eye[5]) + dist(eye[2], eye[4])) / (2.0 * dist(eye[0], eye[3]));
     },
 
-    // 7. 更新按鈕樣式
+    // 7. 更新狀態
     updateStatus(status) {
         const btn = document.getElementById('eyeTrackerBtn');
         if (!btn) return;
 
-        // 避免重複刷新 DOM
         if (status === 'ok' && btn.classList.contains('status-ok')) return;
         if (status === 'warning' && btn.classList.contains('status-warning')) return;
         if (status === 'alert' && btn.classList.contains('status-alert')) return;
 
-        // 清除舊狀態
         btn.classList.remove('status-ok', 'status-warning', 'status-alert');
-        
-        // 強制重繪 (解決動畫切換卡頓)
         void btn.offsetWidth; 
 
-        // 加入新狀態
         if (status === 'ok') btn.classList.add('status-ok');
         else if (status === 'warning') btn.classList.add('status-warning');
         else if (status === 'alert') btn.classList.add('status-alert');
@@ -22647,6 +22631,7 @@ const EyeTracker = {
         this.alarmActive = true;
         if (this.audio) {
             this.audio.muted = false;
+            // 使用新音效：閉眼警告.mp3
             this.audio.play().catch(()=>{});
         }
         if (navigator.vibrate) {
