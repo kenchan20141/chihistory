@@ -7280,25 +7280,21 @@ body.cat-dragging { cursor: grabbing !important; }
 
 /* 1. 按鈕本體樣式 (狀態容器) */
 #eyeTrackerBtn {
-    /* 強制 Flex 佈局以置中 */
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    
-    /* 過渡效果 */
     transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
-    
-    /* 預設樣式 (繼承原有的 .detail-float-btn) */
-    /* 這裡不需要額外寫寬高，因為原有的 class 已經定義了 */
+    /* 這裡不設定背景色，讓它預設繼承 .detail-float-btn 的白色背景 */
 }
 
-/* 2. 狀態 A: 綠色 (正常閱讀/開眼) - 恆亮 */
+/* 狀態 A: 綠色 */
 #eyeTrackerBtn.status-ok {
-    background-color: #8fa398 !important; /* 莫蘭迪綠 */
+    background-color: #8fa398 !important; 
     border-color: #8fa398 !important;
     color: white !important;
     box-shadow: 0 0 15px rgba(143, 163, 152, 0.6) !important;
 }
+
 
 /* 3. 狀態 B: 橙色 (閉眼/離席 < 5秒) - 呼吸閃爍 */
 #eyeTrackerBtn.status-warning {
@@ -21522,7 +21518,7 @@ function showArticleDetail(index) {
  
     // ★★★ [核心修改] 監測按鈕：移除 LED div，只保留圖示 ★★★
     // CSS 會讓整個 button 變色
-    const monitorBtnHtml = `
+   const monitorBtnHtml = `
         <button id="eyeTrackerBtn" class="detail-float-btn scroll-hide-target" onclick="EyeTracker.toggle()" title="開啟專注監測 (防睡)">
             <i class="fas fa-eye"></i>
         </button>
@@ -22371,7 +22367,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 // =======================================================
-// === [修訂版 V3] 專注閱讀監測系統 (參數優化+按鈕變色) ===
+// === [修訂版 V4] 專注閱讀監測系統 (修復開關與靈敏度) ===
 // =======================================================
 
 const EyeTracker = {
@@ -22381,14 +22377,14 @@ const EyeTracker = {
     modelsLoaded: false,
     
     // 狀態變數
-    lastSafeTime: 0,   // 上一次「安全」的時間點
+    lastSafeTime: 0,   
     alarmActive: false,
     checkInterval: null,
     
-    // === 關鍵參數設定 ===
-    // 0.22 是一個較為寬容的數值，適合閱讀時微微低頭的狀態
-    // 如果還是太容易誤判，可以試著降到 0.20
-    EAR_THRESHOLD: 0.22,  
+    // === 關鍵參數設定 (已調校) ===
+    // 0.32 是一個嚴格界線。
+    // 如果系統覺得你眼睛不夠大 (數值 < 0.32)，就會開始計時。
+    EAR_THRESHOLD: 0.32,  
     TIME_THRESHOLD: 5000, // 5秒
     
     audio: null,
@@ -22397,7 +22393,6 @@ const EyeTracker = {
     async init() {
         if (this.modelsLoaded) return true;
         
-        // 建立隱藏 Video
         if (!document.getElementById('eye-tracker-video')) {
             const container = document.createElement('div');
             container.id = 'eye-tracker-hidden-layer';
@@ -22406,7 +22401,6 @@ const EyeTracker = {
             this.video = document.getElementById('eye-tracker-video');
         }
 
-        // 建立音效
         if (!this.audio) {
             this.audio = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
             this.audio.loop = true;
@@ -22432,43 +22426,42 @@ const EyeTracker = {
         }
     },
 
-    // 2. 開關切換邏輯
+    // 2. 開關切換邏輯 (修復無法關閉的問題)
     async toggle() {
         const btn = document.getElementById('eyeTrackerBtn');
         const icon = btn.querySelector('i');
 
         if (this.isMonitoring) {
-            // === 關閉 ===
+            // === 執行關閉 ===
+            console.log("正在關閉監測...");
             this.stop();
+            return; // 結束函數
+        } 
+        
+        // === 執行開啟 ===
+        console.log("正在啟動監測...");
+        this.unlockAudio();
+        
+        // UI 顯示 Loading
+        icon.className = 'fas fa-spinner fa-spin';
+        
+        const success = await this.init();
+        if (success) {
+            await this.start();
             
-            // UI 重置
-            btn.className = 'detail-float-btn scroll-hide-target'; // 移除所有 status class
-            icon.className = 'fas fa-eye';
-            btn.title = "開啟專注監測 (防睡)";
-        } else {
-            // === 開啟 ===
-            this.unlockAudio(); // iOS 解鎖
-            
-            // UI 顯示 Loading
-            icon.className = 'fas fa-spinner fa-spin';
-            
-            const success = await this.init();
-            if (success) {
-                await this.start();
-                
-                if (this.isMonitoring) {
-                    // 啟動成功：預設先給綠燈
-                    this.updateStatus('ok');
-                    icon.className = 'fas fa-eye';
-                    btn.title = "關閉專注監測";
-                    
-                    this.lastSafeTime = Date.now(); // 重置計時器
-                } else {
-                    icon.className = 'fas fa-eye-slash';
-                }
+            if (this.isMonitoring) {
+                // 啟動成功
+                this.updateStatus('ok');
+                icon.className = 'fas fa-eye';
+                btn.title = "關閉專注監測";
+                this.lastSafeTime = Date.now();
             } else {
-                icon.className = 'fas fa-exclamation-triangle';
+                // 啟動失敗 (被瀏覽器拒絕)
+                this.stop(); // 強制重置 UI
+                alert("啟動失敗，請確保允許攝像頭權限。");
             }
+        } else {
+            this.stop(); // 模型載入失敗，重置 UI
         }
     },
 
@@ -22488,21 +22481,29 @@ const EyeTracker = {
             this.lastSafeTime = Date.now();
             
             // 啟動偵測 (每 200ms)
+            if (this.checkInterval) clearInterval(this.checkInterval);
             this.checkInterval = setInterval(() => this.detect(), 200); 
             
         } catch (err) {
             console.error("攝像頭權限錯誤:", err);
-            alert("請允許使用攝像頭以啟用監測功能。");
             this.isMonitoring = false;
         }
     },
 
-    // 4. 停止
+    // 4. 停止與重置 (強制清理)
     stop() {
         this.isMonitoring = false;
-        clearInterval(this.checkInterval);
+        
+        // 清除計時器
+        if (this.checkInterval) {
+            clearInterval(this.checkInterval);
+            this.checkInterval = null;
+        }
+        
+        // 停止警報
         this.stopAlarm();
         
+        // 釋放攝像頭資源
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
@@ -22511,17 +22512,27 @@ const EyeTracker = {
             this.video.srcObject = null;
         }
         
-        // 重置按鈕外觀
+        // ★★★ 強制重置 UI 樣式 ★★★
         const btn = document.getElementById('eyeTrackerBtn');
-        if (btn) btn.className = 'detail-float-btn scroll-hide-target';
+        if (btn) {
+            btn.className = 'detail-float-btn scroll-hide-target'; // 移除所有顏色 class
+            btn.style.backgroundColor = ''; // 清除 inline style
+            btn.style.borderColor = '';
+            btn.style.color = '';
+            btn.style.boxShadow = '';
+            btn.title = "開啟專注監測 (防睡)";
+            
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = 'fas fa-eye';
+        }
     },
 
     // 5. 核心偵測邏輯
     async detect() {
         if (!this.video || this.video.paused || this.video.ended) return;
 
-        // 使用更寬鬆的 scoreThreshold (0.3) 確保能抓到臉
-        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.3 });
+        // ★ 提升 inputSize 到 320，讓遠距離或小眼睛更容易被捕捉
+        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 });
         const detection = await faceapi.detectSingleFace(this.video, options).withFaceLandmarks();
         
         const now = Date.now();
@@ -22536,7 +22547,8 @@ const EyeTracker = {
             const rightEAR = this.getEAR(rightEye);
             const avgEAR = (leftEAR + rightEAR) / 2;
 
-            // 除錯用：您可以打開這行來看數值，通常開眼在 0.25~0.35，閉眼在 0.15~0.2
+            // ★ 除錯用：請在電腦上按 F12 看 Console，調整閾值
+            // 如果閉眼時數值是 0.25，那就把閾值設為 0.28
             // console.log("EAR:", avgEAR.toFixed(2));
 
             // EAR 大於閾值 = 開眼 = 安全
@@ -22575,21 +22587,20 @@ const EyeTracker = {
         return (A + B) / (2.0 * C);
     },
 
-    // 7. 更新按鈕狀態 (直接修改按鈕 Class)
+    // 7. 更新按鈕狀態
     updateStatus(status) {
         const btn = document.getElementById('eyeTrackerBtn');
         if (!btn) return;
 
-        // 避免重複重繪 DOM 造成閃爍
+        // 避免重複重繪
         if (status === 'ok' && btn.classList.contains('status-ok')) return;
         if (status === 'warning' && btn.classList.contains('status-warning')) return;
         if (status === 'alert' && btn.classList.contains('status-alert')) return;
 
-        // 清除舊狀態 (保留基礎 class)
+        // 清除舊狀態
         btn.classList.remove('status-ok', 'status-warning', 'status-alert');
         
-        // 觸發 Reflow 確保動畫重啟 (對 CSS Animation 很重要)
-        void btn.offsetWidth;
+        void btn.offsetWidth; // Trigger Reflow
 
         if (status === 'ok') btn.classList.add('status-ok');
         else if (status === 'warning') btn.classList.add('status-warning');
