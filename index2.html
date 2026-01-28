@@ -21332,8 +21332,17 @@ function showArticleDetail(index) {
     // ★★★ [新增] 版權宣告小字 HTML ★★★
     // 增加 margin-bottom 以確保與下方的賞析區塊有足夠距離
     const disclaimerHtml = `
-        <div style="margin-top: 50px; margin-bottom: 10px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">
-            本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。
+        <div style="
+            margin-top: 15px;
+            margin-bottom: 60px;
+            color: #b0bec5;
+            font-size: 0.8rem;
+            text-align: right;
+            font-family: 'Noto Serif TC', serif;
+            font-style: italic;
+            letter-spacing: 1px;
+        ">
+            * 本文僅供校內教學研習之用。原文版權歸原作者/出版社所有。
         </div>`;
  
     const safeContent = encodeURIComponent(article.content);
