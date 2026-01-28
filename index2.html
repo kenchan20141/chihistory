@@ -7229,12 +7229,69 @@ body.cat-dragging { cursor: grabbing !important; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
 	
-	
+	/* === [新增] 已讀標記樣式 (莫蘭迪風格) === */
+.read-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background-color: #8fa398; /* 莫蘭迪灰綠 */
+    color: white;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    font-weight: normal;
+    opacity: 0.9;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+ 
+/* 手機版微調：防止標籤太擠 */
+@media (max-width: 600px) {
+    .read-badge {
+        font-size: 0.7rem;
+        padding: 1px 6px;
+    }
+}
 
 	
 </style>
 
 <script>
+
+
+// ==========================================
+// === [新增] 已讀狀態管理模組 ===
+// ==========================================
+ 
+// 1. 全域變數
+let currentReadingArticleTitle = "";   // 記錄目前正在閱讀的文章標題
+let isAutoScrollingToAnalysis = false; // 旗標：是否正在由按鈕觸發滾動
+ 
+// 2. 從 LocalStorage 獲取已讀列表
+function getReadArticles() {
+    const stored = localStorage.getItem('sansi_read_articles_list');
+    return stored ? JSON.parse(stored) : [];
+}
+ 
+// 3. 標記文章為已讀 (核心函數)
+function markArticleAsRead(title) {
+    if (!title) return;
+    let readList = getReadArticles();
+    
+    // 如果標題尚未在列表中，才進行加入
+    if (!readList.includes(title)) {
+        readList.push(title);
+        localStorage.setItem('sansi_read_articles_list', JSON.stringify(readList));
+        console.log(`文章 [${title}] 已標記為已讀`);
+        
+        // 觸發輕微震動回饋 (如果裝置支援)
+        if (navigator.vibrate) navigator.vibrate(20);
+    }
+}
+
+
+	
 
 // =======================================================
 // === Live2D 貓咪系統 (預設白貓 + 無TTS + 雙重聲效 + 海量題庫) ===
@@ -20930,58 +20987,68 @@ const MORANDI_TITLES = [
     '#6a7a7d'  // 鐵灰藍
 ];
 
-// 4. 渲染文章列表 (最終修正版)
+// 4. 渲染文章列表 (加入已讀標記版)
 function renderArticleList() {
     const listContainer = document.getElementById('articleListContainer');
     listContainer.innerHTML = '';
-
+ 
     if (filteredArticles.length === 0) {
         listContainer.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">找不到相關文章。</div>';
         updatePagination(0);
         return;
     }
-
+ 
     const start = (currentArticlePage - 1) * ARTICLES_PER_PAGE;
     const end = start + ARTICLES_PER_PAGE;
     const pageItems = filteredArticles.slice(start, end);
-
+ 
+    // 獲取最新的已讀列表
+    const readList = getReadArticles();
+ 
     pageItems.forEach((article, index) => {
         const realIndex = start + index;
         const titleColor = MORANDI_TITLES[realIndex % MORANDI_TITLES.length];
         
+        // ★★★ 新增：檢查是否已讀並生成標籤 HTML ★★★
+        const isRead = readList.includes(article.title);
+        const readBadgeHtml = isRead
+            ? `<span class="read-badge"><i class="fas fa-check"></i> 已讀</span>`
+            : '';
+ 
         const item = document.createElement('div');
         item.className = 'article-item';
         item.onclick = () => showArticleDetail(realIndex);
         
-        // 注意：這裡移除了所有 inline style 的 font-size
         item.innerHTML = `
-            <div class="article-left-group" style="width: calc(100% - 100px); min-width: 0;"> <!-- min-width:0 對 flex item 很重要 -->
+            <div class="article-left-group" style="width: calc(100% - 100px); min-width: 0;">
                 <div class="article-item-title auto-fit-title" style="color: ${titleColor}; margin-bottom: 0;">
                     ${article.title}
                 </div>
                 
-                <span class="list-author-tag">
-                    ${article.author}
-                </span>
+                <div style="margin-top: 5px; display: flex; align-items: center; flex-wrap: wrap;">
+                    <span class="list-author-tag">
+                        ${article.author}
+                    </span>
+                    <!-- ★★★ 插入已讀標籤 ★★★ -->
+                    ${readBadgeHtml}
+                </div>
             </div>
-
+ 
             <div class="article-item-date">
                 ${article.date}
             </div>
         `;
         listContainer.appendChild(item);
     });
-
+ 
     updatePagination(Math.ceil(filteredArticles.length / ARTICLES_PER_PAGE));
-
-    // ★★★ 延遲執行縮放，確保 DOM 渲染完畢 ★★★
+ 
     setTimeout(() => {
         const titles = document.querySelectorAll('#articleListContainer .auto-fit-title');
         titles.forEach(el => {
-            // 列表頁：最大 22px，最小縮到 16px，再不行就換行
             fitTextToContainer(el, 16, 22);
         });
-    }, 50); // 稍微增加延遲到 50ms 比較保險
+    }, 50);
 }
 
 
@@ -21282,22 +21349,32 @@ function scrollToArticleTop() {
     }
 }
 
-// === [新增] 自動滾動至賞析區塊 ===
+// === [修改] 自動滾動至賞析區塊 (加入防誤判邏輯) ===
 function scrollToAnalysis() {
     const analysisSection = document.getElementById('articleAnalysisSection');
     
     if (analysisSection) {
-        // 平滑滾動到賞析區塊的頂部
+        // ★★★ 步驟 A: 開啟鎖定，告訴系統這是「自動滾動」 ★★★
+        // 這樣 onscroll 事件偵測到時，就不會觸發「已讀」
+        isAutoScrollingToAnalysis = true;
+ 
         analysisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // ★★★ 步驟 B: 1秒後解鎖 (給予足夠時間等待滾動動畫結束) ★★★
+        setTimeout(() => {
+            isAutoScrollingToAnalysis = false;
+        }, 1000);
     } else {
         alert("此文章暫無賞析內容。");
     }
 }
 
-// === [修訂版] 顯示文章詳情 (加入跳轉賞析按鈕 + 版權宣告) ===
+// === [修訂版] 顯示文章詳情 (加入已讀判定邏輯) ===
 function showArticleDetail(index) {
     const article = filteredArticles[index];
     if (!article) return;
+    // ★★★ 新增 1: 記錄當前標題 (供判定使用) ★★★
+    currentReadingArticleTitle = article.title;
  
     const isSaved = isArticleBookmarked(article.title);
     const bookmarkClass = isSaved ? 'bookmarked' : '';
@@ -21313,24 +21390,17 @@ function showArticleDetail(index) {
     const isPoetry = /^\s*<br\s*\/?>/i.test(article.content);
     
     let contentHtml = '';
- 
     if (isPoetry) {
-        // --- 詩歌模式 ---
         let cleanContent = article.content.replace(/^\s*<br\s*\/?>/i, '').trim();
         cleanContent = cleanContent.replace(/\\n/g, '\n');
- 
         contentHtml = `<div style="width: 100%; display: flex; justify-content: center;"><div id="poetryContent" style="white-space: pre; word-wrap: normal; display: inline-block; text-align: left; line-height: 1.7; font-family: 'Noto Serif TC', serif; margin-top: 0px;">${cleanContent}</div></div>`;
     } else {
-        // --- 一般散文模式 ---
         contentHtml = article.content.split('\n').filter(p => p.trim()).map((p, i) => {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
         }).join('');
     }
- 
-    // 構建賞析區塊 HTML
     let analysisHtmlBlock = '';
     const hasAnalysis = article.analysis && article.analysis.trim() !== '';
- 
     if (hasAnalysis) {
         const analysisText = article.analysis.split('\n').filter(p => p.trim()).map((p, i) => {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
@@ -21342,26 +21412,19 @@ function showArticleDetail(index) {
             <div class="analysis-body" style="margin-top: 0 !important; font-size: 1.05rem !important;">${analysisText}</div>
         </div>`;
     }
- 
-    // ★★★ 生成跳轉賞析按鈕 HTML (如果有賞析內容才顯示) ★★★
     const analysisBtnHtml = hasAnalysis ?
         `<button class="detail-float-btn scroll-hide-target" onclick="scrollToAnalysis()" title="跳至賞析">
             <i class="fas fa-comment-dots"></i>
          </button>` : '';
- 
-    // ★★★ [新增] 版權宣告小字 HTML ★★★
     const disclaimerHtml = `
         <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">
             本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。
         </div>`;
- 
     const safeContent = encodeURIComponent(article.content);
     const safeTitle = encodeURIComponent(article.title);
- 
     let chatHTML = getCanvasChatHTML('featured_discussion');
     chatHTML = chatHTML.replace('閱卷員追問區', '與陳SIR討論');
     chatHTML = chatHTML.replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？');
- 
     detailView.innerHTML = `
         <style>
             @keyframes stamp-slam {
@@ -21370,43 +21433,19 @@ function showArticleDetail(index) {
                 80% { transform: scale(1.05) rotate(-3deg); }
                 100% { opacity: 1; transform: scale(1) rotate(-3deg); }
             }
- 
-            /* === [修復] 文藝風粗體樣式 === */
-            #fullArticleBody b,
-            #fullArticleBody strong,
-            #poetryContent b,
-            #poetryContent strong {
-                font-weight: bold !important;
-                color: #2c3e50 !important;
-                text-shadow: none !important;
-                font-family: 'Noto Serif TC', serif;
+            #fullArticleBody b, #fullArticleBody strong, #poetryContent b, #poetryContent strong {
+                font-weight: bold !important; color: #2c3e50 !important; text-shadow: none !important; font-family: 'Noto Serif TC', serif;
             }
         </style>
- 
         <div id="readingProgressBarContainer"><div id="readingProgressBar"></div></div>
- 
         <div class="detail-action-group">
-            <button id="detailBookmarkBtn" class="detail-float-btn scroll-hide-target ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤">
-                <i class="fas fa-bookmark"></i>
-            </button>
-            
-            <!-- ★★★ 插入賞析按鈕 ★★★ -->
+            <button id="detailBookmarkBtn" class="detail-float-btn scroll-hide-target ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤"><i class="fas fa-bookmark"></i></button>
             ${analysisBtnHtml}
- 
-            <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀">
-                <i class="fas fa-book-reader"></i>
-            </button>
-            <button class="detail-float-btn scroll-hide-target" onclick="openReaderSettings()" title="慢讀設定">
-                <i class="fas fa-cog"></i>
-            </button>
-            <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;">
-                <i class="fas fa-arrow-up"></i>
-            </button>
-            <button class="detail-float-btn close-mode" onclick="backToArticleList()" title="返回列表">
-                <i class="fas fa-times"></i>
-            </button>
+            <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀"><i class="fas fa-book-reader"></i></button>
+            <button class="detail-float-btn scroll-hide-target" onclick="openReaderSettings()" title="慢讀設定"><i class="fas fa-cog"></i></button>
+            <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;"><i class="fas fa-arrow-up"></i></button>
+            <button class="detail-float-btn close-mode" onclick="backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
         </div>
- 
         <div class="read-mode-container">
             <div class="detail-header-group" style="display: flex; flex-direction: column; align-items: center; border-bottom: 2px dashed #e0ddd7; margin-bottom: 25px !important; padding-bottom: 15px !important;">
                 <div class="detail-title-text auto-fit-title" id="detailTitleText" style="color: ${titleColor}; font-weight: bold; margin-bottom: 20px; text-align: center; width: 100%;">
@@ -21417,17 +21456,11 @@ function showArticleDetail(index) {
                 </div>
                 <div class="detail-date" style="color: #9e9e9e; font-family: 'Courier New', monospace; font-size: 0.9rem;">${article.date}</div>
             </div>
- 
-            <!-- 正文區域 -->
             <div class="article-body" id="fullArticleBody" style="font-size: 1.15rem; color: #4a4a4a; text-align: justify; line-height: 1.8;">
                 ${contentHtml}
             </div>
-            
             ${analysisHtmlBlock}
-            
-            <!-- ★★★ 插入版權宣告 ★★★ -->
             ${disclaimerHtml}
-            
             <div style="margin-top: 80px; margin-bottom: 30px;">
                 <div id="chatToggleButtonContainer" style="text-align: center;">
                     <div style="height: 1px; background: linear-gradient(to right, transparent, #e0ddd7, transparent); width: 50%; margin: 0 auto 30px auto;"></div>
@@ -21448,22 +21481,17 @@ function showArticleDetail(index) {
             </div>
         </div>
     `;
- 
     detailView.style.display = 'block';
     document.body.style.overflow = 'hidden';
- 
     setTimeout(() => {
         const titleEl = document.getElementById('detailTitleText');
         if (titleEl) fitTextToContainer(titleEl, 24, 38);
- 
         if (isPoetry) {
             const poetryEl = document.getElementById('poetryContent');
             if (poetryEl) {
                 let fontSize = 1.25 * 16;
                 poetryEl.style.fontSize = fontSize + 'px';
-                
                 const containerWidth = poetryEl.parentElement.clientWidth;
-                
                 let safety = 0;
                 while (poetryEl.scrollWidth > containerWidth && fontSize > 11 && safety < 100) {
                     fontSize -= 0.5;
@@ -21473,27 +21501,45 @@ function showArticleDetail(index) {
             }
         }
     }, 50);
- 
+    // ★★★ 新增 2: 修改 onscroll 邏輯 (判定手動滾動到賞析) ★★★
     detailView.onscroll = function() {
         const scrollTop = detailView.scrollTop;
         const docHeight = detailView.scrollHeight;
         const winHeight = detailView.clientHeight;
         const scrollPercent = (scrollTop / (docHeight - winHeight)) * 100;
         
+        // 進度條
         const progressBar = document.getElementById('readingProgressBar');
         const progressContainer = document.getElementById('readingProgressBarContainer');
         if(progressBar) progressBar.style.width = scrollPercent + "%";
         if(progressContainer) progressContainer.style.opacity = scrollTop > 10 ? '1' : '0';
- 
+        // 按鈕顯隱
         const hideTargets = document.querySelectorAll('.scroll-hide-target');
         const topBtn = document.getElementById('detailTopBtn');
- 
         if (scrollTop > 100) {
             hideTargets.forEach(btn => btn.style.display = 'none');
             if (topBtn) topBtn.style.display = 'flex';
         } else {
             hideTargets.forEach(btn => btn.style.display = 'flex');
             if (topBtn) topBtn.style.display = 'none';
+        }
+ 
+        // ==========================================
+        // ★★★ [核心] 判定是否讀到賞析部分 ★★★
+        // ==========================================
+        const analysisSection = document.getElementById('articleAnalysisSection');
+        
+        // 條件：
+        // 1. 賞析區塊存在
+        // 2. 並且「不是」由按鈕觸發的自動滾動 (isAutoScrollingToAnalysis === false)
+        if (analysisSection && !isAutoScrollingToAnalysis) {
+            const rect = analysisSection.getBoundingClientRect();
+            
+            // 邏輯：當賞析區塊的頂部 (Top) 進入視窗高度的 80% 位置時，視為已讀
+            // (代表使用者已經滑到了賞析的開頭)
+            if (rect.top <= winHeight * 0.8 && rect.bottom >= 0) {
+                markArticleAsRead(currentReadingArticleTitle);
+            }
         }
     };
 }
@@ -21773,7 +21819,7 @@ function stopReaderAutoPage() {
     }
 }
 
-// 8. 翻頁動作
+// [修改] 翻頁動作 (加入慢讀完成觸發已讀)
 function goToNextReaderPage() {
     if (readerState.currentIndex < readerState.segments.length - 1) {
         readerState.currentIndex++;
@@ -21781,6 +21827,9 @@ function goToNextReaderPage() {
     } else {
         // 讀完自動停止並顯示文藝結尾
         stopReaderAutoPage();
+        
+        // ★★★ 新增：慢讀完成，標記為已讀 ★★★
+        markArticleAsRead(currentReadingArticleTitle);
         
         const displayWrapper = document.getElementById('reader-display-wrapper');
         const paraNum = document.getElementById('reader-para-num');
@@ -21793,8 +21842,6 @@ function goToNextReaderPage() {
             // 清空段落編號
             paraNum.textContent = '';
             
-            // ★★★ 修改處：加入「結束閱讀」按鈕 ★★★
-            // pointer-events: auto 是必須的，因為父層容器 displayWrapper 預設是 none
             textDisplay.innerHTML = `
                 <div style="text-align: center; width: 100%; margin-top: 20px;">
                     <span style="font-family: 'Noto Serif TC', serif; color: #a1887f; font-size: 1.2rem; letter-spacing: 0.5em; opacity: 0.8; display: block; margin-bottom: 20px;">
@@ -21806,9 +21853,9 @@ function goToNextReaderPage() {
                 </div>
             `;
             
-            // 讓 displayWrapper 可以接受點擊 (原本為了防擋住底層是 none)
+            // 讓 displayWrapper 可以接受點擊
             displayWrapper.style.pointerEvents = "auto";
-
+ 
             // 淡入顯示
             displayWrapper.classList.remove('fade-out');
             
