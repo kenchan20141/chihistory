@@ -16687,22 +16687,25 @@ function mergeHistoryRecords(localRecords, cloudRecords) {
 // === 2. 省流同步系統 (Smart Sync) ===
 // ==========================================
  
-// 智慧同步：比對 ID，只傳輸差異部分
+// ==========================================
+// === 2. 省流同步系統 (Smart Sync - 批次寫入修復版) ===
+// ==========================================
+ 
 async function smartSyncHistory() {
     const s = JSON.parse(localStorage.getItem('studentProfile'));
     const user = firebase.auth().currentUser;
     
-    if (!s || !user) return; // 未登入不執行
+    if (!s || !user) return;
  
-    console.log("🚀 [Smart Sync] 開始省流同步檢查...");
+    // console.log("🚀 [Smart Sync] 開始省流同步檢查..."); // 可註解掉減少洗版
  
     try {
         const db = await openHistoryDB();
         const token = await user.getIdToken();
         const basePath = `students/${s.grade}/${s.class}/${s.name}/history`;
-        const dbUrl = "https://sansidata-default-rtdb.firebaseio.com"; // 請確認您的 DB URL
+        const dbUrl = "https://sansidata-default-rtdb.firebaseio.com";
  
-        // 1. 獲取本地所有 ID 與 未同步項目
+        // 1. 獲取本地所有 ID
         const transaction = db.transaction([STORE_NAME], 'readonly');
         const store = transaction.objectStore(STORE_NAME);
         const localData = await new Promise(resolve => {
@@ -16710,71 +16713,104 @@ async function smartSyncHistory() {
             req.onsuccess = e => resolve(e.target.result);
         });
  
-        // 建立本地 ID Set (用 timestamp 當 Key)
         const localIds = new Set(localData.map(r => r.timestamp.toString()));
-        // 找出需要上傳的 (isSynced === false)
         const toUpload = localData.filter(r => r.isSynced === false);
  
-        // 2. 使用 REST API 獲取雲端 ID 列表 (只下載 Keys，極省流量)
+        // 2. 獲取雲端 ID 列表 (省流)
         const response = await fetch(`${dbUrl}/${basePath}.json?shallow=true&auth=${token}`);
         const cloudKeysData = await response.json();
-        
-        // 如果雲端是空的 (null)，cloudKeys 為空陣列
         const cloudKeys = cloudKeysData ? Object.keys(cloudKeysData) : [];
         const cloudIds = new Set(cloudKeys);
  
-        console.log(`📊 [Sync Stats] 本地: ${localIds.size} 筆, 雲端: ${cloudIds.size} 筆`);
+        console.log(`📊 [Sync] 本地: ${localIds.size}, 雲端: ${cloudIds.size}`);
  
-        // 3. 執行上傳 (本地有，雲端沒有，且標記為未同步)
+        // 3. 執行上傳 (邏輯不變)
         if (toUpload.length > 0) {
-            console.log(`⬆️ [Upload] 正在上傳 ${toUpload.length} 筆新紀錄...`);
+            console.log(`⬆️ [Upload] 上傳 ${toUpload.length} 筆...`);
             const updates = {};
             toUpload.forEach(record => {
-                // 標記為已同步
                 record.isSynced = true;
                 record.hasBeenSynced = true;
-                // 寫入更新物件
                 updates[`${basePath}/${record.timestamp}`] = record;
                 
-                // 同時更新本地 DB 狀態
                 const tx = db.transaction([STORE_NAME], 'readwrite');
                 tx.objectStore(STORE_NAME).put(record);
             });
-            // 批量上傳
             await database.ref().update(updates);
         }
  
-        // 4. 執行下載 (雲端有，本地沒有)
+        // 4. ★★★ [核心修復] 批次下載與寫入 ★★★
         const missingLocally = cloudKeys.filter(key => !localIds.has(key));
         
         if (missingLocally.length > 0) {
-            console.log(`⬇️ [Download] 發現 ${missingLocally.length} 筆缺失，正在下載...`);
+            console.log(`⬇️ [Download] 發現 ${missingLocally.length} 筆缺失，開始批次處理...`);
             
-            // 這裡必須逐筆或整批下載。為了簡單，如果缺失少於 5 筆，逐筆下；多於 5 筆，直接下載整個 history (比較快)
-            if (missingLocally.length > 5) {
-                // 全量下載 (雖然有點大，但比發 100 個 request 好)
+            // A. 先將所有資料下載到記憶體 (Promise.all 並行下載)
+            const downloadedRecords = [];
+            
+            // 如果缺失太多(>20)，改用一次性下載整個 History 以免發出太多請求
+            if (missingLocally.length > 20) {
+                console.log("   (數量較多，切換為全量下載模式)");
                 const fullSnap = await database.ref(basePath).once('value');
                 const fullData = fullSnap.val();
                 if (fullData) {
-                    const tx = db.transaction([STORE_NAME], 'readwrite');
-                    const st = tx.objectStore(STORE_NAME);
-                    Object.values(fullData).forEach(r => st.put(r));
+                    Object.values(fullData).forEach(r => {
+                        // 只加入本地沒有的
+                        if (r && r.timestamp && !localIds.has(r.timestamp.toString())) {
+                            downloadedRecords.push(r);
+                        }
+                    });
                 }
             } else {
-                // 逐筆下載
-                const downloadPromises = missingLocally.map(async (key) => {
-                    const snap = await database.ref(`${basePath}/${key}`).once('value');
-                    const record = snap.val();
-                    if (record) {
-                        const tx = db.transaction([STORE_NAME], 'readwrite');
-                        tx.objectStore(STORE_NAME).put(record);
+                // 數量少，逐筆下載 (省流量)
+                await Promise.all(missingLocally.map(async (key) => {
+                    try {
+                        const snap = await database.ref(`${basePath}/${key}`).once('value');
+                        const r = snap.val();
+                        if (r) {
+                            // 資料修補：確保有 timestamp (主鍵)
+                            if (!r.timestamp) r.timestamp = Number(key);
+                            // 標記為已同步
+                            r.isSynced = true;
+                            r.hasBeenSynced = true;
+                            downloadedRecords.push(r);
+                        }
+                    } catch (err) {
+                        console.error(`   下載失敗 Key: ${key}`, err);
                     }
-                });
-                await Promise.all(downloadPromises);
+                }));
             }
-        }
  
-        console.log("✅ [Smart Sync] 同步完成 (省流模式)。");
+            // B. 開啟「單一」交易進行寫入 (這是解決問題的關鍵)
+            if (downloadedRecords.length > 0) {
+                const writeTx = db.transaction([STORE_NAME], 'readwrite');
+                const writeStore = writeTx.objectStore(STORE_NAME);
+                
+                downloadedRecords.forEach(record => {
+                    writeStore.put(record);
+                });
+ 
+                // 等待寫入完成
+                await new Promise((resolve, reject) => {
+                    writeTx.oncomplete = () => {
+                        console.log(`✅ [Save] 成功寫入 ${downloadedRecords.length} 筆紀錄到本地 DB`);
+                        resolve();
+                    };
+                    writeTx.onerror = (e) => {
+                        console.error("❌ 寫入 IndexedDB 失敗:", e);
+                        reject(e);
+                    };
+                });
+                
+                // C. 如果當前在列表頁面，刷新列表
+                if (document.getElementById('historyLevel3').style.display !== 'none' && typeof currentSubFunctionFilter !== 'undefined') {
+                     const themeIndex = typeof currentThemeIndex !== 'undefined' ? currentThemeIndex : 1;
+                     enterHistoryList(currentSubFunctionFilter, themeIndex);
+                }
+            }
+        } else {
+            console.log("✅ [Sync] 本地已是最新狀態");
+        }
  
     } catch (e) {
         console.error("同步失敗:", e);
