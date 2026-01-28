@@ -16521,7 +16521,7 @@ function captureContainerHTML(containerId) {
 
 	
 // ==========================================
-// === 修訂版：儲存紀錄 (改用輕量上傳) ===
+// === 修訂版：儲存紀錄 (防止本地 ID 重複生成) ===
 // ==========================================
 async function saveToHistory(category, subFunction, title, userContent, aiContent, scoreData = null) {
     try {
@@ -16533,16 +16533,13 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             toRemove.forEach(el => el.remove());
             aiContent = tempDiv.innerHTML;
         }
- 
         const db = await openHistoryDB();
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
- 
         const ts = new Date().getTime();
         if (typeof lastGeneratedTimestamp !== 'undefined') {
             lastGeneratedTimestamp = ts; // 更新全域時間戳
         }
- 
         const record = {
             category: category,
             subFunction: subFunction,
@@ -16553,27 +16550,29 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             timestamp: ts,
             dateStr: new Date().toLocaleString('zh-HK', { hour12: false }),
             
-            // 初始狀態：本地先設為 False，等 quickUpload 成功後會轉為 True
+            // 初始狀態
             isSynced: false,       
             hasBeenSynced: false   
         };
- 
-        // 使用 Promise 確保寫入 IndexedDB 完成
-        await new Promise((resolve, reject) => {
+        // ★★★ 關鍵修改：獲取並鎖定 ID ★★★
+        const generatedId = await new Promise((resolve, reject) => {
             const req = store.add(record);
-            req.onsuccess = resolve;
+            req.onsuccess = (e) => {
+                // e.target.result 就是 IndexedDB 剛生成的 Key (ID)
+                resolve(e.target.result);
+            };
             req.onerror = reject;
         });
  
-        console.log("本地紀錄已建立。");
+        // 將 ID 寫回記憶體中的物件，確保後續操作都是針對同一筆資料
+        record.id = generatedId;
+        console.log(`本地紀錄已建立 (ID: ${generatedId})`);
         
-        // ★★★ 關鍵修改處：改用輕量上傳 ★★★
+        // 執行輕量上傳 (傳入帶有 ID 的 record)
         const s = JSON.parse(localStorage.getItem('studentProfile'));
         if (s) {
-            // 異步執行，不需 await 阻擋 UI，讓它在背景上傳即可
             quickUploadToFirebase(record);
         }
- 
     } catch (error) {
         console.error("儲存紀錄失敗:", error);
     }
