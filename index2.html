@@ -7229,18 +7229,7 @@ body.cat-dragging { cursor: grabbing !important; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
 	
-	/* 請將 .article-content 替換成你實際包裹文章內容的 class 名稱 */
-.article-content::after {
-  content: "本文僅供校內教學研習之用。原文版權歸原作者/出版社所有。";
-  display: block;          /* 讓它自成一行 */
-  margin-top: 30px;        /* 與文章內容的距離 */
-  padding-top: 10px;       /* 上方留白 */
-  border-top: 1px solid #eee; /* (選用) 加一條淺灰分隔線 */
-  font-size: 12px;         /* 小字 */
-  color: #888;             /* 淺灰色 */
-  text-align: center;      /* 文字置中，若要靠右改 right */
-  font-style: italic;      /* (選用) 斜體 */
-}
+	
 
 	
 </style>
@@ -7928,107 +7917,71 @@ function playRandomCatSound() {
 }
 
 // === 長按對話邏輯 (已修改為使用 gemini-fast) ===
+// === 長按對話邏輯 (已修改為使用 gemini-fast) ===
 async function triggerCatChat() {
     // 強制重置/顯示氣泡
     showBubble("喵... 讓我想想... <span class='cat-loading-dots'></span>", 0); 
     triggerCatReaction();
 
-    // 1. 海量分類庫 (多元化中文知識 - 適合中學生)
+    // 1. 海量分類庫 (專注於作家、作品、軼事 - 數量充足)
     const categories = [
-        '甲骨文的動物形象', '象形字的演變', '指事字的奧秘', '會意字的趣味組合', '形聲字的聲旁規律',
-        '漢字的造字傳說', '倉頡造字的故事', '金文與青銅器', '小篆的藝術美', '隸書的統一',
-        '楷書的成熟', '行書的流動', '草書的狂放', '錯別字的歷史', '通假字的由來',
-        '避諱字的趣聞', '異體字的困擾', '簡化字的演變', '部首的意義', '偏旁的秘密',
-        '多音字的陷阱', '同音字的笑話', '成語中的動物', '成語中的數字', '成語中的顏色',
-        '成語中的植物', '成語中的人名', '成語中的地名', '成語中的天文', '成語中的地理',
-        '成語中的軍事', '成語中的樂器', '成語中的飲食', '成語中的服飾', '成語中的建築',
-        '成語中的禮儀', '成語中的神話', '成語中的歷史故事', '成語中的哲理', '容易讀錯的成語',
-        '容易寫錯的成語', '容易用錯的成語', '褒義貶用的成語', '貶義褒用的成語', '詩經中的愛情',
-        '詩經中的戰爭', '詩經中的農耕', '楚辭的神話色彩', '屈原的愛國情懷', '漢賦的華麗辭藻',
-        '樂府詩的民歌風味', '古詩十九首的感傷', '建安風骨的悲涼', '陶淵明的田園生活', '謝靈運的隱逸情趣',
-        '王維的歸隱思想', '孟浩然的山水詩', '李白的禪意', '杜甫的家國情懷', '白居易的現實主義',
-        '王昌齡的邊塞詩', '高適的邊塞詩', '岑參的邊塞詩', '韓愈的新樂府運動', '柳宗元的古文運動',
-        '劉禹錫的山水遊記', '李商隱的感傷詩', '杜牧的無題詩', '溫庭筠的詠史詩', '李煜的詞作',
-        '馮延巳的詞作', '范仲淹的詞作', '歐陽修的詞作', '蘇軾的詞風轉變', '柳永的婉約詞',
-        '晏殊的富貴詞', '秦觀的羈旅行役', '周邦彥的慢詞', '李清照的婉約詞', '辛棄疾的豪放詞',
-        '陸游的愛國詞', '姜夔的格律詞', '吳文英的夢窗詞', '元好問的愛國詩', '關漢卿的元曲',
-        '馬致遠的元曲', '白樸的元曲', '鄭光祖的元曲', '王實甫的西廂記', '湯顯祖的牡丹亭',
-        '洪昇的長生殿', '孔尚任的桃花扇', '三國演義的智謀', '水滸傳的義氣', '西遊記的奇幻',
-        '紅樓夢的人物關係', '儒林外史的諷刺', '聊齋志異的鬼狐', '老殘遊記的文人', '鏡花緣的遊歷',
-        '吶喊的吶喊', '彷徨的迷茫', '野草的絕望', '朝花夕拾的回憶', '故事新編的改編',
-        '子夜的都市', '家春秋的家族', '駱駝祥子的悲劇', '四世同堂的命運', '茶館的社會',
-        '雷雨的戲劇衝突', '日出的家庭悲劇', '原野的女性命運', '北京人的生活', '邊城的湘西風情',
-        '圍城的婚姻', '呼蘭河傳的鄉土', '傾城之戀的愛情', '金鎖記的命運', '受戒的童年',
-        '棋王的棋道', '活著的生存', '許三觀賣血記的苦難', '平凡的世界的奮鬥', '白鹿原的農村',
-        '長恨歌的上海', '繁花的都市', '秦腔的歷史', '廢都的變遷', '塵埃落定的命運',
-        '檀香刑的殘酷', '生死疲勞的輪迴', '蛙的生育', '豐乳肥臀的母親', '紅高粱家族的抗日',
-        '穆斯林的葬禮的家族', '白銀時代的歷史', '黃金時代的荒誕', '青銅時代的反諷', '黑鐵時代的壓抑',
-        '古代科舉制度', '古代官職名稱', '古代禮儀習俗', '古代飲食文化', '古代服飾文化',
-        '古代建築特色', '古代交通工具', '古代通訊方式', '古代貨幣演變', '古代度量衡',
-        '古代天文曆法', '古代地理知識', '古代醫學常識', '古代兵法戰術', '古代樂器種類',
-        '古代書法藝術', '古代繪畫藝術', '古代戲曲藝術', '古代民間工藝', '古代節日習俗',
-        '春節的由來', '元宵節的習俗', '清明節的意義', '端午節的傳說', '七夕節的故事',
-        '中秋節的傳說', '重陽節的習俗', '臘八節的由來', '除夕的習俗', '二十四節氣的含義',
-        '天干地支的計算', '生肖的排序', '五行的相生相剋', '八卦的含義', '風水的原理',
-        '中醫的望聞問切', '針灸的奧秘', '中藥的配伍', '養生的智慧', '茶道的藝術',
-        '酒文化的歷史', '圍棋的規則', '象棋的戰術', '麻將的起源', '風箏的製作',
-        '剪紙的技巧', '刺繡的工藝', '陶瓷的燒製', '玉器的鑑賞', '青銅器的紋飾',
-        '對聯的規則', '謎語的技巧', '歇後語的幽默', '諺語的智慧', '慣用語的由來',
-        '語法中的主謂賓', '語法中的定狀補', '句子的成分', '複句的類型', '修辭手法之比喻',
-        '修辭手法之擬人', '修辭手法之排比', '修辭手法之誇張', '修辭手法之反問', '修辭手法之設問',
-        '修辭手法之對偶', '修辭手法之借代', '修辭手法之反語', '修辭手法之雙關', '修辭手法之頂真',
-        '標點符號的用法', '病句的修改', '文言虛詞之之', '文言虛詞之乎', '文言虛詞之者',
-        '文言虛詞之也', '文言虛詞之矣', '文言虛詞之焉', '文言虛詞之哉', '文言虛詞之其',
-        '文言虛詞之以', '文言虛詞之為', '文言虛詞之於', '文言虛詞之乃', '文言虛詞之則',
-        '文言虛詞之所', '文言虛詞之且', '文言虛詞之若', '文言虛詞之而', '文言虛詞之何',
-        '文言句式之判斷句', '文言句式之被動句', '文言句式之倒裝句', '文言句式之省略句', '古今異義詞辨析'
-    ];
+        // --- 魯迅與現代文學 ---
+        '魯迅的《狂人日記》', '魯迅的《孔乙己》', '魯迅的《阿Q正傳》', '魯迅棄醫從文的原因', '魯迅與朱安的關係',
+        '魯迅的百草園', '張愛玲的《傾城之戀》', '張愛玲的《金鎖記》', '張愛玲與胡蘭成的糾葛', '張愛玲晚年的孤獨',
+        '張愛玲的旗袍癖好', '徐志摩的《再別康橋》', '徐志摩與林徽因', '徐志摩與陸小曼', '沈從文的《邊城》',
+        '沈從文與張兆和的情書', '錢鍾書的《圍城》', '錢鍾書的驚人記憶力', '楊絳的《我們仨》', '巴金的《家》',
+        '巴金的筆名由來', '老舍的《駱駝祥子》', '老舍的《茶館》', '老舍的幽默感', '蕭紅的《呼蘭河傳》',
+        '蕭紅坎坷的情路', '茅盾的《子夜》', '郁達夫的《沉淪》', '聞一多的愛國詩', '戴望舒的《雨巷》',
+        '朱自清的《背影》', '朱自清不吃美國麵粉', '冰心的《繁星》', '冰心的《寄小讀者》', '林海音的《城南舊事》',
+        
+        // --- 港台與當代文學 ---
+        '金庸的《射鵰英雄傳》', '金庸的《神鵰俠侶》', '金庸的《天龍八部》', '金庸筆名的由來', '金庸小說中的歷史人物',
+        '古龍的嗜酒如命', '古龍筆下的浪子形象', '倪匡的衛斯理系列', '倪匡幫金庸代筆的趣事', '三毛的撒哈拉故事',
+        '三毛與荷西的愛情', '瓊瑤的言情世界', '余光中的《鄉愁》', '白先勇的《臺北人》', '白先勇的《遊園驚夢》',
+        '西西的《我城》', '西西的《像我這樣的一個女子》', '劉以鬯的《對倒》', '劉以鬯的《酒徒》意識流', '也斯的飲食文學',
+        '董啟章的《天工開物》', '莫言的《紅高粱》', '莫言的魔幻現實主義', '余華的《活著》', '余華的《許三觀賣血記》',
+        '蘇童的《妻妾成群》', '阿城的《棋王》', '王安憶的《長恨歌》', '陳之藩的《失根的蘭花》', '梁實秋的《雅舍小品》',
+        '林語堂的幽默哲學', '胡適的《嘗試集》', '蔡元培的教育思想', '梁啟超的《新民說》', '王國維的人間詞話',
 
-    // 2. 定義切入角度 (多元化視角 - 適合中學生)
-    const angles = [
-        '鮮為人知的', '教科書沒寫的', '容易誤解的', '有趣的冷知識', '背後的小故事',
-        '令人驚訝的', '充滿智慧的', '富有哲理的', '幽默風趣的', '感人至深的',
-        '歷史的真相', '文化的傳承', '語言的奧秘', '文字的魅力', '詩詞的意境',
-        '古人的生活', '古人的智慧', '古人的情感', '古人的幽默', '古人的煩惱',
-        '穿越時空的對話', '現代視角的解讀', '比較文化的觀點', '科學的分析', '藝術的鑑賞',
-        '邏輯的推理', '語言的演變', '詞義的引申', '成語的誤用', '詩詞的誤讀',
-        '歷史的誤解', '文化的差異', '風俗的演變', '節日的意義', '名字的由來',
-        '地名的故事', '物名的典故', '習俗的起源', '傳說的真相', '神話的寓意',
-        '寓言的啟示', '童話的隱喻', '小說的原型', '戲曲的幕後', '藝術的靈感',
-        '發明的巧思', '發現的過程', '探索的艱辛', '創造的樂趣', '學習的方法',
-        '思考的角度', '觀察的細節', '想像的空間', '表達的技巧', '溝通的藝術',
-        '閱讀的樂趣', '寫作的靈感', '演講的技巧', '辯論的邏輯', '翻譯的趣事',
-        '跨文化的交流', '語言的遊戲', '文字的迷宮', '思維的體操', '智慧的火花',
-        '靈感的閃現', '創意的源泉', '思想的碰撞', '文化的交融', '歷史的迴響',
-        '時代的變遷', '社會的縮影', '人性的光輝', '情感的共鳴', '心靈的慰藉',
-        '精神的寄託', '價值的體現', '意義的追尋', '真理的探索', '美的追求',
-        '善的弘揚', '愛的傳遞', '夢的解析', '未來的展望', '過去的反思',
-        '現在的把握', '生活的藝術', '生命的意義', '自然的奧秘', '宇宙的浩瀚',
-        '人類的渺小', '文明的偉大', '科技的進步', '傳統的價值', '創新的力量',
-        '變革的勇氣', '堅守的信念', '包容的胸懷', '開放的視野', '合作的精神',
-        '競爭的動力', '和平的願望', '發展的機遇', '挑戰的應對', '危機的化解',
-        '成功的秘訣', '失敗的教訓', '成長的煩惱', '青春的迷茫', '夢想的追逐',
-        '友情的珍貴', '親情的溫暖', '師恩的難忘', '家國的情懷', '民族的自豪',
-        '世界的眼光', '未來的責任', '青年的擔當', '時代的呼喚', '歷史的使命',
-        '文化的自信', '語言的力量', '文字的重量', '思想的深度', '靈魂的高度',
-        '人格的魅力', '道德的修養', '品格的磨練', '意志的考驗', '心靈的洗禮',
-        '情感的昇華', '精神的超越', '生命的綻放', '青春的燃燒', '歲月的沉澱',
-        '時光的流逝', '記憶的珍藏', '往事的回味', '當下的珍惜', '未來的憧憬'
+        // --- 唐詩宋詞與詩人 ---
+        '李白的醉酒詩', '李白的《靜夜思》', '李白與杜甫的友誼', '李白「鐵杵磨成針」的傳說', '李白撈月而死的故事',
+        '杜甫的《春望》', '杜甫的成都茅屋', '杜甫的流亡生活', '杜甫與李龜年', '王維的隱居生活',
+        '王維詩中有畫畫中有詩', '白居易的《長恨歌》', '白居易的《琵琶行》', '白居易與元稹的交情', '韓愈的《師說》',
+        '韓愈諫迎佛骨被貶', '柳宗元的《永州八記》', '柳宗元的《江雪》', '劉禹錫的《陋室銘》', '李商隱的無題詩',
+        '杜牧的《清明》', '杜牧的揚州夢', '蘇軾的《赤壁賦》', '蘇軾的《定風波》', '蘇軾與東坡肉',
+        '蘇軾與佛印的趣事', '蘇軾的貶謫生涯', '歐陽修的《醉翁亭記》', '范仲淹的《岳陽樓記》', '王安石的變法與詩文',
+        '曾鞏的散文', '柳永的婉約詞', '柳永與歌妓', '李清照的《聲聲慢》', '李清照與趙明誠',
+        '李清照晚年再嫁的風波', '辛棄疾的豪放詞', '辛棄疾的軍旅生涯', '陸游的《示兒》', '陸游與唐婉的《釵頭鳳》',
+        '姜夔的《揚州慢》', '孟浩然的田園詩', '王昌齡的邊塞詩', '高適的軍旅詩', '賀知章的回鄉偶書',
+
+        // --- 古典名著與小說 ---
+        '施耐庵的《水滸傳》', '武松打虎的細節', '魯智深倒拔垂楊柳', '羅貫中的《三國演義》', '諸葛亮空城計',
+        '關羽溫酒斬華雄', '曹操煮酒論英雄', '吳承恩的《西遊記》', '孫悟空大鬧天宮', '豬八戒的身世',
+        '曹雪芹的《紅樓夢》', '賈寶玉與林黛玉', '紅樓夢的結局之謎', '王熙鳳的潑辣性格', '劉姥姥進大觀園',
+        '蒲松齡的《聊齋誌異》', '蒲松齡的路邊茶攤', '吳敬梓的《儒林外史》', '范進中舉的諷刺', '劉鶚的《老殘遊記》',
+        '李寶嘉的《官場現形記》', '袁枚的《隨園食單》', '納蘭性德的詞', '龔自珍的己亥雜詩', '關漢卿的《竇娥冤》',
+        '王實甫的《西廂記》', '湯顯祖的《牡丹亭》', '孔尚任的《桃花扇》', '洪昇的《長生殿》', '三言二拍的故事',
+
+        // --- 先秦漢魏六朝 ---
+        '陶淵明的《桃花源記》', '陶淵明不為五斗米折腰', '屈原的《離騷》', '屈原投江的傳說', '曹操的《短歌行》',
+        '曹植的《七步詩》', '竹林七賢的故事', '嵇康的《廣陵散》', '王羲之的《蘭亭集序》', '謝靈運的山水詩',
+        '司馬遷的《史記》', '司馬遷受宮刑忍辱負重', '項羽的《垓下歌》', '諸葛亮的《出師表》', '李密的《陳情表》',
+        '王勃的《滕王閣序》', '陳子昂的《登幽州臺歌》', '木蘭辭的故事', '孔雀東南飛', '古詩十九首',
+        '莊子的逍遙遊', '莊周夢蝶', '惠子與莊子的辯論', '孟母三遷的故事', '蘇秦懸梁刺股'
     ];
 
     const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-    const randomAngle = angles[Math.floor(Math.random() * angles.length)];
     const randomSeed = Math.floor(Math.random() * 999999);
 
     const prompt = `
     (RandomSeed: ${randomSeed})
-    你是我的貓咪助手。請告訴我一個關於【${randomCategory}】的冷知識。
+    你是我的貓咪助手。請告訴我一個關於【${randomCategory}】的文學冷知識、趣事或作品深意。
     要求：
-    1. 內容必須【${randomAngle}】。
-    2. 字數嚴格限制在 50 字以內。
-    3. 語氣可愛、請務必使用「廣東話口語」（粵語）來回答，例如使用「係」、「嘅」、「咁」、「㗎」。
-    4. 不要用列點，不要像教科書，直接像朋友聊天一樣說出來。
-    5. 絕對不要講「你好」、「你知道嗎」這類廢話，直接講知識點。
+    1. 內容要有趣、獨特，或者是教科書沒教的細節。
+    2. 字數嚴格限制在 60 字以內。
+    3. 語氣可愛、請務必使用粵語回答，例如使用「係」、「嘅」、「咁」、「㗎」。
+    4. 不要用列點，不要像教科書，直接像朋友聊天一樣說出來，不可說髒話，語氣要自然。
+    5. 絕對不要講「你好」、「你知道嗎」這類廢話，直接講重點知識。
     `;
 
     try {
@@ -10627,8 +10580,8 @@ refreshBtn.addEventListener('click', fetchHitokoto);
 <div class="category-title"><svg class="icon"><use xlink:href="#icon-write"></use></svg>寫作創作</div>
 <div class="sub-group">
 <div class="sub-group-title">AI範文</div>
-<div class="node level-2"><a href="https://kenchan20141.github.io/article/" data-tool-id="fanshui-narrative">翻水 (敘事)</a></div>
-<div class="node level-2"><a href="https://kenchan20141.github.io/essay/" data-tool-id="fanshui-argument">翻水 (議論)</a></div>
+<div class="node level-2"><a href="toolbox/article.html" data-tool-id="fanshui-narrative">翻水 (敘事)</a></div>
+<div class="node level-2"><a href="toolbox/essay.html" data-tool-id="fanshui-argument">翻水 (議論)</a></div>
 </div>
 <div class="sub-group">
 <div class="sub-group-title">草擬</div>
@@ -16568,7 +16521,7 @@ function captureContainerHTML(containerId) {
 
 	
 // ==========================================
-// === 修訂：儲存紀錄 (強制等待同步完成) ===
+// === 修訂版：儲存紀錄 (改用輕量上傳) ===
 // ==========================================
 async function saveToHistory(category, subFunction, title, userContent, aiContent, scoreData = null) {
     try {
@@ -16580,47 +16533,88 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             toRemove.forEach(el => el.remove());
             aiContent = tempDiv.innerHTML;
         }
-
+ 
         const db = await openHistoryDB();
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
-
+ 
         const ts = new Date().getTime();
-        lastGeneratedTimestamp = ts; // 更新全域時間戳，供聊天室使用
-
+        if (typeof lastGeneratedTimestamp !== 'undefined') {
+            lastGeneratedTimestamp = ts; // 更新全域時間戳
+        }
+ 
         const record = {
             category: category,
             subFunction: subFunction,
             title: title || "無標題",
             userContent: userContent,
             aiContent: aiContent,
-            scoreData: scoreData, 
+            scoreData: scoreData,
             timestamp: ts,
             dateStr: new Date().toLocaleString('zh-HK', { hour12: false }),
             
-            // 初始狀態：False (保護它是新草稿，且告訴 Merge 函數這是本地新增的)
+            // 初始狀態：本地先設為 False，等 quickUpload 成功後會轉為 True
             isSynced: false,       
             hasBeenSynced: false   
         };
-
+ 
         // 使用 Promise 確保寫入 IndexedDB 完成
         await new Promise((resolve, reject) => {
             const req = store.add(record);
             req.onsuccess = resolve;
             req.onerror = reject;
         });
-
-        console.log("本地紀錄已建立，開始同步...");
+ 
+        console.log("本地紀錄已建立。");
         
-        // 觸發同步，這會將這筆新紀錄推上雲端，然後將本地狀態改為 True
+        // ★★★ 關鍵修改處：改用輕量上傳 ★★★
         const s = JSON.parse(localStorage.getItem('studentProfile'));
         if (s) {
-            await syncHistoryToFirebase(true); 
-            console.log("同步完成，狀態已更新");
+            // 異步執行，不需 await 阻擋 UI，讓它在背景上傳即可
+            quickUploadToFirebase(record);
         }
-
+ 
     } catch (error) {
         console.error("儲存紀錄失敗:", error);
+    }
+}
+
+
+	// === [新增] 輕量級上傳 (只上傳單筆新資料，不下載舊資料) ===
+// 這是節省流量的關鍵！
+async function quickUploadToFirebase(record) {
+    const s = JSON.parse(localStorage.getItem('studentProfile'));
+    if (!s) return;
+ 
+    // 使用 timestamp 作為唯一的 Key
+    // 這樣我們可以精準地只更新這一筆，而不影響其他資料
+    const recordKey = record.timestamp.toString();
+    const path = `students/${s.grade}/${s.class}/${s.name}/history/${recordKey}`;
+ 
+    // 標記為已同步
+    const recordToUpload = {
+        ...record,
+        isSynced: true,
+        hasBeenSynced: true
+    };
+ 
+    try {
+        // 使用 update 只寫入這一筆
+        // 注意：我們構建一個 update object，路徑精確到該筆紀錄
+        const updates = {};
+        updates[path] = recordToUpload;
+ 
+        await database.ref().update(updates);
+        console.log(`✅ [省流模式] 單筆紀錄上傳成功: ${record.title}`);
+ 
+        // 上傳成功後，更新本地的同步狀態 (避免下次全量同步時衝突)
+        const db = await openHistoryDB();
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put(recordToUpload);
+ 
+    } catch (e) {
+        console.error("單筆上傳失敗 (將在下次全量同步時補傳):", e);
     }
 }
 
@@ -16687,94 +16681,105 @@ function mergeHistoryRecords(localRecords, cloudRecords) {
     return Array.from(mergedMap.values()).sort((a, b) => b.timestamp - a.timestamp);
 }
 // ==========================================
-// === [DEBUG 版] 核心同步函數 ===
+// === [智能省流版] 核心同步函數 (增量更新 + 斷點續傳) ===
 // ==========================================
-async function syncHistoryToFirebase(isSilent = false) {
+// ==========================================
+// === 2. 省流同步系統 (Smart Sync) ===
+// ==========================================
+ 
+// 智慧同步：比對 ID，只傳輸差異部分
+async function smartSyncHistory() {
     const s = JSON.parse(localStorage.getItem('studentProfile'));
-    if (!s) {
-        if (!isSilent) alert("請先綁定身份");
-        return;
-    }
+    const user = firebase.auth().currentUser;
     
-    // UI 按鈕狀態處理 (如果是由按鈕觸發)
-    let btn = null;
-    let originalText = "";
-    if (!isSilent && typeof event !== 'undefined' && event && event.target) {
-        btn = event.target.tagName === 'BUTTON' ? event.target : event.target.closest('button');
-        if (btn) {
-            originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i>';
-            btn.disabled = true;
-        }
-    }
-    
+    if (!s || !user) return; // 未登入不執行
+ 
+    console.log("🚀 [Smart Sync] 開始省流同步檢查...");
+ 
     try {
         const db = await openHistoryDB();
-        
-        // A. 讀取本地所有資料
+        const token = await user.getIdToken();
+        const basePath = `students/${s.grade}/${s.class}/${s.name}/history`;
+        const dbUrl = "https://sansidata-default-rtdb.firebaseio.com"; // 請確認您的 DB URL
+ 
+        // 1. 獲取本地所有 ID 與 未同步項目
         const transaction = db.transaction([STORE_NAME], 'readonly');
         const store = transaction.objectStore(STORE_NAME);
-        const localRecords = await new Promise((resolve) => {
+        const localData = await new Promise(resolve => {
             const req = store.getAll();
             req.onsuccess = e => resolve(e.target.result);
-            req.onerror = () => resolve([]);
         });
-
-        // B. 讀取雲端所有資料
-        const path = `students/${s.grade}/${s.class}/${s.name}/history`;
-        const cloudSnapshot = await database.ref(path).once('value');
-        const cloudData = cloudSnapshot.val();
-        let cloudRecords = [];
  
-        if (cloudData) {
-            if (Array.isArray(cloudData)) {
-                cloudRecords = cloudData.filter(item => item !== null);
-            } else if (typeof cloudData === 'object') {
-                cloudRecords = Object.values(cloudData);
+        // 建立本地 ID Set (用 timestamp 當 Key)
+        const localIds = new Set(localData.map(r => r.timestamp.toString()));
+        // 找出需要上傳的 (isSynced === false)
+        const toUpload = localData.filter(r => r.isSynced === false);
+ 
+        // 2. 使用 REST API 獲取雲端 ID 列表 (只下載 Keys，極省流量)
+        const response = await fetch(`${dbUrl}/${basePath}.json?shallow=true&auth=${token}`);
+        const cloudKeysData = await response.json();
+        
+        // 如果雲端是空的 (null)，cloudKeys 為空陣列
+        const cloudKeys = cloudKeysData ? Object.keys(cloudKeysData) : [];
+        const cloudIds = new Set(cloudKeys);
+ 
+        console.log(`📊 [Sync Stats] 本地: ${localIds.size} 筆, 雲端: ${cloudIds.size} 筆`);
+ 
+        // 3. 執行上傳 (本地有，雲端沒有，且標記為未同步)
+        if (toUpload.length > 0) {
+            console.log(`⬆️ [Upload] 正在上傳 ${toUpload.length} 筆新紀錄...`);
+            const updates = {};
+            toUpload.forEach(record => {
+                // 標記為已同步
+                record.isSynced = true;
+                record.hasBeenSynced = true;
+                // 寫入更新物件
+                updates[`${basePath}/${record.timestamp}`] = record;
+                
+                // 同時更新本地 DB 狀態
+                const tx = db.transaction([STORE_NAME], 'readwrite');
+                tx.objectStore(STORE_NAME).put(record);
+            });
+            // 批量上傳
+            await database.ref().update(updates);
+        }
+ 
+        // 4. 執行下載 (雲端有，本地沒有)
+        const missingLocally = cloudKeys.filter(key => !localIds.has(key));
+        
+        if (missingLocally.length > 0) {
+            console.log(`⬇️ [Download] 發現 ${missingLocally.length} 筆缺失，正在下載...`);
+            
+            // 這裡必須逐筆或整批下載。為了簡單，如果缺失少於 5 筆，逐筆下；多於 5 筆，直接下載整個 history (比較快)
+            if (missingLocally.length > 5) {
+                // 全量下載 (雖然有點大，但比發 100 個 request 好)
+                const fullSnap = await database.ref(basePath).once('value');
+                const fullData = fullSnap.val();
+                if (fullData) {
+                    const tx = db.transaction([STORE_NAME], 'readwrite');
+                    const st = tx.objectStore(STORE_NAME);
+                    Object.values(fullData).forEach(r => st.put(r));
+                }
+            } else {
+                // 逐筆下載
+                const downloadPromises = missingLocally.map(async (key) => {
+                    const snap = await database.ref(`${basePath}/${key}`).once('value');
+                    const record = snap.val();
+                    if (record) {
+                        const tx = db.transaction([STORE_NAME], 'readwrite');
+                        tx.objectStore(STORE_NAME).put(record);
+                    }
+                });
+                await Promise.all(downloadPromises);
             }
         }
-        
-        // C. 執行合併運算
-        const mergedRecords = mergeHistoryRecords(localRecords, cloudRecords);
-
-        // D. ★★★ 關鍵修復：上傳前淨化 ★★★
-        // 為了避免 Firebase 存到 "hasBeenSynced: false"，我們建立一個專門上傳用的副本
-        // 強制將所有欄位設為 true。這樣 Firebase 永遠只會持有 "已同步" 的狀態。
-        const recordsToUpload = mergedRecords.map(r => ({
-            ...r,
-            isSynced: true,      // 雲端永遠是已同步狀態
-            hasBeenSynced: true  // 雲端永遠是已歸檔狀態
-        }));
-
-        // 寫入雲端 (使用淨化後的數據)
-        await database.ref(path).set(recordsToUpload);
-        console.log(`[DEBUG] 雲端更新完畢 (${recordsToUpload.length} 筆)`);
-        
-        // E. 寫回本地 (這裡會將本地狀態也鎖定為 true)
-        await updateLocalHistoryWithMergedData(mergedRecords, db);
-        console.log(`[DEBUG] 本地更新完畢`);
-        
-        if (!isSilent) alert("✅ 資料同步完成！");
-        
-        // F. 刷新畫面 (如果正在瀏覽列表)
-        const level3 = document.getElementById('historyLevel3');
-        if (level3 && level3.style.display !== 'none' && typeof currentSubFunctionFilter !== 'undefined') {
-             const themeIndex = typeof currentThemeIndex !== 'undefined' ? currentThemeIndex : 1;
-             enterHistoryList(currentSubFunctionFilter, themeIndex);
-        }
-        
-    } catch (err) {
-        console.error("[DEBUG] 同步錯誤:", err);
-        if (!isSilent) alert("❌ 同步失敗: " + err.message);
-    } finally {
-        if (btn && originalText) {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
+ 
+        console.log("✅ [Smart Sync] 同步完成 (省流模式)。");
+ 
+    } catch (e) {
+        console.error("同步失敗:", e);
     }
 }
-
-
 	
 // ==========================================
 // === 2. 更新本地資料庫 (修復：鎖定同步狀態) ===
@@ -16819,70 +16824,77 @@ async function updateLocalHistoryWithMergedData(mergedRecords, db) {
 }
 
 // ==========================================
-// === 4. 自動同步監聽器 (二合一終極版) ===
+// === 4. 自動同步監聽器 (修復版) ===
 // ==========================================
-
+ 
 // 定義全域變數以儲存監聽器參照
 let autoSyncListenerRef = null;    // 用於歷史紀錄
 let autoProfileListenerRef = null; // 用於身份狀態 (轉班)
 let isSyncingLock = false;         // 同步鎖，防止無限迴圈
-
+ 
 function startAutoSyncListener() {
     const s = JSON.parse(localStorage.getItem('studentProfile'));
-    if (!s) return;
-
-    // --- 部分 A：歷史紀錄同步監聽 (修復刪除不同步問題) ---
     
+    // 只要沒有學生檔案，就不啟動監聽，這是唯一合理的阻擋條件
+    if (!s) return;
+ 
+    // --- 部分 A：歷史紀錄同步監聽 ---
+ 
     // 1. 先移除舊的歷史監聽器
     if (autoSyncListenerRef) {
         autoSyncListenerRef.off();
     }
-
+ 
     // 2. 設定路徑
     const historyPath = `students/${s.grade}/${s.class}/${s.name}/history`;
     autoSyncListenerRef = database.ref(historyPath);
-
+ 
     // 3. 監聽 'value' 事件
     autoSyncListenerRef.on('value', (snapshot) => {
         
-        // 如果目前正在執行本地發起的同步，忽略這次訊號
+        // 檢查 1：本地鎖定 (防止無限迴圈)
         if (isSyncingLock) {
             console.log("忽略自身寫入導致的回彈訊號");
             return;
         }
-
+ 
+        // ★★★ 移除這裡的 auth.currentUser 檢查 ★★★
+        // 理由：當頁面重新整理時，Auth 狀態還沒準備好，如果這裡 return 了，
+        // 監聽器就會失效。我們讓 Firebase 內部去處理連線權限。
+ 
         console.log("⚡ 偵測到雲端歷史變更 (含刪除動作)，立即同步...");
         
         // 設定鎖定
         isSyncingLock = true;
-
-        // 執行同步 (這裡的 syncHistoryToFirebase 配合 mergeHistoryRecords 會處理刪除邏輯)
+ 
+        // 執行同步
         syncHistoryToFirebase(true).then(() => {
-            // 延遲解鎖，過濾 Firebase 寫入後的延遲回彈
+            // 延遲解鎖
             setTimeout(() => {
                 isSyncingLock = false;
             }, 2000);
         });
     });
-
-    // --- 部分 B：身份狀態監聽 (保留你原有的轉班功能) ---
+ 
+    // --- 部分 B：身份狀態監聽 ---
     if (autoProfileListenerRef) autoProfileListenerRef.off();
     const profilePath = `students/${s.grade}/${s.class}/${s.name}/profile`;
     autoProfileListenerRef = database.ref(profilePath);
     autoProfileListenerRef.on('value', (snapshot) => {
         const val = snapshot.val();
-        if (!val) {
-            autoProfileListenerRef.off(); 
+        // 如果值為 null，代表該路徑被刪除或讀取不到 (可能轉班了)
+        if (val === null) {
+            autoProfileListenerRef.off();
             if (autoSyncListenerRef) autoSyncListenerRef.off();
             findStudentNewLocation(s.name);
         } else if (!val.number || val.number === "") {
             promptForNewClassNumber(s, profilePath);
         }
     });
-    
+ 
     console.log("✅ 雙重監聽器 (歷史 + 身份) 已啟動");
 }
-
+	
 // 變數儲存當前導航狀態
 let currentCategoryFilter = null;
 let currentSubFunctionFilter = null;
@@ -18309,39 +18321,45 @@ async function sendStudentNotification(studentName, title, message) {
 
 	
 
-// === 修改打開「學生雲端中心」的函式 (已修復：加入文萃隱藏) ===
+// ==========================================
+// === 1. 雲端按鍵 (白雲) 與 視窗控制 ===
+// ==========================================
+ 
+// 打開「學生雲端中心」
 function openStudentLoginModal() {
     const modal = document.getElementById('studentCloudModal');
     if (modal) {
-        // 1. ★★★ 強制關閉其他全螢幕介面 ★★★
-        document.getElementById('historyContainer').style.display = 'none';
-        document.getElementById('toolsContainer2').style.display = 'none';
-        document.getElementById('featuredContainer').style.display = 'none'; // <--- ★★★ 關鍵新增 ★★★
-
-        // 同時隱藏主頁背景元素，防止透視
+        // 1. 強制關閉其他全螢幕介面
+        const containers = ['historyContainer', 'toolsContainer2', 'featuredContainer'];
+        containers.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.style.display = 'none';
+        });
+ 
+        // 隱藏主頁背景元素
         document.querySelector('.title-container').style.display = 'none';
         document.getElementById('hitokoto-container').style.display = 'none';
         document.getElementById('mainMenuBox').style.display = 'none';
         document.getElementById('dse-countdown-box').style.display = 'none';
-
-        // 2. 顯示視窗並鎖定捲動
-        modal.style.display = 'block'; 
-        document.body.style.overflow = 'hidden'; 
+ 
+        // 2. 顯示視窗
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
         
-        // 3. 執行登入檢查
+        // 3. 執行登入檢查 & 載入課業 (但不同步歷史)
         checkStudentLogin();
-
-        // 4. --- UI 按鈕狀態切換 ---
+ 
+        // 4. UI 按鈕狀態調整
         const cloudBtn = document.getElementById('sideMenuCloudBtn');
-        if (cloudBtn) cloudBtn.style.display = 'none';
-
+        if (cloudBtn) cloudBtn.style.display = 'none'; // 在雲端頁面時隱藏雲端按鈕
+ 
         const homeBtn = document.getElementById('sideMenuHomeBtn');
         if (homeBtn) homeBtn.style.display = 'flex';
-
+ 
         const floatHomeBtn = document.getElementById('homeBtn');
         if (floatHomeBtn) floatHomeBtn.style.display = 'none';
-
-        // 強制收起側邊選單
+ 
+        // 收起側邊選單
         const sideMenu = document.getElementById('sideMenu');
         if (sideMenu) {
             sideMenu.classList.remove('active');
@@ -18349,7 +18367,6 @@ function openStudentLoginModal() {
         }
     }
 }
-
 // === 2. 修改關閉「學生雲端中心」的函式 ===
 function closeStudentCloudModal() {
     // 直接呼叫 returnToHome()，它會負責：
@@ -18364,50 +18381,50 @@ function closeStudentCloudModal() {
 // === 全新修訂：學生身份自動同步與轉班處理 ===
 // ==========================================
 
-// === 修正版：移除重試邏輯，避免權限錯誤時卡死 ===
+// 檢查學生登入狀態 & 啟動課業監聽
 async function checkStudentLogin() {
+    // 嘗試讀取本地學生檔案 (登出時不再刪除此檔案，所以通常會有)
     const s = JSON.parse(localStorage.getItem('studentProfile'));
-    if (!s) return;
-
-    // 1. 切換 UI
+    
+    if (!s) {
+        // 如果完全沒有資料，顯示登入表單
+        document.getElementById('studentIdentityForm').style.display = 'block';
+        document.getElementById('studentCloudPanel').style.display = 'none';
+        return;
+    }
+ 
+    // 有資料，顯示雲端面板
     document.getElementById('studentIdentityForm').style.display = 'none';
     document.getElementById('studentCloudPanel').style.display = 'block';
-    
-    // 2. 更新歡迎語
     updateWelcomeMessage(s);
     
-    // 3. 直接執行，不要使用遞歸重試 (tryLoad)
+    // 檢查 Firebase Auth 狀態 (是否過期)
+    // 我們只在 Auth 準備好時觸發「課業載入」
+    // ★★★ 關鍵：這裡只載入課業，不同步歷史 ★★★
     try {
-        // 等待 Auth 就緒 (最多等 2 秒，不等太久以免卡住)
+        // 如果 Auth 未初始化，等待一下
         let authWait = 0;
-        while (!auth.currentUser && authWait < 10) { 
+        while (!auth.currentUser && authWait < 5) {
             await new Promise(r => setTimeout(r, 200));
             authWait++;
         }
-
-        // 強制刷新 Token 以確保權限最新
+ 
         if (auth.currentUser) {
-            await auth.currentUser.getIdToken(true);
+            // 已連線：載入課業列表
+            await loadAssignments(s.grade, s.class);
+            
+            // 啟動紅點監聽 (如果有未交功課)
+            monitorPendingAssignments();
+            
+            // ★★★ 這裡啟動「省流同步」，只在背景執行，不阻擋 UI ★★★
+            smartSyncHistory();
+        } else {
+            console.log("處於離線或未驗證狀態，顯示本地緩存的介面");
+            // 即使沒連線，也可以顯示介面，但不載入新課業
         }
-
-        // 載入資料
-        await loadAssignments(s.grade, s.class);
-        
-        // 啟動其他監聽 (只有在 loadAssignments 成功後才執行)
-        monitorPendingAssignments();
-        startAutoSyncListener();
-        syncHistoryToFirebase(true);
-
-   } catch (err) {
-        console.error("❌ 登入後載入流程失敗:", err);
-        
-        // 如果是權限錯誤，全域安全網會捕捉到並處理。
-        // 我們這裡只針對明確的 permission_denied 手動觸發一次，雙重保險。
-        if (err.message && err.message.includes("permission_denied")) {
-            // ★★★ 修改處：註解掉下面這一行 ★★★
-            // forceLogoutAndKeepHistory(); 
-            console.log("正在嘗試背景刷新憑證...");
-        }
+ 
+    } catch (err) {
+        console.error("登入檢查錯誤:", err);
     }
 }
 
@@ -18697,9 +18714,7 @@ async function findProfileByEmail(targetEmail) {
 
 	
 
-// === 修改後：統一處理登入後的邏輯 (加入唯一性檢查) ===
-
-// === 修正版：處理登入結果 (含遷移邏輯) ===
+// === 修正版：處理登入結果 (全動態資料庫驗證版) ===
 async function processLoginResult(user, btn, originalContent) {
     let manualName, grade, cls, number;
     const storedData = sessionStorage.getItem('sansi_temp_student_data');
@@ -18712,73 +18727,102 @@ async function processLoginResult(user, btn, originalContent) {
         cls = document.getElementById('studentClass')?.value;
         number = document.getElementById('studentNumber')?.value;
     }
+    
     if (!manualName) {
         alert("資料遺失，請重新輸入姓名。");
         if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
         return;
     }
-    const email = user.email;
-    const DEBUG_USER_B64 = 'a2VuY2hhbjIwMTQxQGdtYWlsLmNvbQ==';   
-    const STUDENT_ADD_B64 = 'a2VuY2hhbjIwMTMxQGdtYWlsLmNvbQ==';  
-    const SPECIAL_USER_B64 = 'a2VuY2hhbjIwMTUxQGdtYWlsLmNvbQ==';
-    const SPECIAL_USER_2_B64 = 'Y2hhbnN1bWx1aTIwMDVAZ21haWwuY29t';
-	   // ★★★ 新增這行 ★★★
-    const SPECIAL_USER_3_B64 = 'dHN6eWl1bmczMTFAZ21haWwuY29t'; // tsz
-    const debugUser = atob(DEBUG_USER_B64);
-    const studentUserAdd = atob(STUDENT_ADD_B64);
-    const specialUserAdd = atob(SPECIAL_USER_B64);
-	 // ★★★【補回這一行】★★★ 
-    const specialUser2Add = atob(SPECIAL_USER_2_B64); 
-    // ★★★ 新增這行 ★★★
-    const specialUser3Add = atob(SPECIAL_USER_3_B64);
 
-   // ★★★ 修改判斷式 (現在 specialUser2Add 已定義，不會報錯了) ★★★
-    if (!email.endsWith('@ccckyc.edu.hk') && email !== debugUser && email !== studentUserAdd && email !== specialUserAdd && email !== specialUser2Add && email !== specialUser3Add) {
-        await auth.signOut();
-        alert("⛔ 驗證失敗！\n請使用學校電郵登入。");
-        sessionStorage.removeItem('sansi_temp_student_data');
-        if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
-        return;
-    }
-    // 教師與特許用戶判斷 (保持不變)
-    const TEACHER_B64_LIST = ["Y2trQGNjY2t5Yy5lZHUuaGs=", "dGx5QGNjY2t5Yy5lZHUuaGs=", "bHN0QGNjY2t5Yy5lZHUuaGs=", "Y2tjQGNjY2t5Yy5lZHUuaGs=", "c2tzQGNjY2t5Yy5lZHUuaGs=", "eWhjQGNjY2t5Yy5lZHUuaGs=", "d2ZjQGNjY2t5Yy5lZHUuaGs=", "dHVuZ0BjY2NreWMuZWR1Lmhr", "a2J5QGNjY2t5Yy5lZHUuaGs=", "d3B5QGNjY2t5Yy5lZHUuaGs=", DEBUG_USER_B64];
+    const email = user.email;
     let isTeacher = false;
-    for (let b64 of TEACHER_B64_LIST) { try { if (atob(b64) === email) { isTeacher = true; break; } } catch(e) {} }
-    if (isTeacher) { grade = "System"; cls = "Test"; number = "99"; alert("👋 老師您好，進入測試班。"); }
-   let isSpecialUser = false;
-    // ★★★ 修改判斷式 (加入 specialUser3Add) ★★★
-    if (email === specialUserAdd || email === specialUser2Add || email === specialUser3Add) { 
-        isSpecialUser = true; 
-        grade = "Special"; 
-        cls = "User"; 
-        alert("👋 歡迎特許用家。"); 
+    let isSpecialUser = false;
+
+    try {
+        // Firebase Key 不能有點，所以將 . 替換為 ,
+        const safeEmailKey = email.replace(/\./g, ',');
+
+        // 1. 並行查詢「老師名單」與「特許名單」
+        // (使用 Promise.all 加速)
+        const [teacherSnap, specialSnap] = await Promise.all([
+            database.ref(`teachers/${safeEmailKey}`).once('value'),
+            database.ref(`special_users/${safeEmailKey}`).once('value')
+        ]);
+
+        if (teacherSnap.exists() && teacherSnap.val() === true) {
+            isTeacher = true;
+            console.log("✅ 驗證通過：教師身份");
+        } else if (specialSnap.exists() && specialSnap.val() === true) {
+            isSpecialUser = true;
+            grade = "Special";
+            cls = "User";
+            console.log("✅ 驗證通過：特許用家");
+        } 
+        // 2. 如果都不在名單內，檢查是否為 Debug 帳號 (最後防線)
+        else {
+            const DEBUG_USER = atob('a2VuY2hhbjIwMTQxQGdtYWlsLmNvbQ==');
+            if (email === DEBUG_USER) {
+                isTeacher = true;
+            }
+        }
+
+        // 3. 如果不是老師/特許，必須是學校電郵才能當學生
+        if (!isTeacher && !isSpecialUser) {
+            if (!email.endsWith('@ccckyc.edu.hk')) {
+                await auth.signOut();
+                alert("⛔ 驗證失敗！\n此電郵不在允許名單內。\n請使用學校電郵，或聯絡管理員新增特許權限。");
+                sessionStorage.removeItem('sansi_temp_student_data');
+                if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
+                return;
+            }
+        }
+
+    } catch (err) {
+        console.error("權限檢查錯誤:", err);
+        // 容錯機制：如果是學校電郵，發生錯誤時仍允許以學生身份嘗試登入
+        if (!email.endsWith('@ccckyc.edu.hk')) {
+            alert("系統連線錯誤，無法驗證權限。");
+            if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
+            return;
+        }
     }
-    // --- 核心修改：搜尋邏輯 ---
-    // 1. 先查索引表 (最快)
+
+    // --- 根據身份設定班級 ---
+    if (isTeacher) { 
+        grade = "System"; cls = "Test"; number = "99"; 
+        alert("👋 老師您好，進入測試班。"); 
+    }
+    
+    if (isSpecialUser) {
+        alert("👋 歡迎特許用家。");
+    }
+
+    // --- 之後的邏輯與原本相同 (搜尋舊資料、綁定、跳轉) ---
     let existingProfile = await findProfileByEmail(email);
     
-    // 2. 如果索引表沒有 (舊用戶)，則檢查「用戶手動輸入的位置」
-    // 這一步是關鍵：我們不掃描全校，而是信任用戶輸入的 G/C/Name 去檢查該位置是否存在該電郵
+    // 如果索引表沒有 (舊用戶)，嘗試用手動輸入的路徑找回
     if (!existingProfile) {
         const inputPath = `students/${grade}/${cls}/${manualName}/profile`;
         try {
             const snap = await database.ref(inputPath).once('value');
             if (snap.exists() && snap.val().email === email) {
-                console.log("在輸入位置找到舊用戶，正在建立索引...");
                 existingProfile = snap.val();
-                // 順便補建索引，下次就不用這步了
+                // 補建索引
                 database.ref('email_mapping/' + btoa(email)).set(existingProfile);
             }
-        } catch(e) { console.error("路徑檢查失敗", e); }
+        } catch(e) {}
     }
+
     if (existingProfile) {
-        // 舊用戶登入
         const oldLocation = `${existingProfile.grade}${existingProfile.class}`;
         const newLocation = `${grade}${cls}`;
+        
+        // 只有在「既不是老師也不是特許」，且「位置不同」時才警告
         if (oldLocation !== newLocation && !isTeacher && !isSpecialUser) {
             alert(`⚠️ 偵測到此電郵已註冊於【${oldLocation}班】。\n系統將登入您的原有帳號。`);
         }
-        // 老師/特許強制遷移邏輯
+        
+        // 老師/特許強制遷移邏輯 (確保他們總是回到 System/Test 或 Special/User)
         if ((isTeacher && (existingProfile.grade !== "System" || existingProfile.class !== "Test")) ||
             (isSpecialUser && (existingProfile.grade !== "Special" || existingProfile.class !== "User"))) {
              await bindStudentIdentity(grade, cls, number, manualName, email, user.uid);
@@ -18796,8 +18840,7 @@ async function processLoginResult(user, btn, originalContent) {
         await syncHistoryToFirebase(true);
         startAutoSyncListener();
     } else {
-        // 新用戶註冊 (或輸入的資料與舊資料不符)
-        // 此時 bindStudentIdentity 會寫入 email_mapping
+        // 新用戶註冊
         await bindStudentIdentity(grade, cls, number, manualName, email, user.uid);
         sessionStorage.removeItem('sansi_temp_student_data');
         await syncHistoryToFirebase(true);
@@ -18915,86 +18958,40 @@ function finishLogin(grade, cls, number, name) {
 }
 
 
-// === 修訂版 V10 (終極修復)：遇權限錯誤即自動登出 ===
 async function loadAssignments(grade, cls) {
     const listDiv = document.getElementById('assignmentList');
-    const s = JSON.parse(localStorage.getItem('studentProfile'));
     
-    // 如果本地根本沒資料，不需要載入
-    if (!s) return;
-
-    // 1. 顯示載入狀態
-    listDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#8fa398;"><i class="fas fa-circle-notch fa-spin"></i> 正在同步課業資料...</div>';
-
-    // 2. 稍微等待 Auth 初始化 (最多 5 秒)，避免剛開網頁還沒連上就誤判
-    let authWait = 0;
-    while (!auth.currentUser && authWait < 10) { 
-        await new Promise(r => setTimeout(r, 500));
-        authWait++;
+    // 1. 顯示載入中 (僅在第一次)
+    if (listDiv.innerHTML.trim() === "" || listDiv.innerHTML.includes("載入中")) {
+        listDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#8fa398;"><i class="fas fa-circle-notch fa-spin"></i> 正在更新課業狀態...</div>';
     }
-
+ 
     try {
-        // 3. 嘗試讀取資料庫
         const path = `assignments/${grade}/${cls}`;
-        const assignmentsSnap = await database.ref(path).once('value');
-        const assignmentsData = assignmentsSnap.val();
-
-        if (!assignmentsData) {
-            listDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">目前沒有新課業</div>';
-            return;
-        }
-
-        // 4. 成功讀取後的處理
-        allAssignmentTasks = Object.entries(assignmentsData).sort((a, b) => b[1].timestamp - a[1].timestamp);
-        currentLoadedCount = 0; // 重置計數
-        listDiv.innerHTML = ''; // 清空 Loading
         
-        // 移除舊的「載入更多」按鈕 (如果有的話)
-        const oldBtn = document.getElementById('loadMoreAssignmentsBtn');
-        if (oldBtn) oldBtn.remove();
-
-        await loadNextBatchAssignments();
-
+        // 使用 .on() 進行實時監聽
+        // 優點：只會在數據變更時下載 Delta，不用每次重新下載全部
+        database.ref(path).on('value', (snapshot) => {
+            const assignmentsData = snapshot.val();
+ 
+            if (!assignmentsData) {
+                listDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#666;">目前沒有新課業</div>';
+                return;
+            }
+ 
+            // 更新全域變數 (供分頁用)
+            allAssignmentTasks = Object.entries(assignmentsData).sort((a, b) => b[1].timestamp - a[1].timestamp);
+            
+            // 重新渲染列表 (這會自動檢查 assignments_submissions 的狀態)
+            // 這裡我們重置計數並重新載入第一批，確保狀態最新
+            currentLoadedCount = 0;
+            listDiv.innerHTML = '';
+            loadNextBatchAssignments();
+        });
+ 
     } catch (error) {
-        console.error("載入失敗:", error);
-
-        // ★★★ [核心修復]：捕捉權限錯誤，直接強制登出 ★★★
-        if (error.code === 'PERMISSION_DENIED' || error.message.includes("permission_denied")) {
-            console.warn("⛔ 權限失效，執行強制登出程序...");
-            
-            // A. 清除 Firebase 登入狀態
-            if (auth) await auth.signOut();
-            
-            // B. 清除本地緩存
-            localStorage.removeItem('studentProfile');
-            
-            // C. 移除紅點監聽
-            if (typeof pendingMonitorRef !== 'undefined' && pendingMonitorRef) {
-                pendingMonitorRef.off();
-            }
-            const badge = document.getElementById('notifBadge');
-            if(badge) badge.style.display = 'none';
-
-            // D. 重置 UI 到未登入狀態
-            document.getElementById('studentCloudPanel').style.display = 'none';
-            document.getElementById('studentIdentityForm').style.display = 'block';
-            
-            // 重置登入按鈕
-            const loginBtn = document.querySelector('#studentIdentityForm button');
-            if (loginBtn) {
-                loginBtn.innerHTML = '<i class="fab fa-google"></i> 學校帳號登入';
-                loginBtn.disabled = false;
-            }
-
-            // E. 通知使用者 (使用 alert 中斷執行流)
-            alert("⚠️ 您的登入憑證已過期或權限不足。\n\n系統已自動為您登出，請重新登入即可解決問題。");
-            
-            // F. 停止所有後續動作
-            return;
-        } else {
-            // 其他網絡錯誤 (保留簡單提示)
-            listDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#d69a92;">連線不穩，請重整頁面試試。</div>';
-        }
+        console.error("課業載入失敗:", error);
+        listDiv.innerHTML = '<div style="text-align:center; padding:20px; color:#d69a92;">連線問題，無法更新課業狀態 (但您仍可查看歷史紀錄)</div>';
     }
 }
 	// === 核心：分批載入詳細數據 ===
@@ -21274,7 +21271,7 @@ function scrollToAnalysis() {
     }
 }
 
-// === [修訂版] 顯示文章詳情 (版權宣告位於賞析上方) ===
+// === [修訂版] 顯示文章詳情 (加入跳轉賞析按鈕 + 版權宣告) ===
 function showArticleDetail(index) {
     const article = filteredArticles[index];
     if (!article) return;
@@ -21323,26 +21320,16 @@ function showArticleDetail(index) {
         </div>`;
     }
  
-    // 生成跳轉賞析按鈕 HTML
+    // ★★★ 生成跳轉賞析按鈕 HTML (如果有賞析內容才顯示) ★★★
     const analysisBtnHtml = hasAnalysis ?
         `<button class="detail-float-btn scroll-hide-target" onclick="scrollToAnalysis()" title="跳至賞析">
             <i class="fas fa-comment-dots"></i>
          </button>` : '';
  
     // ★★★ [新增] 版權宣告小字 HTML ★★★
-    // 增加 margin-bottom 以確保與下方的賞析區塊有足夠距離
     const disclaimerHtml = `
-        <div style="
-            margin-top: 15px;
-            margin-bottom: 60px;
-            color: #b0bec5;
-            font-size: 0.8rem;
-            text-align: right;
-            font-family: 'Noto Serif TC', serif;
-            font-style: italic;
-            letter-spacing: 1px;
-        ">
-            * 本文僅供校內教學研習之用。原文版權歸原作者/出版社所有。
+        <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">
+            本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。
         </div>`;
  
     const safeContent = encodeURIComponent(article.content);
@@ -21380,6 +21367,7 @@ function showArticleDetail(index) {
                 <i class="fas fa-bookmark"></i>
             </button>
             
+            <!-- ★★★ 插入賞析按鈕 ★★★ -->
             ${analysisBtnHtml}
  
             <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀">
@@ -21412,11 +21400,10 @@ function showArticleDetail(index) {
                 ${contentHtml}
             </div>
             
-            <!-- ★★★ 修改：將版權宣告插入在正文之後，賞析之前 ★★★ -->
-            ${disclaimerHtml}
-            
-            <!-- 賞析區塊 -->
             ${analysisHtmlBlock}
+            
+            <!-- ★★★ 插入版權宣告 ★★★ -->
+            ${disclaimerHtml}
             
             <div style="margin-top: 80px; margin-bottom: 30px;">
                 <div id="chatToggleButtonContainer" style="text-align: center;">
