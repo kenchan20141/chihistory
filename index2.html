@@ -16784,85 +16784,86 @@ async function smartSyncHistory() {
         // 步驟 C: 下載缺失資料 (含 ID 合併邏輯)
         // ==================================================
         // 檢查雲端有，但本地 Map 裡沒有的 key
-        const missingLocally = cloudKeys.filter(key => !localTimestampMap.has(key));
-        
-        if (missingLocally.length > 0) {
-            console.log(`⬇️ [Download] 下載 ${missingLocally.length} 筆...`);
-            const downloadedRecords = [];
+       // ==================================================
+// 步驟 C: 下載缺失資料 (含 ID 合併邏輯 + 即時遷移)
+// ==================================================
+const missingLocally = cloudKeys.filter(key => !localTimestampMap.has(key));
  
-          // 逐筆下載
-// 1. 定義一個陣列來收集需要刪除的舊 Key
-const oldCloudKeysToDelete = [];
- 
-// 逐筆下載
-await Promise.all(missingLocally.map(async (key) => {
-    try {
-        const snap = await database.ref(`${basePath}/${key}`).once('value');
-        const r = snap.val();
-        if (r) {
-            const keyNum = Number(key);
- 
-            // ★★★ 兼容性遷移邏輯 (Migration Logic) ★★★
-            // 判斷：如果 Key 是合理的 Timestamp (大於 2020年)，代表是新格式
-            if (keyNum > 1600000000000) {
-                // 新格式：信任 Key，強制同步
-                r.timestamp = keyNum;
-                r.isSynced = true;
-                r.hasBeenSynced = true;
-            }
-            else {
-                // 舊格式 (Key 是 0, 1, 2...)：
-                // 1. 不要覆蓋 timestamp (保留資料原本內含的正確時間)
-                if (!r.timestamp) r.timestamp = new Date().getTime(); // 防呆補時
-                
-                // 2. 標記為「未同步」
-                // 這樣做很巧妙：系統會把它當作「本地新資料」，下次會自動上傳到正確的 Timestamp Key 位置
-                r.isSynced = false;
-                
-                // 3. 標記為「未曾同步」
-                r.hasBeenSynced = false;
-                
-                console.log(`🔧 [Migration] 自動修復舊格式資料: ${r.title} (準備刪除舊 Key: ${key})`);
- 
-                // ★★★ 新增：將舊 Key 加入刪除名單 ★★★
-                oldCloudKeysToDelete.push(key);
-            }
- 
-            // ... ID 合併邏輯 (保持不變) ...
-            const existingLocal = localTimestampMap.get(String(r.timestamp));
-            if (existingLocal && existingLocal.id) {
-                r.id = existingLocal.id;
-            } else {
-                delete r.id;
-            }
-            
-            downloadedRecords.push(r);
-        }
-    } catch (err) {
-        console.error(`下載失敗 Key: ${key}`, err);
-    }
-}));
- 
-// ★★★ 新增：批量刪除雲端上的舊格式資料 ★★★
-if (oldCloudKeysToDelete.length > 0) {
-    const updates = {};
-    oldCloudKeysToDelete.forEach(oldKey => {
-        // 將該路徑設為 null 即為刪除
-        updates[`${basePath}/${oldKey}`] = null;
-    });
+if (missingLocally.length > 0) {
+    console.log(`⬇️ [Download] 下載 ${missingLocally.length} 筆...`);
+    const downloadedRecords = [];
     
-    // 執行刪除
-    await database.ref().update(updates);
-    console.log(`🗑️ [Migration] 已從雲端移除 ${oldCloudKeysToDelete.length} 筆舊格式資料`);
-}
+    // 用來收集「遷移指令」的物件 (同時刪舊 + 建新)
+    const migrationUpdates = {};
  
-            if (downloadedRecords.length > 0) {
-                const writeTx = db.transaction([STORE_NAME], 'readwrite');
-                const writeStore = writeTx.objectStore(STORE_NAME);
-                downloadedRecords.forEach(r => writeStore.put(r));
-                await new Promise(resolve => writeTx.oncomplete = resolve);
+    // 逐筆下載
+    await Promise.all(missingLocally.map(async (key) => {
+        try {
+            const snap = await database.ref(`${basePath}/${key}`).once('value');
+            const r = snap.val();
+            if (r) {
+                const keyNum = Number(key);
+                let isMigrationNeeded = false;
+ 
+                // ★★★ 兼容性遷移邏輯 (Migration Logic) ★★★
+                if (keyNum > 1600000000000) {
+                    // --- 情況 A: 新格式 (正常下載) ---
+                    r.timestamp = keyNum;
+                    r.isSynced = true;
+                    r.hasBeenSynced = true;
+                }
+                else {
+                    // --- 情況 B: 舊格式 (即時遷移) ---
+                    console.log(`🔧 [Migration] 發現舊格式 Key: ${key}，正在即時轉換...`);
+                    
+                    // 1. 補全時間戳
+                    if (!r.timestamp) r.timestamp = new Date().getTime();
+                    
+                    // 2. ★關鍵修改★：因為我們馬上就要手動上傳了，所以本地標記為「已同步」
+                    // 這樣下次同步時，步驟 B 就不會重複上傳它
+                    r.isSynced = true;
+                    r.hasBeenSynced = true;
+ 
+                    // 3. 準備 Firebase 指令：刪除舊 Key
+                    migrationUpdates[`${basePath}/${key}`] = null;
+ 
+                    // 4. 準備 Firebase 指令：寫入新 Key
+                    migrationUpdates[`${basePath}/${r.timestamp}`] = r;
+                    
+                    isMigrationNeeded = true;
+                }
+ 
+                // ... ID 合併邏輯 (保持不變) ...
+                const existingLocal = localTimestampMap.get(String(r.timestamp));
+                if (existingLocal && existingLocal.id) {
+                    r.id = existingLocal.id;
+                } else {
+                    delete r.id;
+                }
+                
+                downloadedRecords.push(r);
             }
+        } catch (err) {
+            console.error(`下載失敗 Key: ${key}`, err);
         }
+    }));
+ 
+    // ★★★ 執行即時遷移 (Atomic Update) ★★★
+    // 如果有舊資料需要轉換，這裡會一次過發送「刪除舊+寫入新」的指令
+    if (Object.keys(migrationUpdates).length > 0) {
+        console.log(`🚀 [Migration] 正在執行雲端即時遷移 (${Object.keys(migrationUpdates).length / 2} 筆)...`);
+        await database.ref().update(migrationUpdates);
+        console.log("✅ [Migration] 雲端遷移完成");
+    }
+ 
+    // 寫入本地資料庫
+    if (downloadedRecords.length > 0) {
+        const writeTx = db.transaction([STORE_NAME], 'readwrite');
+        const writeStore = writeTx.objectStore(STORE_NAME);
+        downloadedRecords.forEach(r => writeStore.put(r));
+        await new Promise(resolve => writeTx.oncomplete = resolve);
+    }
+}
  
         // ==================================================
         // 步驟 D: 刷新介面
