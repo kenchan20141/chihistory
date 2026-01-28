@@ -21274,7 +21274,7 @@ function scrollToAnalysis() {
     }
 }
 
-// === [修訂版] 顯示文章詳情 (加入跳轉賞析按鈕 + 版權宣告) ===
+// === [修訂版] 顯示文章詳情 (版權宣告位於賞析上方) ===
 function showArticleDetail(index) {
     const article = filteredArticles[index];
     if (!article) return;
@@ -21323,15 +21323,16 @@ function showArticleDetail(index) {
         </div>`;
     }
  
-    // ★★★ 生成跳轉賞析按鈕 HTML (如果有賞析內容才顯示) ★★★
+    // 生成跳轉賞析按鈕 HTML
     const analysisBtnHtml = hasAnalysis ?
         `<button class="detail-float-btn scroll-hide-target" onclick="scrollToAnalysis()" title="跳至賞析">
             <i class="fas fa-comment-dots"></i>
          </button>` : '';
  
     // ★★★ [新增] 版權宣告小字 HTML ★★★
+    // 增加 margin-bottom 以確保與下方的賞析區塊有足夠距離
     const disclaimerHtml = `
-        <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">
+        <div style="margin-top: 50px; margin-bottom: 10px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">
             本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。
         </div>`;
  
@@ -21370,7 +21371,6 @@ function showArticleDetail(index) {
                 <i class="fas fa-bookmark"></i>
             </button>
             
-            <!-- ★★★ 插入賞析按鈕 ★★★ -->
             ${analysisBtnHtml}
  
             <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀">
@@ -21403,10 +21403,11 @@ function showArticleDetail(index) {
                 ${contentHtml}
             </div>
             
-            ${analysisHtmlBlock}
-            
-            <!-- ★★★ 插入版權宣告 ★★★ -->
+            <!-- ★★★ 修改：將版權宣告插入在正文之後，賞析之前 ★★★ -->
             ${disclaimerHtml}
+            
+            <!-- 賞析區塊 -->
+            ${analysisHtmlBlock}
             
             <div style="margin-top: 80px; margin-bottom: 30px;">
                 <div id="chatToggleButtonContainer" style="text-align: center;">
