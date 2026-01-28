@@ -7268,69 +7268,58 @@ body.cat-dragging { cursor: grabbing !important; }
 /* === [修訂版 V3] 專注模式/防睡監測樣式 === */
 /* ========================================= */
 
-/* 隱藏的攝像頭與畫布 */
-#eye-tracker-hidden-layer {
-    position: fixed;
-    top: 0; left: 0;
-    width: 1px; height: 1px;
-    opacity: 0;
-    pointer-events: none;
-    z-index: -1;
+/* === [新增] 滾動時的低調指示燈模式 (Mini Mode) === */
+.detail-float-btn.mini-mode {
+    width: 12px !important;       /* 極小尺寸 */
+    height: 12px !important;
+    padding: 0 !important;
+    border-radius: 50% !important; /* 圓點 */
+    border: none !important;      /* 移除邊框 */
+    box-shadow: 0 0 5px rgba(0,0,0,0.2) !important;
+    
+    /* 隱藏原本的圖示 */
+    font-size: 0 !important; 
+    
+    /* 調整位置與邊距 (放在置頂鍵左邊) */
+    margin-right: 10px;
+    
+    /* 禁止點擊 (純顯示)，或者保留點擊也可，這裡設為可點擊以防萬一 */
+    pointer-events: auto;
+    
+    transition: all 0.3s ease;
 }
 
-/* 1. 按鈕本體樣式 (狀態容器) */
-#eyeTrackerBtn {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
-    /* 這裡不設定背景色，讓它預設繼承 .detail-float-btn 的白色背景 */
+/* 確保圖示在 mini 模式下完全隱藏 */
+.detail-float-btn.mini-mode i {
+    display: none !important;
 }
 
-/* 狀態 A: 綠色 */
-#eyeTrackerBtn.status-ok {
-    background-color: #8fa398 !important; 
-    border-color: #8fa398 !important;
-    color: white !important;
-    box-shadow: 0 0 15px rgba(143, 163, 152, 0.6) !important;
+/* 指示燈顏色狀態 (在 Mini 模式下的表現) */
+.detail-float-btn.mini-mode.status-ok {
+    background-color: #8fa398 !important; /* 綠點 */
+    box-shadow: 0 0 8px #8fa398 !important;
+}
+.detail-float-btn.mini-mode.status-warning {
+    background-color: #e6d0a6 !important; /* 橙點 */
+    box-shadow: 0 0 8px #e6d0a6 !important;
+    animation: mini-breathe 1.5s infinite ease-in-out;
+}
+.detail-float-btn.mini-mode.status-alert {
+    background-color: #d69a92 !important; /* 紅點 */
+    box-shadow: 0 0 10px #d69a92 !important;
+    animation: mini-flash 0.5s infinite;
 }
 
-
-/* 3. 狀態 B: 橙色 (閉眼/離席 < 5秒) - 呼吸閃爍 */
-#eyeTrackerBtn.status-warning {
-    background-color: #e6d0a6 !important; /* 莫蘭迪橙 */
-    border-color: #e6d0a6 !important;
-    color: white !important;
-    box-shadow: 0 0 15px rgba(230, 208, 166, 0.6) !important;
-    animation: btn-breathe 1.5s infinite ease-in-out;
+/* 呼吸燈動畫 (Mini版) */
+@keyframes mini-breathe {
+    0% { opacity: 0.6; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.2); }
+    100% { opacity: 0.6; transform: scale(0.9); }
 }
-
-/* 4. 狀態 C: 紅色 (警報) - 急促閃爍 */
-#eyeTrackerBtn.status-alert {
-    background-color: #d69a92 !important; /* 莫蘭迪紅 */
-    border-color: #d69a92 !important;
-    color: white !important;
-    box-shadow: 0 0 25px rgba(214, 154, 146, 0.8) !important;
-    animation: btn-flash 0.3s infinite;
-}
-
-/* 呼吸動畫 */
-@keyframes btn-breathe {
-    0% { opacity: 0.8; transform: scale(0.95); }
-    50% { opacity: 1; transform: scale(1.05); }
-    100% { opacity: 0.8; transform: scale(0.95); }
-}
-
-/* 警報閃爍動畫 */
-@keyframes btn-flash {
-    0% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(1.1); }
-    100% { opacity: 1; transform: scale(1); }
-}
-
-/* 啟動時的 Loading 狀態 */
-#eyeTrackerBtn i.fa-spinner {
-    animation: fa-spin 1s infinite linear;
+@keyframes mini-flash {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
 }
 
 	
@@ -21462,7 +21451,7 @@ function scrollToAnalysis() {
     }
 }
 
-// === [修訂版 V3] 顯示文章詳情 (包含低調模式邏輯) ===
+// === [修訂版 V3] 顯示文章詳情 (按鈕本身變色) ===
 function showArticleDetail(index) {
     const article = filteredArticles[index];
     if (!article) return;
@@ -21516,9 +21505,10 @@ function showArticleDetail(index) {
     let chatHTML = getCanvasChatHTML('featured_discussion');
     chatHTML = chatHTML.replace('閱卷員追問區', '與陳SIR討論').replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？');
  
-    // 監測按鈕 (預設樣式)
-    const monitorBtnHtml = `
-        <button id="eyeTrackerBtn" class="detail-float-btn" onclick="EyeTracker.toggle()" title="開啟專注監測 (防睡)">
+    // ★★★ [核心修改] 監測按鈕：移除 LED div，只保留圖示 ★★★
+    // CSS 會讓整個 button 變色
+   const monitorBtnHtml = `
+        <button id="eyeTrackerBtn" class="detail-float-btn scroll-hide-target" onclick="EyeTracker.toggle()" title="開啟專注監測 (防睡)">
             <i class="fas fa-eye"></i>
         </button>
     `;
@@ -21534,32 +21524,6 @@ function showArticleDetail(index) {
             #fullArticleBody b, #fullArticleBody strong, #poetryContent b, #poetryContent strong {
                 font-weight: bold !important; color: #2c3e50 !important; text-shadow: none !important; font-family: 'Noto Serif TC', serif;
             }
-            
-            /* ★★★ 新增：低調指示燈樣式 ★★★ */
-            .mini-eye-indicator {
-                /* 縮小尺寸 */
-                width: 12px !important;
-                height: 12px !important;
-                border-radius: 50% !important;
-                padding: 0 !important;
-                
-                /* 位置調整：固定在右下角，位於 BackTop (25px) 的左邊 */
-                position: fixed !important;
-                bottom: 35px !important; /* 與 BackTop 高度一致 */
-                right: 80px !important;  /* 25px + 45px + 10px Gap */
-                top: auto !important;    /* 取消原本的 top */
-                
-                /* 外觀微調 */
-                border: 1px solid rgba(0,0,0,0.1) !important;
-                box-shadow: 0 0 5px rgba(0,0,0,0.1) !important;
-                transform: none !important;
-                z-index: 25002 !important;
-            }
-            
-            /* 在 Mini 模式下隱藏 Icon */
-            .mini-eye-indicator i {
-                display: none !important;
-            }
         </style>
         <div id="readingProgressBarContainer"><div id="readingProgressBar"></div></div>
         
@@ -21569,14 +21533,8 @@ function showArticleDetail(index) {
             ${analysisBtnHtml}
             <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀"><i class="fas fa-book-reader"></i></button>
             <button class="detail-float-btn scroll-hide-target" onclick="openReaderSettings()" title="慢讀設定"><i class="fas fa-cog"></i></button>
-            
-            <!-- 置頂按鈕 (預設隱藏) -->
-            <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" 
-                    style="display: none; position: fixed; bottom: 20px; right: 25px; top: auto;">
-                <i class="fas fa-arrow-up"></i>
-            </button>
-            
-            <button class="detail-float-btn close-mode scroll-hide-target" onclick="EyeTracker.stop(); backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
+            <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;"><i class="fas fa-arrow-up"></i></button>
+            <button class="detail-float-btn close-mode" onclick="EyeTracker.stop(); backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
         </div>
 
         <div class="read-mode-container">
@@ -21638,60 +21596,67 @@ function showArticleDetail(index) {
         }
     }, 50);
  
-    // ★★★ Scroll Event Listener 修改 ★★★
+ // 這是 showArticleDetail 函數內部的 onscroll 設定
     detailView.onscroll = function() {
         const scrollTop = detailView.scrollTop;
         const docHeight = detailView.scrollHeight;
         const winHeight = detailView.clientHeight;
         const scrollPercent = (scrollTop / (docHeight - winHeight)) * 100;
         
+        // 進度條邏輯
         const progressBar = document.getElementById('readingProgressBar');
         const progressContainer = document.getElementById('readingProgressBarContainer');
         if(progressBar) progressBar.style.width = scrollPercent + "%";
         if(progressContainer) progressContainer.style.opacity = scrollTop > 10 ? '1' : '0';
  
+        // === 按鈕顯示/隱藏/變形邏輯 ===
         const hideTargets = document.querySelectorAll('.scroll-hide-target');
         const topBtn = document.getElementById('detailTopBtn');
         const eyeBtn = document.getElementById('eyeTrackerBtn');
 
-        // 判斷滾動閾值
+        // 當滾動超過 100px
         if (scrollTop > 100) {
-            // --- 滾動向下時 ---
             
-            // 1. 隱藏其他懸浮按鈕
+            // 1. 隱藏大部分按鈕
             hideTargets.forEach(btn => {
-                // 如果是 EyeTrackerBtn，不隱藏，而是變形
+                // ★ 排除 EyeTracker 按鈕，我們單獨處理它
                 if (btn.id !== 'eyeTrackerBtn') {
                     btn.style.display = 'none';
                 }
             });
 
-            // 2. 顯示置頂按鈕
+            // 2. 處理 EyeTracker 按鈕
+            if (eyeBtn) {
+                // 如果正在監測中 (有狀態 class)，則進入 Mini Mode
+                if (EyeTracker.isMonitoring) {
+                    eyeBtn.style.display = 'flex'; // 確保它是顯示的
+                    eyeBtn.classList.add('mini-mode'); // 變成小圓點
+                } else {
+                    // 沒開啟監測，就隱藏
+                    eyeBtn.style.display = 'none';
+                    eyeBtn.classList.remove('mini-mode');
+                }
+            }
+
+            // 3. 顯示置頂按鈕
             if (topBtn) topBtn.style.display = 'flex';
 
-            // 3. ★ 眼動按鈕：變形為低調指示燈 ★
-            if (eyeBtn) {
-                eyeBtn.classList.add('mini-eye-indicator');
-                // 確保它是顯示的 (因為上面 hideTargets 可能把它 hide 了)
-                eyeBtn.style.display = 'block'; 
-            }
-
         } else {
-            // --- 滾動回頂部時 ---
+            // === 滾動回頂部：恢復原狀 ===
             
-            // 1. 顯示所有按鈕
+            // 1. 恢復所有按鈕顯示
             hideTargets.forEach(btn => btn.style.display = 'flex');
             
-            // 2. 隱藏置頂按鈕
-            if (topBtn) topBtn.style.display = 'none';
-
-            // 3. ★ 眼動按鈕：恢復原狀 ★
+            // 2. 恢復 EyeTracker 大按鈕
             if (eyeBtn) {
-                eyeBtn.classList.remove('mini-eye-indicator');
-                eyeBtn.style.display = 'flex';
+                eyeBtn.classList.remove('mini-mode');
             }
+
+            // 3. 隱藏置頂按鈕
+            if (topBtn) topBtn.style.display = 'none';
         }
  
+        // 自動標記已讀邏輯 (保持不變)
         const analysisSection = document.getElementById('articleAnalysisSection');
         if (analysisSection && !isAutoScrollingToAnalysis) {
             const rect = analysisSection.getBoundingClientRect();
@@ -22431,7 +22396,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 // =======================================================
-// === [修訂版 V5] 專注閱讀監測系統 (眨眼緩衝 + 狀態重置修復) ===
+// === [修訂版 V5] 專注閱讀監測系統 (完美修復版) ===
 // =======================================================
 
 const EyeTracker = {
@@ -22441,16 +22406,22 @@ const EyeTracker = {
     modelsLoaded: false,
     
     // 狀態變數
-    lastSafeTime: 0,   // 上一次「安全」的時間點
-    closingTimer: 0,   // 用於計算閉眼/消失的持續時間
-    
+    lastSafeTime: 0,   // 上一次偵測到開眼的時間
     alarmActive: false,
     checkInterval: null,
     
-    // === 參數設定 ===
-    EAR_THRESHOLD: 0.28,  //稍微調低閾值，容許更多角度
-    BLINK_BUFFER: 1000,   // 1秒緩衝：閉眼少於1秒當作眨眼，不變色
-    TIME_THRESHOLD: 5000, // 5秒：超過此時間觸發警報
+    // === 關鍵參數設定 (已優化) ===
+    // 1. 降低閾值：閱讀時視線向下，眼瞼會自然下垂，0.32 太嚴格。
+    // 改為 0.22 可以容許視線向下及輕微側臉。
+    EAR_THRESHOLD: 0.29,  
+    
+    // 2. 時間設定
+    TIME_THRESHOLD: 5000, // 5秒 (轉紅色/警報)
+    
+    // 3. [新增] 眨眼緩衝區：1秒
+    // 閉眼時間 < 1秒 = 視為眨眼 (綠色)
+    // 閉眼時間 1秒~5秒 = 視為分心 (橙色)
+    BLINK_BUFFER: 1000,   
     
     audio: null,
 
@@ -22461,8 +22432,7 @@ const EyeTracker = {
         if (!document.getElementById('eye-tracker-video')) {
             const container = document.createElement('div');
             container.id = 'eye-tracker-hidden-layer';
-            // 隱藏 video 元素
-            container.style.cssText = "position:fixed; top:0; left:0; width:1px; height:1px; opacity:0; pointer-events:none; z-index:-1;";
+            // playsinline 確保在手機上不會全螢幕播放
             container.innerHTML = '<video id="eye-tracker-video" playsinline muted autoplay></video>';
             document.body.appendChild(container);
             this.video = document.getElementById('eye-tracker-video');
@@ -22478,6 +22448,7 @@ const EyeTracker = {
             const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
             console.log("正在載入 Face-API 模型...");
             
+            // 使用 Tiny 模型以節省資源
             await Promise.all([
                 faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
@@ -22496,16 +22467,21 @@ const EyeTracker = {
     // 2. 開關切換邏輯
     async toggle() {
         const btn = document.getElementById('eyeTrackerBtn');
+        if(!btn) return;
         const icon = btn.querySelector('i');
 
         if (this.isMonitoring) {
+            // === 執行關閉 ===
+            console.log("正在關閉監測...");
             this.stop();
-            return;
+            return; 
         } 
         
+        // === 執行開啟 ===
         console.log("正在啟動監測...");
         this.unlockAudio();
         
+        // UI 顯示 Loading
         if(icon) icon.className = 'fas fa-spinner fa-spin';
         
         const success = await this.init();
@@ -22513,17 +22489,17 @@ const EyeTracker = {
             await this.start();
             
             if (this.isMonitoring) {
+                // 啟動成功
                 this.updateStatus('ok');
                 if(icon) icon.className = 'fas fa-eye';
                 btn.title = "關閉專注監測";
                 this.lastSafeTime = Date.now();
-                this.closingTimer = 0; // 重置計時
             } else {
-                this.stop();
+                this.stop(); 
                 alert("啟動失敗，請確保允許攝像頭權限。");
             }
         } else {
-            this.stop();
+            this.stop(); 
         }
     },
 
@@ -22541,8 +22517,8 @@ const EyeTracker = {
 
             this.isMonitoring = true;
             this.lastSafeTime = Date.now();
-            this.closingTimer = 0;
             
+            // 啟動偵測 (每 200ms 檢查一次)
             if (this.checkInterval) clearInterval(this.checkInterval);
             this.checkInterval = setInterval(() => this.detect(), 200); 
             
@@ -22552,18 +22528,20 @@ const EyeTracker = {
         }
     },
 
-    // 4. 停止與重置 (100% 還原樣式)
+    // 4. 停止與重置 (解決按鍵顏色殘留問題)
     stop() {
-        console.log("停止監測，還原樣式...");
         this.isMonitoring = false;
         
+        // 清除計時器
         if (this.checkInterval) {
             clearInterval(this.checkInterval);
             this.checkInterval = null;
         }
         
+        // 停止警報
         this.stopAlarm();
         
+        // 釋放攝像頭資源
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
@@ -22572,19 +22550,22 @@ const EyeTracker = {
             this.video.srcObject = null;
         }
         
-        // ★★★ 強制重置 UI 樣式 (針對問題一) ★★★
+        // ★★★ 強制重置 UI 樣式 (100%還原) ★★★
         const btn = document.getElementById('eyeTrackerBtn');
         if (btn) {
-            // 1. 移除所有狀態 Class (含 mini-eye-indicator 以防在滾動狀態下關閉)
+            // 1. 移除所有狀態 class (包括 mini-mode)
+            btn.classList.remove('status-ok', 'status-warning', 'status-alert', 'mini-mode');
+            
+            // 2. 強制恢復預設 class
             btn.className = 'detail-float-btn scroll-hide-target'; 
             
-            // 2. 清除所有 inline styles (背景色、陰影等)
-            btn.removeAttribute('style');
+            // 3. 清空所有 inline style (這會移除背景色、邊框色、陰影)
+            btn.style.cssText = ''; 
             
-            // 3. 還原 Title
+            // 4. 恢復文字提示
             btn.title = "開啟專注監測 (防睡)";
             
-            // 4. 還原 Icon (防止 Loading 圖示殘留)
+            // 5. 恢復圖示
             const icon = btn.querySelector('i');
             if (icon) {
                 icon.className = 'fas fa-eye';
@@ -22593,19 +22574,18 @@ const EyeTracker = {
         }
     },
 
-    // 5. 核心偵測邏輯 (眨眼緩衝 + 五官判斷)
+    // 5. 核心偵測邏輯 (解決閃爍問題)
     async detect() {
         if (!this.video || this.video.paused || this.video.ended) return;
 
-        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 });
+        // 使用 TinyFaceDetector，分數門檻設低一點以容許側臉
+        const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 });
         const detection = await faceapi.detectSingleFace(this.video, options).withFaceLandmarks();
         
         const now = Date.now();
-        let isCurrentlyOpen = false;
+        let currentEyeOpen = false;
 
-        // A. 判斷當下是否張眼/有人
         if (detection) {
-            // 有五官 (detection 存在)，進一步檢查眼睛
             const landmarks = detection.landmarks;
             const leftEye = landmarks.getLeftEye();
             const rightEye = landmarks.getRightEye();
@@ -22614,45 +22594,42 @@ const EyeTracker = {
             const rightEAR = this.getEAR(rightEye);
             const avgEAR = (leftEAR + rightEAR) / 2;
 
-            // 如果 EAR 大於閾值，視為張眼
+            // 判斷眼睛是否張開
             if (avgEAR > this.EAR_THRESHOLD) {
-                isCurrentlyOpen = true;
+                currentEyeOpen = true;
             }
-        } else {
-            // 完全沒偵測到臉 -> 視為閉眼/離開 (isCurrentlyOpen = false)
-        }
-
-        // B. 狀態機 (加入時間緩衝)
-        if (isCurrentlyOpen) {
-            // === 情況：眼睛張開 ===
-            this.lastSafeTime = now;
-            this.closingTimer = 0; // 重置閉眼計時器
+        } 
+        
+        // === 狀態判斷邏輯 (加入緩衝區) ===
+        if (currentEyeOpen) {
+            // 如果眼睛是張開的，更新最後安全時間
+            this.lastSafeTime = now; 
+            
+            // 立即轉回綠色 (且停止警報)
             this.updateStatus('ok');
             if (this.alarmActive) this.stopAlarm();
-        } else {
-            // === 情況：閉眼 或 沒人 ===
-            // 累加閉眼時間
-            if (this.closingTimer === 0) {
-                this.closingTimer = now; // 開始計時
-            }
             
-            const timeClosed = now - this.closingTimer;
-
+        } else {
+            // 眼睛閉上或沒偵測到人臉
+            const timeClosed = now - this.lastSafeTime;
+            
             if (timeClosed < this.BLINK_BUFFER) {
-                // < 1秒：視為眨眼或側頭，保持綠色 (Status OK)
-                this.updateStatus('ok'); 
-            } else if (timeClosed > this.TIME_THRESHOLD) {
-                // > 5秒：警報 (Red)
+                // 閉眼時間 < 1秒：視為眨眼，保持綠色
+                this.updateStatus('ok');
+            } 
+            else if (timeClosed >= this.BLINK_BUFFER && timeClosed < this.TIME_THRESHOLD) {
+                // 1秒 < 閉眼時間 < 5秒：轉為橙色警告
+                this.updateStatus('warning');
+            } 
+            else {
+                // 閉眼時間 > 5秒：轉為紅色警報
                 this.updateStatus('alert');
                 if (!this.alarmActive) this.triggerAlarm();
-            } else {
-                // 1秒 ~ 5秒之間：警告 (Orange)
-                this.updateStatus('warning');
             }
         }
     },
 
-    // 6. EAR 計算
+    // 6. EAR 計算 (保持不變)
     getEAR(eye) {
         const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
         const A = dist(eye[1], eye[5]);
@@ -22666,27 +22643,21 @@ const EyeTracker = {
         const btn = document.getElementById('eyeTrackerBtn');
         if (!btn) return;
 
-        // 如果按鈕現在是 mini 模式，我們只改變背景色，不改變大小
-        // classList 操作
-        if (status === 'ok') {
-            if (!btn.classList.contains('status-ok')) {
-                btn.classList.remove('status-warning', 'status-alert');
-                btn.classList.add('status-ok');
-            }
-        } else if (status === 'warning') {
-            if (!btn.classList.contains('status-warning')) {
-                btn.classList.remove('status-ok', 'status-alert');
-                btn.classList.add('status-warning');
-            }
-        } else if (status === 'alert') {
-            if (!btn.classList.contains('status-alert')) {
-                btn.classList.remove('status-ok', 'status-warning');
-                btn.classList.add('status-alert');
-            }
-        }
+        // 檢查是否需要更新 (避免重複操作 DOM)
+        if (status === 'ok' && btn.classList.contains('status-ok')) return;
+        if (status === 'warning' && btn.classList.contains('status-warning')) return;
+        if (status === 'alert' && btn.classList.contains('status-alert')) return;
+
+        // 移除舊狀態
+        btn.classList.remove('status-ok', 'status-warning', 'status-alert');
+        
+        // 加入新狀態
+        if (status === 'ok') btn.classList.add('status-ok');
+        else if (status === 'warning') btn.classList.add('status-warning');
+        else if (status === 'alert') btn.classList.add('status-alert');
     },
 
-    // 8. 警報
+    // 8. 警報 (震動 + 聲音)
     triggerAlarm() {
         this.alarmActive = true;
         if (this.audio) {
@@ -22708,7 +22679,7 @@ const EyeTracker = {
         if (navigator.vibrate) navigator.vibrate(0);
     },
     
-    // 10. 音效解鎖
+    // 10. 音效解鎖 (解決瀏覽器自動播放限制)
     unlockAudio() {
         if (this.audio) {
             this.audio.muted = true;
