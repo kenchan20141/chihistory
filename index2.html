@@ -7359,17 +7359,17 @@ body.cat-dragging { cursor: grabbing !important; }
 }
 
 
-/* === [修訂 V5] 慢讀專用：右緣全高防睡燈 (強制拉伸版) === */
+/* === [修訂 V6] 慢讀專用：右緣全高防睡燈 (清晰莫蘭迪版) === */
 
 #slowReaderFocusIndicator {
     position: fixed;
     top: 0;
-    bottom: 0;       /* ★ 核心修改：同時設定 top 和 bottom 強制拉伸 */
+    bottom: 0;       /* 強制拉伸全高 */
     right: 0;
     width: 6px;      /* 極窄設計 */
-    height: auto;    /* 讓 top/bottom 控制高度 */
+    height: auto;
     
-    /* ★ 設定極高層級，確保蓋過關閉鍵所在圖層，佔據最右側 */
+    /* 確保最上層 */
     z-index: 2147483647; 
     
     display: none;   /* 預設隱藏 */
@@ -7380,26 +7380,33 @@ body.cat-dragging { cursor: grabbing !important; }
     background-color: transparent;
     cursor: pointer;
     
-    /* 確保不會攔截不想攔截的點擊 (但在 prompting 狀態下我們會開啟它) */
+    /* 預設不攔截點擊，但在 prompting 狀態會開啟 */
     pointer-events: none; 
     
-    transition: background-color 0.5s ease, box-shadow 0.5s ease;
+    transition: background-color 0.4s ease, box-shadow 0.4s ease;
 }
 
-/* 狀態一：綠燈 (監察中) - 開啟 pointer-events 讓滑鼠可以 hover */
+/* 狀態一：綠燈 (監察中 - 靜謐灰綠) */
+/* 修改：不透明度提高，並加上極淡的陰影，確保在白底上清晰可見 */
 #slowReaderFocusIndicator.status-green {
-    background-color: rgba(123, 148, 136, 0.3) !important; /* 加深一點的灰綠 */
+    background-color: #8FA398 !important; /* 實心莫蘭迪灰綠 */
+    opacity: 0.75; /* 75% 不透明，既通透又看得見 */
+    box-shadow: -1px 0 4px rgba(143, 163, 152, 0.4); /* 輕微邊緣陰影 */
     pointer-events: auto; 
 }
 #slowReaderFocusIndicator.status-green:hover {
-    background-color: rgba(123, 148, 136, 0.9) !important;
+    opacity: 1; /* 懸停時完全顯色 */
+    background-color: #7D9186 !important; /* 稍微變深 */
 }
 
-/* 狀態二：橙燈 (3分鐘) - 視覺引導 */
+/* 狀態二：橙燈 (3分鐘 - 暖陶土色) */
+/* 修改：稍微加重色調，讓呼吸燈效果更明確 */
 #slowReaderFocusIndicator.status-prompt {
-    background-color: #DE9981 !important; /* 暖陶土色 */
-    pointer-events: auto; /* 允許點擊當作下一頁 */
-    box-shadow: -2px 0 20px rgba(222, 153, 129, 0.8); 
+    background-color: #D9886D !important; /* 加深一點的陶土色 */
+    pointer-events: auto;
+    opacity: 1;
+    /* 陰影範圍縮小但濃度增加，看起來更「聚光」 */
+    box-shadow: -2px 0 15px rgba(217, 136, 109, 0.8); 
     animation: full-height-pulse 2s infinite ease-in-out;
 }
 /* 擴大點擊感應區 */
@@ -7407,22 +7414,27 @@ body.cat-dragging { cursor: grabbing !important; }
     content: ''; position: absolute; top: 0; left: -30px; right: 0; bottom: 0;
 }
 
-/* 狀態三：紅燈 (3分30秒) - 警告 */
+/* 狀態三：紅燈 (3分30秒 - 鐵鏽紅) */
+/* 修改：使用帶灰調的深紅，有警示感但不出戲 */
 #slowReaderFocusIndicator.status-red {
-    background-color: #D16E64 !important; /* 深豆沙紅 */
+    background-color: #C96055 !important; /* 莫蘭迪鐵鏽紅 */
     pointer-events: auto;
-    box-shadow: -4px 0 30px rgba(209, 110, 100, 1);
+    opacity: 1;
+    box-shadow: -3px 0 25px rgba(201, 96, 85, 0.9);
     animation: full-height-flash 0.5s infinite;
 }
 
+/* 動畫定義 (配合新顏色微調) */
 @keyframes full-height-pulse {
-    0% { opacity: 0.6; box-shadow: -1px 0 10px rgba(222, 153, 129, 0.5); }
-    50% { opacity: 1; box-shadow: -4px 0 25px rgba(222, 153, 129, 1); }
-    100% { opacity: 0.6; box-shadow: -1px 0 10px rgba(222, 153, 129, 0.5); }
+    0% { opacity: 0.8; box-shadow: -1px 0 8px rgba(217, 136, 109, 0.5); }
+    50% { opacity: 1; box-shadow: -3px 0 20px rgba(217, 136, 109, 0.9); }
+    100% { opacity: 0.8; box-shadow: -1px 0 8px rgba(217, 136, 109, 0.5); }
 }
 
 @keyframes full-height-flash {
-    0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; }
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
 }
 	
 	
