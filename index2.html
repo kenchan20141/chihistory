@@ -7362,101 +7362,89 @@ body.cat-dragging { cursor: grabbing !important; }
 
 /* === [新增] 慢讀專用：防睡功能 UI === */
 
-/* 1. 防睡指示燈 (沿用全域設計，但定位在慢讀介面右上角) */
+/* === [修訂] 慢讀專用：防睡側邊指示燈 === */
+
+/* 1. 側邊指示燈容器 (類似卡扣式菜單) */
 #slowReaderFocusIndicator {
     position: fixed;
-    top: 20px;
-    right: 80px; /* 放在關閉鍵 (right: 25px) 的左邊，預留足夠空間 */
-    z-index: 30005;
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    display: none; /* 預設隱藏，由 JS 控制 */
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%); /* 垂直置中 */
+    z-index: 30010; /* 最高層級 */
+    
+    width: 24px;  /* 預設窄一點，像個標籤 */
+    height: 60px; /* 長條形 */
+    border-radius: 8px 0 0 8px; /* 左邊圓角 */
+    
+    display: none; /* 預設隱藏 */
     align-items: center;
     justify-content: center;
+    
     background-color: rgba(255, 255, 255, 0.9);
     border: 1px solid #dcd6c8;
+    border-right: none; /* 貼邊無邊框 */
+    
     color: #8d6e63;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     cursor: pointer;
+    
     backdrop-filter: blur(5px);
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: -2px 0 10px rgba(0,0,0,0.1);
 }
 
-/* 狀態一：綠燈 (監察中) */
+/* 狀態一：綠燈 (監察中 - 低調) */
 #slowReaderFocusIndicator.status-green {
-    background-color: #8fa398 !important; /* 莫蘭迪灰綠 */
+    background-color: rgba(143, 163, 152, 0.8) !important; /* 莫蘭迪灰綠 (半透明) */
     color: white !important;
-    border-color: #8fa398 !important;
-    box-shadow: 0 0 15px rgba(143, 163, 152, 0.6) !important;
+    width: 20px; /* 很窄，不擋視線 */
+}
+#slowReaderFocusIndicator.status-green:hover {
+    width: 40px; /* 滑鼠移上去伸長 */
+    background-color: rgba(143, 163, 152, 1) !important;
 }
 
-/* 狀態二：紅燈 (警報中) */
+/* 狀態二：橙燈 (3分鐘 - 視覺引導，無聲) */
+#slowReaderFocusIndicator.status-prompt {
+    background-color: #e6b49d !important; /* 莫蘭迪陶土色 */
+    color: white !important;
+    width: 50px; /* 伸長，引導點擊 */
+    box-shadow: 0 0 15px rgba(230, 180, 157, 0.8);
+    animation: side-pulse 1.5s infinite ease-in-out; /* 呼吸燈效果 */
+}
+/* 橙燈時顯示「下一頁」箭頭 */
+#slowReaderFocusIndicator.status-prompt i::before {
+    content: "\f061"; /* FontAwesome 右箭頭 (fa-arrow-right) */
+}
+
+/* 狀態三：紅燈 (3分30秒 - 警告) */
 #slowReaderFocusIndicator.status-red {
     background-color: #d69a92 !important; /* 莫蘭迪豆沙紅 */
     color: white !important;
-    border-color: #d69a92 !important;
-    box-shadow: 0 0 20px rgba(214, 154, 146, 0.9) !important;
-    animation: monitor-pulse 0.5s infinite;
+    width: 50px;
+    box-shadow: 0 0 20px rgba(214, 154, 146, 0.9);
+    animation: side-shake 0.5s infinite; /* 劇烈搖晃 */
+}
+#slowReaderFocusIndicator.status-red i::before {
+    content: "\f0f3"; /* FontAwesome 鈴鐺 (fa-bell) */
 }
 
-/* 2. 專注確認按鈕 (每3分鐘出現一次) */
-#slowReaderPromptBtn {
-    position: fixed;
-    bottom: 100px; /* 位於下方，方便手指點擊 */
-    left: 50%;
-    transform: translateX(-50%) scale(0); /* 初始縮小隱藏 */
-    z-index: 30010; /* 最高層級 */
-    
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    border: none;
-    
-    /* 莫蘭迪漸層色：霧霾藍 -> 灰綠 */
-    background: linear-gradient(135deg, #94a7b5 0%, #8fa398 100%);
-    color: white;
-    font-size: 1.5rem;
-    
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    
-    box-shadow: 0 10px 25px rgba(143, 163, 152, 0.5);
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
-    opacity: 0;
-    pointer-events: none; /* 隱藏時不可點擊 */
+/* 動畫定義 */
+@keyframes side-pulse {
+    0% { transform: translateY(-50%) scale(1); opacity: 0.9; }
+    50% { transform: translateY(-50%) scale(1.1); opacity: 1; box-shadow: 0 0 25px rgba(230, 180, 157, 1); }
+    100% { transform: translateY(-50%) scale(1); opacity: 0.9; }
 }
 
-/* 按鈕出現時的狀態 */
-#slowReaderPromptBtn.show {
-    transform: translateX(-50%) scale(1);
-    opacity: 1;
-    pointer-events: auto;
-    animation: prompt-float 3s ease-in-out infinite; /* 輕微浮動吸引注意 */
+@keyframes side-shake {
+    0% { transform: translateY(-50%) rotate(0deg); }
+    25% { transform: translateY(-50%) rotate(5deg); }
+    75% { transform: translateY(-50%) rotate(-5deg); }
+    100% { transform: translateY(-50%) rotate(0deg); }
 }
 
-#slowReaderPromptBtn:active {
-    transform: translateX(-50%) scale(0.9);
-}
-
-@keyframes prompt-float {
-    0%, 100% { transform: translateX(-50%) scale(1) translateY(0); }
-    50% { transform: translateX(-50%) scale(1) translateY(-10px); }
-}
-
-/* 手機版微調 */
-@media (max-width: 600px) {
-    #slowReaderFocusIndicator {
-        top: 20px;
-        right: 70px; /* 手機上靠得緊一點 */
-        width: 40px;
-        height: 40px;
-        font-size: 1rem;
-    }
-}
+/* 移除舊的圓形按鈕樣式 (如果還在的話) */
+#slowReaderPromptBtn { display: none !important; }
 
 
 
@@ -22192,61 +22180,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // ==========================================
-// === [新增] 慢讀專用防睡管理器 ===
+// === [修訂] 慢讀專用防睡管理器 (側邊燈號版) ===
 // ==========================================
 const SlowReaderFocusManager = {
     checkTimer: null,      // 3分鐘計時器
     warningTimer: null,    // 30秒倒數計時器
-    isWarning: false,      // 是否正在警告中
+    isPrompting: false,    // 是否處於橙燈/紅燈狀態 (3分鐘後)
     
-    // 設定參數
-    INTERVAL_MS: 3 * 60 * 1000, // 3分鐘 (180000ms)
-    WARNING_MS: 30 * 1000,      // 30秒
+    // 設定時間參數
+    INTERVAL_MS: 3 * 60 * 1000,      // 3分鐘 (180000ms) - 出現橙燈
+    WARNING_MS: 30 * 1000,           // 30秒 - 轉紅燈並響鈴
     
-    // 初始化 UI (插入到 slowReaderOverlay 中)
+    // 初始化 UI
     initUI: function() {
         const overlay = document.getElementById('slowReaderOverlay');
         if (!overlay) return;
         
-        // 1. 建立右上角指示燈 (如果沒有的話)
-        if (!document.getElementById('slowReaderFocusIndicator')) {
-            const indicator = document.createElement('button');
+        // 建立側邊指示燈
+        let indicator = document.getElementById('slowReaderFocusIndicator');
+        if (!indicator) {
+            indicator = document.createElement('button');
             indicator.id = 'slowReaderFocusIndicator';
-            indicator.className = 'status-green'; // 預設綠色
-            indicator.innerHTML = '<i class="fas fa-eye"></i>';
-            indicator.onclick = function() {
-                // 點擊指示燈可切換功能開關
-                SlowReaderFocusManager.toggle();
+            indicator.innerHTML = '<i class="fas fa-eye"></i>'; // 預設圖示：眼
+            
+            // 點擊事件邏輯
+            indicator.onclick = function(e) {
+                e.stopPropagation(); // 防止冒泡
+                
+                if (SlowReaderFocusManager.isPrompting) {
+                    // 1. 如果是橙/紅燈狀態：視為「下一頁」操作 + 重置
+                    // 這符合「用家可以點擊它當下一頁」的需求
+                    SlowReaderFocusManager.handleUserActivity(); 
+                    goToNextReaderPage(); 
+                    // 如果正在自動播放，重啟自動計時
+                    if (readerState.timerInterval) {
+                        startReaderAutoPage();
+                    }
+                } else {
+                    // 2. 如果是綠燈狀態：單純切換開關 (關閉防睡)
+                    SlowReaderFocusManager.toggle();
+                }
             };
             overlay.appendChild(indicator);
         }
-        
-        // 2. 建立每3分鐘出現的確認按鈕
-        if (!document.getElementById('slowReaderPromptBtn')) {
-            const promptBtn = document.createElement('button');
-            promptBtn.id = 'slowReaderPromptBtn';
-            // 純圖案：下一頁箭頭 + 眼睛
-            promptBtn.innerHTML = '<i class="fas fa-arrow-right"></i>'; 
-            promptBtn.onclick = function() {
-                SlowReaderFocusManager.handleUserCheckIn();
-            };
-            overlay.appendChild(promptBtn);
-        }
     },
 
-    // 啟動邏輯 (進入慢讀時呼叫)
+    // 啟動邏輯
     start: function() {
         this.initUI();
         const indicator = document.getElementById('slowReaderFocusIndicator');
         
-        // 檢查全域防睡功能是否開啟
-        // 注意：這裡我們暫停全域的 checkFocusStatus，改用我們自己的邏輯
+        // 檢查全域開關
         if (focusMonitorState.isActive) {
-            console.log("慢讀防睡系統：啟動");
+            console.log("慢讀防睡：啟動 (側邊模式)");
             indicator.style.display = 'flex';
-            this.resetMainTimer();
+            this.resetMainTimer(); // 開始計時
             
-            // 暫停原本全域的閒置檢查，避免雙重干擾
+            // 暫停全域閒置檢查
             if (focusMonitorState.checkInterval) {
                 clearInterval(focusMonitorState.checkInterval);
                 focusMonitorState.checkInterval = null;
@@ -22257,39 +22247,33 @@ const SlowReaderFocusManager = {
         }
     },
 
-    // 停止邏輯 (離開慢讀時呼叫)
+    // 停止邏輯
     stop: function() {
-        console.log("慢讀防睡系統：停止");
+        console.log("慢讀防睡：停止");
         clearTimeout(this.checkTimer);
         clearTimeout(this.warningTimer);
         this.checkTimer = null;
         this.warningTimer = null;
-        this.isWarning = false;
+        this.isPrompting = false;
         
-        // 隱藏按鈕
-        const btn = document.getElementById('slowReaderPromptBtn');
-        if (btn) btn.classList.remove('show');
+        stopAlarm(); // 停止聲音/震動
         
-        // 停止任何正在播放的警報
-        stopAlarm();
-        
-        // 如果原本全域功能是開著的，恢復全域檢查
+        // 恢復全域檢查 (如果原本是開的)
         if (focusMonitorState.isActive) {
             focusMonitorState.checkInterval = setInterval(checkFocusStatus, 1000);
-            focusMonitorState.lastActivityTime = Date.now(); // 重置時間
+            focusMonitorState.lastActivityTime = Date.now();
         }
     },
 
-    // 切換開關 (點擊慢讀中的眼睛按鈕)
+    // 切換開關 (綠燈狀態下點擊)
     toggle: function() {
         const indicator = document.getElementById('slowReaderFocusIndicator');
-        
         if (focusMonitorState.isActive) {
             // 關閉
             focusMonitorState.isActive = false;
             indicator.style.display = 'none';
             this.stop();
-            // 同步更新外部按鈕狀態 (如果有的話)
+            // 同步外部按鈕
             const globalBtn = document.getElementById('focusMonitorBtn');
             if(globalBtn) {
                 globalBtn.className = "detail-float-btn scroll-hide-target";
@@ -22300,38 +22284,49 @@ const SlowReaderFocusManager = {
             focusMonitorState.isActive = true;
             indicator.style.display = 'flex';
             this.start();
-            // 載入音效
             focusMonitorState.audio.loop = true;
             focusMonitorState.audio.load();
         }
     },
 
-    // 重置 3 分鐘計時器
+    // === [核心] 重置計時器 (使用者有任何操作時呼叫) ===
     resetMainTimer: function() {
+        // 只有在功能開啟時才執行
+        if (!focusMonitorState.isActive) return;
+
+        // 1. 清除所有計時與警報
         clearTimeout(this.checkTimer);
         clearTimeout(this.warningTimer);
-        this.isWarning = false;
+        stopAlarm();
         
+        // 2. 重置狀態旗標
+        this.isPrompting = false;
+        
+        // 3. 重置 UI 為綠燈 (低調狀態)
         const indicator = document.getElementById('slowReaderFocusIndicator');
         if(indicator) {
             indicator.className = 'status-green';
-            indicator.innerHTML = '<i class="fas fa-eye"></i>';
+            indicator.innerHTML = '<i class="fas fa-eye"></i>'; // 恢復眼睛圖示
         }
 
-        // 3分鐘後觸發 Prompt
+        // 4. 重新開始 3 分鐘倒數
         this.checkTimer = setTimeout(() => {
             this.showPrompt();
         }, this.INTERVAL_MS);
     },
 
-    // 顯示確認按鈕
+    // === 3分鐘到：顯示橙燈 (視覺引導) ===
     showPrompt: function() {
-        this.isWarning = true;
-        const btn = document.getElementById('slowReaderPromptBtn');
-        if (btn) btn.classList.add('show');
+        this.isPrompting = true;
         
-        // 震動一下提示按鈕出現了
-        if(navigator.vibrate) navigator.vibrate(50);
+        const indicator = document.getElementById('slowReaderFocusIndicator');
+        if(indicator) {
+            indicator.className = 'status-prompt'; // 轉為橙色呼吸燈
+            // CSS 中已設定 content 為箭頭，或者這裡強制寫入
+            indicator.innerHTML = '<i class="fas fa-arrow-right"></i>'; 
+        }
+        
+        console.log("慢讀防睡：3分鐘到，顯示視覺提示");
 
         // 開始 30 秒倒數，若不點擊則觸發警報
         this.warningTimer = setTimeout(() => {
@@ -22339,7 +22334,7 @@ const SlowReaderFocusManager = {
         }, this.WARNING_MS);
     },
 
-    // 觸發警報 (紅燈 + 聲音 + 震動)
+    // === 3分30秒到：紅燈 + 警報 ===
     triggerAlarm: function() {
         const indicator = document.getElementById('slowReaderFocusIndicator');
         if(indicator) {
@@ -22347,36 +22342,14 @@ const SlowReaderFocusManager = {
             indicator.innerHTML = '<i class="fas fa-bell"></i>';
         }
         
-        // 播放全域定義的警報音效
+        console.log("慢讀防睡：警報觸發");
+        // 播放音效與震動
         focusMonitorState.audio.play().catch(e => console.log("音效播放失敗", e));
-        
-        // 持續強震動 (使用與全域相同的 400ms 邏輯)
-        if (navigator.vibrate) {
-            // 這裡使用 setInterval 來模擬全域的 checkFocusStatus 頻率
-            // 由於這是單次觸發，我們依賴使用者點擊按鈕來停止
-            // 為了簡單，我們先震動一次長一點的
-            navigator.vibrate([400, 200, 400, 200, 400]);
-        }
+        if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
     },
 
-    // 使用者點擊按鈕 (Check-in)
-    handleUserCheckIn: function() {
-        // 1. 停止警報
-        stopAlarm();
-        
-        // 2. 隱藏按鈕
-        const btn = document.getElementById('slowReaderPromptBtn');
-        if (btn) btn.classList.remove('show');
-        
-        // 3. 執行下一頁邏輯 (整合功能)
-        goToNextReaderPage();
-        
-        // 4. 如果是在自動翻頁模式，重置自動翻頁計時器，避免立即又翻一頁
-        if (readerState.timerInterval) {
-            startReaderAutoPage(); // 這會清除舊的並重新開始
-        }
-
-        // 5. 重置 3 分鐘計時
+    // 處理用戶活動 (外部呼叫接口)
+    handleUserActivity: function() {
         this.resetMainTimer();
     }
 };
@@ -22612,7 +22585,11 @@ function stopReaderAutoPage() {
 }
 
 // 8. 翻頁動作
+// 8. 翻頁動作 (修改版)
 function goToNextReaderPage() {
+    // ★★★ [新增] 任何翻頁操作都視為用戶活躍，重置防睡計時 ★★★
+    SlowReaderFocusManager.handleUserActivity();
+
     if (readerState.currentIndex < readerState.segments.length - 1) {
         readerState.currentIndex++;
         displayReaderSegment(readerState.currentIndex);
@@ -22657,6 +22634,9 @@ function goToNextReaderPage() {
 }
 
 function goToPrevReaderPage() {
+    // ★★★ [新增] 任何翻頁操作都視為用戶活躍，重置防睡計時 ★★★
+    SlowReaderFocusManager.handleUserActivity();
+
     if (readerState.currentIndex > 0) {
         readerState.currentIndex--;
         displayReaderSegment(readerState.currentIndex);
