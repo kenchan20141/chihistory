@@ -22127,6 +22127,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
+// ==========================================
+// === 慢讀專用防睡管理器 (修正版) ===
+// ==========================================
 const SlowReaderFocusManager = {
     checkTimer: null,
     warningTimer: null,
@@ -22153,7 +22156,7 @@ const SlowReaderFocusManager = {
                     // 橙/紅燈狀態：點擊視為「用戶回來了」，重置計時並繼續閱讀
                     SlowReaderFocusManager.handleUserActivity(); 
                     
-                    // 如果原本是暫停狀態，點擊燈號後自動繼續 (可選)
+                    // 如果原本是暫停狀態，點擊燈號後自動繼續
                     if (readerState.timerInterval) {
                         startReaderAutoPage();
                     }
@@ -22171,7 +22174,7 @@ const SlowReaderFocusManager = {
         this.initUI();
         const indicator = document.getElementById('slowReaderFocusIndicator');
         
-        if (focusMonitorState && focusMonitorState.isActive) {
+        if (typeof focusMonitorState !== 'undefined' && focusMonitorState.isActive) {
             console.log("慢讀防睡：啟動計時 (180s check)");
             indicator.style.display = 'block';
             this.resetMainTimer();
@@ -22181,13 +22184,8 @@ const SlowReaderFocusManager = {
                 clearInterval(focusMonitorState.checkInterval);
                 focusMonitorState.checkInterval = null;
             }
-
-            // ★★★ 核心修改：移除這裡的 document 監聽器 ★★★
-            // 這樣普通的頁面觸控、滾動都不會重置計時，只有特定函數呼叫 handleUserActivity 才會重置
-            // document.addEventListener('touchstart', this.handleUserActivityBound, {passive: true});
-            // document.addEventListener('click', this.handleUserActivityBound, {passive: true});
-            // document.addEventListener('keydown', this.handleUserActivityBound, {passive: true});
-
+            
+            // 注意：這裡移除了 document 的全域監聽，改由按鈕觸發重置
         } else {
             indicator.style.display = 'none';
             this.stop();
@@ -22205,10 +22203,10 @@ const SlowReaderFocusManager = {
         const indicator = document.getElementById('slowReaderFocusIndicator');
         if(indicator) indicator.style.display = 'none';
 
-        stopAlarm();
+        if (typeof stopAlarm === 'function') stopAlarm();
         
-        // 恢復全域檢查 (如果離開慢讀後還想保持防睡)
-        if (focusMonitorState && focusMonitorState.isActive) {
+        // 恢復全域檢查
+        if (typeof focusMonitorState !== 'undefined' && focusMonitorState.isActive) {
             focusMonitorState.checkInterval = setInterval(checkFocusStatus, 1000);
             focusMonitorState.lastActivityTime = Date.now();
         }
@@ -22216,6 +22214,8 @@ const SlowReaderFocusManager = {
 
     // 切換開關
     toggle: function() {
+        if (typeof focusMonitorState === 'undefined') return;
+
         if (focusMonitorState.isActive) {
             focusMonitorState.isActive = false;
             this.stop();
@@ -22237,29 +22237,26 @@ const SlowReaderFocusManager = {
 
     // 重置計時器
     resetMainTimer: function() {
-        if (!focusMonitorState.isActive) return;
+        if (typeof focusMonitorState === 'undefined' || !focusMonitorState.isActive) return;
 
-        // 清除舊計時
         clearTimeout(this.checkTimer);
         clearTimeout(this.warningTimer);
-        stopAlarm();
+        if (typeof stopAlarm === 'function') stopAlarm();
         
         this.isPrompting = false;
         
-        // 恢復綠燈狀態
         const indicator = document.getElementById('slowReaderFocusIndicator');
         if(indicator) {
             indicator.className = 'status-green';
             indicator.innerHTML = '';
         }
 
-        // 重新開始 180秒 倒數
         this.checkTimer = setTimeout(() => {
             this.showPrompt();
         }, this.INTERVAL_MS);
     },
 
-    // 顯示橙燈 (180秒到)
+    // 顯示橙燈
     showPrompt: function() {
         this.isPrompting = true;
         const indicator = document.getElementById('slowReaderFocusIndicator');
@@ -22269,13 +22266,12 @@ const SlowReaderFocusManager = {
         }
         console.log("慢讀防睡：180秒已到，轉橙燈");
 
-        // 開始 30秒 倒數轉紅燈
         this.warningTimer = setTimeout(() => {
             this.triggerAlarm();
         }, this.WARNING_MS);
     },
 
-    // 觸發警報 (210秒到)
+    // 觸發警報
     triggerAlarm: function() {
         const indicator = document.getElementById('slowReaderFocusIndicator');
         if(indicator) {
@@ -22283,16 +22279,16 @@ const SlowReaderFocusManager = {
             indicator.innerHTML = '';
         }
         console.log("慢讀防睡：210秒警報觸發！");
-        if(focusMonitorState.audio) focusMonitorState.audio.play().catch(e => {});
+        if(typeof focusMonitorState !== 'undefined' && focusMonitorState.audio) {
+            focusMonitorState.audio.play().catch(e => {});
+        }
         if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
     },
     
-    // 對外暴露的重置接口
     handleUserActivity: function() {
         this.resetMainTimer();
     }
 };
-
 
 
 
@@ -22523,28 +22519,23 @@ function stopReaderAutoPage() {
 }
 
 function goToNextReaderPage() {
-    // ★★★ 核心修正：移除 handleUserActivity ★★★
-    // 自動翻頁不應視為用戶活躍，否則計時器永遠不會觸發橙燈
+    // 這裡移除了 SlowReaderFocusManager.handleUserActivity();
+    // 這樣自動翻頁就不會被視為用戶活躍
 
     if (readerState.currentIndex < readerState.segments.length - 1) {
         readerState.currentIndex++;
         displayReaderSegment(readerState.currentIndex);
     } else {
-        // 讀完自動停止並顯示文藝結尾
         stopReaderAutoPage();
         
         const displayWrapper = document.getElementById('reader-display-wrapper');
         const paraNum = document.getElementById('reader-para-num');
         const textDisplay = document.getElementById('reader-text');
         
-        // 淡出當前文字
         displayWrapper.classList.add('fade-out');
         
         setTimeout(() => {
-            // 清空段落編號
             paraNum.textContent = '';
-            
-            // 顯示結束按鈕
             textDisplay.innerHTML = `
                 <div style="text-align: center; width: 100%; margin-top: 20px;">
                     <span style="font-family: 'Noto Serif TC', serif; color: #a1887f; font-size: 1.2rem; letter-spacing: 0.5em; opacity: 0.8; display: block; margin-bottom: 20px;">
@@ -22556,20 +22547,15 @@ function goToNextReaderPage() {
                 </div>
             `;
             
-            // 讓 displayWrapper 可以接受點擊
             displayWrapper.style.pointerEvents = "auto";
-
-            // 淡入顯示
             displayWrapper.classList.remove('fade-out');
-            
-            // 進度條補滿
             document.getElementById('reader-progress-bar').style.width = '100%';
         }, 600);
     }
 }
 
 function goToPrevReaderPage() {
-    // ★★★ 新增：手動點擊上一頁，視為活躍，重置計時 ★★★
+    // 手動點擊上一頁，視為活躍
     if (typeof SlowReaderFocusManager !== 'undefined') {
         SlowReaderFocusManager.handleUserActivity();
     }
@@ -22579,18 +22565,14 @@ function goToPrevReaderPage() {
         displayReaderSegment(readerState.currentIndex);
     }
 }
-4. 修改 handleReaderInteractStart (處理長按暫停)
-修訂重點：加入 SlowReaderFocusManager.handleUserActivity()，確保長按（暫停）動作被視為活躍。
-code
-JavaScript
+
+	
 function handleReaderInteractStart(e) {
-    // 忽略按鈕點擊
     if (e.target.closest('button')) return;
-    
     if (e.type === 'touchstart') e.preventDefault();
     if (!readerState.isReading) return;
 
-    // ★★★ 新增：手指按下（準備長按或點擊），重置計時 ★★★
+    // 手指按下，視為活躍
     if (typeof SlowReaderFocusManager !== 'undefined') {
         SlowReaderFocusManager.handleUserActivity();
     }
@@ -22600,7 +22582,7 @@ function handleReaderInteractStart(e) {
     
     readerState.visualPauseTimer = setTimeout(() => {
         document.getElementById('reader-pause-indicator').style.opacity = '1';
-    }, 250); // 長按閾值
+    }, 250); 
 }
 
 // 9. 互動控制 (長按暫停、點擊翻頁)
@@ -22624,7 +22606,7 @@ function handleReaderInteractEnd(e) {
     if (e.type === 'touchend') e.preventDefault();
     if (!readerState.isReading || !readerState.pressTimer) return;
 
-    // ★★★ 新增：手指放開（完成點擊或長按），再次重置計時以防萬一 ★★★
+    // 手指放開，視為活躍
     if (typeof SlowReaderFocusManager !== 'undefined') {
         SlowReaderFocusManager.handleUserActivity();
     }
@@ -22648,10 +22630,9 @@ function handleReaderInteractEnd(e) {
         } else {
             // 手動點擊下一頁
             goToNextReaderPage(); 
-            startReaderAutoPage(); // 點擊後重新開始自動翻頁計時
+            startReaderAutoPage(); 
         }
     } 
-    // 長按鬆開：(如果需要恢復自動播放，可在這裡呼叫 startReaderAutoPage)
 }
 
 	
