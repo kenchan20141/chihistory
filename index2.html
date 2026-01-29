@@ -22168,15 +22168,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // ==========================================
-// === [修訂 V3] 慢讀專用防睡管理器 (邏輯增強版) ===
+// === [修訂 V4] 慢讀專用防睡管理器 (時間調整版) ===
 // ==========================================
 const SlowReaderFocusManager = {
     checkTimer: null,
     warningTimer: null,
     isPrompting: false,
     
-    INTERVAL_MS: 3 * 60 * 1000, // 3分鐘
-    WARNING_MS: 30 * 1000,      // 30秒
+    // ★★★ 時間設定修改 ★★★
+    // 第一階段：180秒 (3分鐘) 後轉橙色 (提示點擊)
+    INTERVAL_MS: 180 * 1000, 
+    
+    // 第二階段：橙色維持 30秒，即總計 210秒 後轉紅色 (警報)
+    WARNING_MS: 30 * 1000,
     
     // 1. 初始化 UI (直接掛在 body 上，確保全高)
     initUI: function() {
@@ -22191,7 +22195,7 @@ const SlowReaderFocusManager = {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // 如果是橙/紅燈 (3分鐘後)：視為「下一頁」並重置
+                // 如果是橙/紅燈 (180秒後)：視為「下一頁」並重置
                 if (SlowReaderFocusManager.isPrompting) {
                     console.log("防睡按鈕點擊：下一頁");
                     SlowReaderFocusManager.handleUserActivity(); 
@@ -22200,7 +22204,7 @@ const SlowReaderFocusManager = {
                         startReaderAutoPage();
                     }
                 } else {
-                    // 如果是綠燈：切換開關
+                    // 如果是綠燈：切換開關 (關閉功能)
                     SlowReaderFocusManager.toggle();
                 }
             };
@@ -22215,7 +22219,7 @@ const SlowReaderFocusManager = {
         
         // 檢查全域功能是否已開啟
         if (focusMonitorState && focusMonitorState.isActive) {
-            console.log("慢讀防睡：啟動計時");
+            console.log("慢讀防睡：啟動計時 (180秒/210秒)");
             indicator.style.display = 'block';
             this.resetMainTimer();
             
@@ -22225,7 +22229,7 @@ const SlowReaderFocusManager = {
                 focusMonitorState.checkInterval = null;
             }
 
-            // ★★★ 關鍵：監聽所有點擊/觸控，重置計時 ★★★
+            // 監聽所有點擊/觸控，重置計時
             document.addEventListener('touchstart', this.handleUserActivityBound, {passive: true});
             document.addEventListener('click', this.handleUserActivityBound, {passive: true});
             document.addEventListener('keydown', this.handleUserActivityBound, {passive: true});
@@ -22286,7 +22290,7 @@ const SlowReaderFocusManager = {
         }
     },
 
-    // 2. 重置計時器
+    // 2. 重置計時器 (使用者操作時觸發)
     resetMainTimer: function() {
         if (!focusMonitorState.isActive) return;
 
@@ -22299,42 +22303,47 @@ const SlowReaderFocusManager = {
         const indicator = document.getElementById('slowReaderFocusIndicator');
         if(indicator) {
             indicator.className = 'status-green'; // 變回綠色
+            indicator.innerHTML = '';
         }
 
-        // 重新開始 3 分鐘
+        // 重新開始 180 秒倒數
         this.checkTimer = setTimeout(() => {
             this.showPrompt();
         }, this.INTERVAL_MS);
     },
 
-    // 3. 顯示橙燈 (3分鐘)
+    // 3. 顯示橙燈 (180秒到了)
     showPrompt: function() {
         this.isPrompting = true;
+        
         const indicator = document.getElementById('slowReaderFocusIndicator');
         if(indicator) {
             indicator.className = 'status-prompt'; // 變橙色
+            indicator.innerHTML = '';
         }
-        console.log("慢讀防睡：3分鐘無操作，請點擊確認");
+        
+        console.log("慢讀防睡：180秒已到，轉橙燈");
 
-        // 開始 30 秒倒數
+        // 開始 30 秒倒數，總計 210 秒時觸發紅燈
         this.warningTimer = setTimeout(() => {
             this.triggerAlarm();
         }, this.WARNING_MS);
     },
 
-    // 4. 觸發警報 (3分30秒)
+    // 4. 觸發警報 (210秒到了)
     triggerAlarm: function() {
         const indicator = document.getElementById('slowReaderFocusIndicator');
         if(indicator) {
             indicator.className = 'status-red'; // 變紅色
+            indicator.innerHTML = '';
         }
         
-        console.log("慢讀防睡：警報觸發！");
+        console.log("慢讀防睡：210秒警報觸發！");
         if(focusMonitorState.audio) focusMonitorState.audio.play().catch(e => {});
         if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
     },
 
-    // 綁定用的函式參照 (確保 removeEventListener 有效)
+    // 綁定用的函式參照
     handleUserActivityBound: function() {
         SlowReaderFocusManager.resetMainTimer();
     },
@@ -22344,7 +22353,6 @@ const SlowReaderFocusManager = {
         this.resetMainTimer();
     }
 };
-
 
 
 
