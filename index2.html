@@ -7360,77 +7360,77 @@ body.cat-dragging { cursor: grabbing !important; }
 
 
 
-/* === [新增] 慢讀專用：防睡功能 UI === */
+/* === [修訂 V4] 慢讀專用：右緣全高防睡燈 (顏色加深版) === */
 
-/* === [修訂] 慢讀專用：防睡側邊指示燈 === */
-
-/* 1. 側邊指示燈容器 (類似卡扣式菜單) */
 /* 1. 側邊指示燈容器 */
 #slowReaderFocusIndicator {
     position: fixed;
-    top: 50%;
+    top: 0;
     right: 0;
-    transform: translateY(-50%); /* 垂直置中 */
+    height: 100%;    /* 佔滿全高 */
+    width: 6px;      /* 極窄設計 */
     z-index: 30010;
     
-    width: 8px;   /* ★ 極窄設計 ★ */
-    height: 60px; /* 長條形 */
-    border-radius: 4px 0 0 4px; /* 左邊圓角 */
-    
-    display: none; /* 預設隱藏 */
+    display: none;   /* 預設隱藏 */
     padding: 0;
     margin: 0;
     
-    background-color: rgba(255, 255, 255, 0.5); /* 預設底色 */
     border: none;
+    border-radius: 0;
+    
+    background-color: transparent;
     cursor: pointer;
     
-    backdrop-filter: blur(2px);
-    transition: all 0.3s ease;
-    box-shadow: -1px 0 5px rgba(0,0,0,0.05);
+    transition: background-color 0.5s ease, box-shadow 0.5s ease;
 }
 
-/* 狀態一：綠燈 (監察中 - 幾乎隱形) */
+/* 狀態一：綠燈 (監察中 - 稍微加深) */
+/* 原本是 0.1 (太透)，現在改為 0.25，讓它像一條淡淡的玻璃條 */
 #slowReaderFocusIndicator.status-green {
-    background-color: rgba(143, 163, 152, 0.4) !important; /* 莫蘭迪灰綠 (高透明度) */
-    width: 8px; /* 保持極窄 */
+    background-color: rgba(123, 148, 136, 0.25) !important; /* 加深了一點的灰綠 */
+    width: 6px;
 }
-/* 滑鼠移上去稍微變明顯，方便點擊關閉 */
 #slowReaderFocusIndicator.status-green:hover {
-    background-color: rgba(143, 163, 152, 0.9) !important;
+    background-color: rgba(123, 148, 136, 0.8) !important; /* 懸停時更明顯 */
 }
 
-/* 狀態二：橙燈 (3分鐘 - 呼吸燈，無圖示) */
+/* 狀態二：橙燈 (3分鐘 - 顏色微調加深) */
+/* 原本 #e6b49d -> 現在 #DE9981 (暖陶土色) */
 #slowReaderFocusIndicator.status-prompt {
-    background-color: #e6b49d !important; /* 莫蘭迪陶土色 */
-    width: 8px; /* 保持極窄 */
-    box-shadow: 0 0 15px rgba(230, 180, 157, 0.9); /* 發光效果 */
-    animation: side-pulse 1.5s infinite ease-in-out; /* 呼吸燈動畫 */
+    background-color: #DE9981 !important; 
+    width: 6px;
+    /* 陰影也同步加深，增強發光感 */
+    box-shadow: -2px 0 15px rgba(222, 153, 129, 0.7); 
+    animation: full-height-pulse 2s infinite ease-in-out;
+}
+/* 擴展感應區 (保持不變) */
+#slowReaderFocusIndicator.status-prompt::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -20px; right: 0; bottom: 0; 
 }
 
-/* 狀態三：紅燈 (3分30秒 - 警告) */
+/* 狀態三：紅燈 (3分30秒 - 顏色微調加深) */
+/* 原本 #d69a92 -> 現在 #D16E64 (深豆沙紅) */
 #slowReaderFocusIndicator.status-red {
-    background-color: #d69a92 !important; /* 莫蘭迪豆沙紅 */
-    width: 8px; /* 保持極窄 */
-    box-shadow: 0 0 20px rgba(214, 154, 146, 1);
-    animation: side-shake 0.5s infinite; /* 劇烈搖晃 */
+    background-color: #D16E64 !important; 
+    width: 6px;
+    box-shadow: -2px 0 25px rgba(209, 110, 100, 0.95);
+    animation: full-height-flash 0.5s infinite;
 }
 
-/* 動畫定義 */
-@keyframes side-pulse {
-    0% { opacity: 0.6; box-shadow: 0 0 5px rgba(230, 180, 157, 0.5); }
-    50% { opacity: 1; box-shadow: 0 0 15px rgba(230, 180, 157, 1); }
-    100% { opacity: 0.6; box-shadow: 0 0 5px rgba(230, 180, 157, 0.5); }
+/* 動畫定義 (配合新顏色調整陰影) */
+@keyframes full-height-pulse {
+    0% { opacity: 0.7; box-shadow: -1px 0 8px rgba(222, 153, 129, 0.4); }
+    50% { opacity: 1; box-shadow: -3px 0 20px rgba(222, 153, 129, 0.9); }
+    100% { opacity: 0.7; box-shadow: -1px 0 8px rgba(222, 153, 129, 0.4); }
 }
 
-@keyframes side-shake {
-    0% { transform: translateY(-50%) translateX(0); }
-    25% { transform: translateY(-50%) translateX(-2px); }
-    75% { transform: translateY(-50%) translateX(2px); }
-    100% { transform: translateY(-50%) translateX(0); }
+@keyframes full-height-flash {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
 }
-/* 移除舊的圓形按鈕樣式 (如果還在的話) */
-#slowReaderPromptBtn { display: none !important; }
 
 
 
