@@ -7261,12 +7261,19 @@ body.cat-dragging { cursor: grabbing !important; }
 
 
 /* ========================================= */
-/* === [修訂 V2] 專注監察功能 (莫蘭迪色 + 防遮擋) === */
+/* === [修訂 V3] 專注監察功能 (Flex流變形版) === */
 /* ========================================= */
  
-/* 按鈕基礎過渡 */
+/* 按鈕基礎過渡 (加入 transform 以便平滑縮放) */
 #focusMonitorBtn {
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), width 0.3s ease, height 0.3s ease, background-color 0.5s ease;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+                width 0.3s ease,
+                height 0.3s ease,
+                background-color 0.3s ease,
+                border-radius 0.3s ease;
+    
+    /* 確保按鈕在 Flex 容器中不會被壓縮 */
+    flex-shrink: 0;
 }
  
 /* 狀態一：綠燈 (監察中 - 莫蘭迪灰綠) */
@@ -7295,9 +7302,9 @@ body.cat-dragging { cursor: grabbing !important; }
     animation: monitor-pulse 0.5s infinite;
 }
  
-/* === 極低調指示燈模式 (滾動時觸發) === */
+/* === [核心] 極低調變形模式 (原地變身) === */
 #focusMonitorBtn.minimized {
-    /* 縮小尺寸 */
+    /* 強制變為小圓點 */
     width: 14px !important;
     height: 14px !important;
     min-height: 0 !important;
@@ -7307,35 +7314,28 @@ body.cat-dragging { cursor: grabbing !important; }
     border: 2px solid rgba(255, 255, 255, 0.9) !important;
     border-radius: 50% !important;
     
-    /* === [位置修正] === */
-    position: fixed !important;
-    
-    /* 垂直：置中於按鈕群組的高度 (20px top + 45px button / 2) */
-    top: 35px !important;
-    
-    /* 水平：
-       25px (右邊距) + 45px (關閉鍵) + 15px (間距) + 45px (置頂鍵) + 15px (間距)
-       = 145px */
-    right: 145px !important;
-    
-    /* 層級確保在最上層 */
-    z-index: 25005 !important;
-    
-    /* 禁止點擊，視覺優化 */
+    /* 禁止點擊 (變為純指示燈) */
     pointer-events: none !important;
     opacity: 1 !important;
     cursor: default !important;
     box-shadow: none !important;
+    
+    /* 確保在 Flex 容器中顯示 (覆蓋可能繼承的 display:none) */
+    display: flex !important;
+    
+    /* 垂直置中 (防止 Flex 內容拉伸導致變形) */
+    margin-top: auto;
+    margin-bottom: auto;
 }
  
-/* 在極低調模式下，隱藏圖示 */
+/* 在極低調模式下，隱藏內部的眼睛/鈴鐺圖示 */
 #focusMonitorBtn.minimized i {
     display: none !important;
 }
  
-/* 紅燈在低調模式下保留莫蘭迪色系的閃爍 */
+/* 紅燈在低調模式下依然閃爍 */
 #focusMonitorBtn.minimized.focus-status-red {
-    box-shadow: 0 0 12px rgba(214, 154, 146, 0.8) !important;
+    box-shadow: 0 0 10px rgba(214, 154, 146, 0.8) !important;
     animation: monitor-pulse 0.5s infinite;
 }
  
@@ -7351,7 +7351,6 @@ body.cat-dragging { cursor: grabbing !important; }
     50% { transform: scale(1.3); }
     100% { transform: scale(1); }
 }
-
 	
 	
 </style>
@@ -21475,10 +21474,13 @@ function scrollToAnalysis() {
 }
 
 // === [修訂版] 顯示文章詳情 (含滾動變形指示燈) ===
+// === [修訂 V3] 顯示文章詳情 (原地變形指示燈) ===
 function showArticleDetail(index) {
     const article = filteredArticles[index];
     if (!article) return;
+ 
     currentReadingArticleTitle = article.title;
+ 
     const isSaved = isArticleBookmarked(article.title);
     const bookmarkClass = isSaved ? 'bookmarked' : '';
     
@@ -21491,6 +21493,7 @@ function showArticleDetail(index) {
     
     const isPoetry = /^\s*<br\s*\/?>/i.test(article.content);
     let contentHtml = '';
+ 
     if (isPoetry) {
         let cleanContent = article.content.replace(/^\s*<br\s*\/?>/i, '').trim();
         cleanContent = cleanContent.replace(/\\n/g, '\n');
@@ -21500,8 +21503,10 @@ function showArticleDetail(index) {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
         }).join('');
     }
+ 
     let analysisHtmlBlock = '';
     const hasAnalysis = article.analysis && article.analysis.trim() !== '';
+ 
     if (hasAnalysis) {
         const analysisText = article.analysis.split('\n').filter(p => p.trim()).map((p, i) => {
             return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
@@ -21513,19 +21518,24 @@ function showArticleDetail(index) {
             <div class="analysis-body" style="margin-top: 0 !important; font-size: 1.05rem !important;">${analysisText}</div>
         </div>`;
     }
+ 
     const analysisBtnHtml = hasAnalysis ?
         `<button class="detail-float-btn scroll-hide-target" onclick="scrollToAnalysis()" title="跳至賞析">
             <i class="fas fa-comment-dots"></i>
          </button>` : '';
+ 
     const disclaimerHtml = `
         <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">
             本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。
         </div>`;
+ 
     const safeContent = encodeURIComponent(article.content);
     const safeTitle = encodeURIComponent(article.title);
+ 
     let chatHTML = getCanvasChatHTML('featured_discussion');
     chatHTML = chatHTML.replace('閱卷員追問區', '與陳SIR討論');
     chatHTML = chatHTML.replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？');
+ 
     detailView.innerHTML = `
         <style>
             @keyframes stamp-slam {
@@ -21540,19 +21550,25 @@ function showArticleDetail(index) {
         </style>
         <div id="readingProgressBarContainer"><div id="readingProgressBar"></div></div>
         
+        <!-- 
+           ★ 按鈕群組 (Flex Row) 
+           順序調整：書籤 -> 慢讀/設定/賞析 -> [防睡] -> [置頂] -> [關閉]
+           這樣當其他隱藏時，[防睡] 會自然緊貼在 [置頂] 的左邊。
+        -->
         <div class="detail-action-group">
             <button id="detailBookmarkBtn" class="detail-float-btn scroll-hide-target ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤"><i class="fas fa-bookmark"></i></button>
-            
-            <!-- ★★★ 防睡監察按鈕 ★★★ -->
-            <button id="focusMonitorBtn" class="detail-float-btn scroll-hide-target" onclick="toggleFocusMonitor()" title="開啟防睡監察"><i class="fas fa-eye"></i></button>
-            
             ${analysisBtnHtml}
             <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀"><i class="fas fa-book-reader"></i></button>
             <button class="detail-float-btn scroll-hide-target" onclick="openReaderSettings()" title="慢讀設定"><i class="fas fa-cog"></i></button>
+            
+            <!-- ★★★ 防睡按鈕 (放在置頂鍵之前) ★★★ -->
+            <button id="focusMonitorBtn" class="detail-float-btn scroll-hide-target" onclick="toggleFocusMonitor()" title="開啟防睡監察"><i class="fas fa-eye"></i></button>
+            
             <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;"><i class="fas fa-arrow-up"></i></button>
+            
             <button class="detail-float-btn close-mode" onclick="backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
         </div>
- 
+
         <div class="read-mode-container">
             <div class="detail-header-group" style="display: flex; flex-direction: column; align-items: center; border-bottom: 2px dashed #e0ddd7; margin-bottom: 25px !important; padding-bottom: 15px !important;">
                 <div class="detail-title-text auto-fit-title" id="detailTitleText" style="color: ${titleColor}; font-weight: bold; margin-bottom: 20px; text-align: center; width: 100%;">
@@ -21588,11 +21604,14 @@ function showArticleDetail(index) {
             </div>
         </div>
     `;
+ 
     detailView.style.display = 'block';
     document.body.style.overflow = 'hidden';
+ 
     setTimeout(() => {
         const titleEl = document.getElementById('detailTitleText');
         if (titleEl) fitTextToContainer(titleEl, 24, 38);
+ 
         if (isPoetry) {
             const poetryEl = document.getElementById('poetryContent');
             if (poetryEl) {
@@ -21608,7 +21627,8 @@ function showArticleDetail(index) {
             }
         }
     }, 50);
-    // ★★★ [核心] 滾動隱藏/顯示邏輯 (含指示燈變形) ★★★
+ 
+    // ★★★ [核心] 滾動邏輯更新：利用 Flex 流自然對齊 ★★★
     detailView.onscroll = function() {
         const scrollTop = detailView.scrollTop;
         const docHeight = detailView.scrollHeight;
@@ -21619,34 +21639,53 @@ function showArticleDetail(index) {
         const progressContainer = document.getElementById('readingProgressBarContainer');
         if(progressBar) progressBar.style.width = scrollPercent + "%";
         if(progressContainer) progressContainer.style.opacity = scrollTop > 10 ? '1' : '0';
+ 
+        // 取得所有「滾動時應隱藏」的按鈕
         const hideTargets = document.querySelectorAll('.scroll-hide-target');
         const topBtn = document.getElementById('detailTopBtn');
         
-        // 處理滾動隱藏按鈕
-        hideTargets.forEach(btn => {
-            if (scrollTop > 100) {
-                // 如果是監察按鈕且已啟動 (正在亮燈)，則不隱藏，而是變形為指示燈
-                if (btn.id === 'focusMonitorBtn' && focusMonitorState.isActive) {
-                    btn.classList.add('minimized');
-                    btn.style.display = 'flex'; // 保持顯示 (但透過 CSS 變小)
-                } else {
-                    btn.style.display = 'none'; // 其他按鈕正常隱藏
-                }
-            } else {
-                // 滾回頂部：恢復所有按鈕顯示
-                if (btn.id === 'focusMonitorBtn') {
-                    btn.classList.remove('minimized'); // 恢復大按鈕狀態
-                }
-                btn.style.display = 'flex';
-            }
-        });
- 
-        // 返回頂部按鈕邏輯
         if (scrollTop > 100) {
+            // --- 滾動向下模式 ---
+            
+            // 1. 顯示「返回頂部」箭頭
             if (topBtn) topBtn.style.display = 'flex';
+
+            // 2. 處理其他按鈕
+            hideTargets.forEach(btn => {
+                if (btn.id === 'focusMonitorBtn') {
+                    // 特殊處理防睡按鈕
+                    if (focusMonitorState.isActive) {
+                        // 如果功能開啟：保留顯示，但加上 minimized 變形
+                        // 因為它在 HTML 中排在 topBtn 前面，所以它會自動排在箭頭左邊
+                        btn.style.display = 'flex';
+                        btn.classList.add('minimized');
+                    } else {
+                        // 功能沒開：隱藏
+                        btn.style.display = 'none';
+                        btn.classList.remove('minimized');
+                    }
+                } else {
+                    // 其他按鈕 (書籤、慢讀等)：一律隱藏
+                    btn.style.display = 'none';
+                }
+            });
+
         } else {
+            // --- 滾動回頂部模式 ---
+            
+            // 1. 隱藏「返回頂部」箭頭
             if (topBtn) topBtn.style.display = 'none';
+
+            // 2. 恢復所有按鈕顯示
+            hideTargets.forEach(btn => {
+                btn.style.display = 'flex';
+                // 移除變形狀態
+                if (btn.id === 'focusMonitorBtn') {
+                    btn.classList.remove('minimized');
+                }
+            });
         }
+ 
         const analysisSection = document.getElementById('articleAnalysisSection');
         if (analysisSection && !isAutoScrollingToAnalysis) {
             const rect = analysisSection.getBoundingClientRect();
@@ -21656,7 +21695,6 @@ function showArticleDetail(index) {
         }
     };
 }
-
 // =======================================================
 // === [修訂] 防入睡失神監察系統 (無彈窗 + 莫蘭迪色) ===
 // =======================================================
