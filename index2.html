@@ -7261,74 +7261,81 @@ body.cat-dragging { cursor: grabbing !important; }
 
 
 /* ========================================= */
-/* === [新增] 專注監察功能 (紅綠燈 + 極低調模式) === */
+/* === [修訂 V2] 專注監察功能 (莫蘭迪色 + 防遮擋) === */
 /* ========================================= */
  
-/* 按鈕基礎過渡 (加入 width/height/padding 的過渡以實現平滑變形) */
+/* 按鈕基礎過渡 */
 #focusMonitorBtn {
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), width 0.3s ease, height 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), width 0.3s ease, height 0.3s ease, background-color 0.5s ease;
 }
  
-/* 狀態一：綠燈 (監察中 - 安全) */
+/* 狀態一：綠燈 (監察中 - 莫蘭迪灰綠) */
 .focus-status-green {
-    background-color: #28a745 !important;
+    background-color: #8fa398 !important;
     color: white !important;
-    border-color: #28a745 !important;
-    box-shadow: 0 0 15px rgba(40, 167, 69, 0.6) !important;
+    border-color: #8fa398 !important;
+    box-shadow: 0 0 15px rgba(143, 163, 152, 0.6) !important;
 }
  
-/* 狀態二：橙燈 (閒置警告) */
+/* 狀態二：橙燈 (閒置警告 - 莫蘭迪陶土色) */
 .focus-status-orange {
-    background-color: #fd7e14 !important;
+    background-color: #e6b49d !important;
     color: white !important;
-    border-color: #fd7e14 !important;
-    box-shadow: 0 0 15px rgba(253, 126, 20, 0.6) !important;
+    border-color: #e6b49d !important;
+    box-shadow: 0 0 15px rgba(230, 180, 157, 0.6) !important;
     animation: monitor-breath 2s infinite ease-in-out;
 }
  
-/* 狀態三：紅燈 (入睡/失神警告) */
+/* 狀態三：紅燈 (入睡/失神警告 - 莫蘭迪豆沙紅) */
 .focus-status-red {
-    background-color: #dc3545 !important;
+    background-color: #d69a92 !important;
     color: white !important;
-    border-color: #dc3545 !important;
-    box-shadow: 0 0 20px rgba(220, 53, 69, 0.9) !important;
+    border-color: #d69a92 !important;
+    box-shadow: 0 0 20px rgba(214, 154, 146, 0.9) !important;
     animation: monitor-pulse 0.5s infinite;
 }
  
-/* === [核心新增] 極低調指示燈模式 (滾動時觸發) === */
+/* === 極低調指示燈模式 (滾動時觸發) === */
 #focusMonitorBtn.minimized {
-    /* 強制縮小尺寸 */
+    /* 縮小尺寸 */
     width: 14px !important;
     height: 14px !important;
     min-height: 0 !important;
     padding: 0 !important;
     
     /* 移除文字與邊框，僅保留色塊 */
-    border: 2px solid rgba(255, 255, 255, 0.8) !important; /* 加白邊增加識別度 */
+    border: 2px solid rgba(255, 255, 255, 0.9) !important;
     border-radius: 50% !important;
     
-    /* 固定在右上角，稍微偏離原有按鈕位置以免遮擋內容 */
+    /* === [位置修正] === */
     position: fixed !important;
-    top: 25px !important;
-    right: 25px !important;
     
-    /* 禁止點擊 (低調模式下純顯示，要關閉請滑回頂部) */
+    /* 垂直：置中於按鈕群組的高度 (20px top + 45px button / 2) */
+    top: 35px !important;
+    
+    /* 水平：
+       25px (右邊距) + 45px (關閉鍵) + 15px (間距) + 45px (置頂鍵) + 15px (間距)
+       = 145px */
+    right: 145px !important;
+    
+    /* 層級確保在最上層 */
+    z-index: 25005 !important;
+    
+    /* 禁止點擊，視覺優化 */
     pointer-events: none !important;
-    opacity: 0.9 !important;
+    opacity: 1 !important;
     cursor: default !important;
-    
-    /* 移除陰影以免太顯眼，除非是紅燈 */
     box-shadow: none !important;
 }
  
-/* 在極低調模式下，隱藏原本的「眼睛」圖示 */
+/* 在極低調模式下，隱藏圖示 */
 #focusMonitorBtn.minimized i {
     display: none !important;
 }
  
-/* 紅燈在低調模式下依然保留閃爍，以示緊急 */
+/* 紅燈在低調模式下保留莫蘭迪色系的閃爍 */
 #focusMonitorBtn.minimized.focus-status-red {
-    box-shadow: 0 0 10px rgba(220, 53, 69, 0.8) !important;
+    box-shadow: 0 0 12px rgba(214, 154, 146, 0.8) !important;
     animation: monitor-pulse 0.5s infinite;
 }
  
@@ -7344,7 +7351,6 @@ body.cat-dragging { cursor: grabbing !important; }
     50% { transform: scale(1.3); }
     100% { transform: scale(1); }
 }
-
 
 	
 	
@@ -21652,19 +21658,19 @@ function showArticleDetail(index) {
 }
 
 // =======================================================
-// === [新增] 防入睡失神監察系統 (非鏡頭/頁面狀態版) ===
+// === [修訂] 防入睡失神監察系統 (無彈窗 + 莫蘭迪色) ===
 // =======================================================
  
 // 監察系統全域狀態
 let focusMonitorState = {
-    isActive: false,        // 功能是否開啟
-    lastActivityTime: 0,    // 最後一次操作的時間戳
-    checkInterval: null,    // 檢查狀態的計時器
-    currentState: 'green',  // 當前狀態: 'green' | 'orange' | 'red'
-    audio: new Audio('閉眼警告.mp3') // 警報音效
+    isActive: false,        
+    lastActivityTime: 0,    
+    checkInterval: null,    
+    currentState: 'green',  
+    audio: new Audio('閉眼警告.mp3')
 };
  
-// 1. 開啟/關閉 監察功能 (由按鈕觸發)
+// 1. 開啟/關閉 監察功能 (修訂：移除 Alert，僅震動提示)
 function toggleFocusMonitor() {
     const btn = document.getElementById('focusMonitorBtn');
     if (!btn) return;
@@ -21675,29 +21681,31 @@ function toggleFocusMonitor() {
         focusMonitorState.lastActivityTime = Date.now();
         focusMonitorState.currentState = 'green';
         
-        // 更新按鈕外觀：顯示開啟狀態 (綠色)
+        // 更新按鈕外觀：顯示開啟狀態 (莫蘭迪綠)
         btn.innerHTML = '<i class="fas fa-eye"></i>';
-        btn.classList.remove('minimized'); // 確保開始時不是縮小狀態
+        btn.classList.remove('minimized');
         btn.classList.add('focus-status-green');
         btn.title = "防睡監察中 (點擊關閉)";
         
-        // 預先加載並設定音效 (解鎖瀏覽器自動播放限制)
+        // 預先加載音效 (解鎖瀏覽器自動播放限制)
         focusMonitorState.audio.loop = true;
         focusMonitorState.audio.volume = 1.0;
         focusMonitorState.audio.load();
         
         // 啟動監聽器與計時器
         startFocusListeners();
-        focusMonitorState.checkInterval = setInterval(checkFocusStatus, 1000); // 每秒檢查一次閒置時間
+        focusMonitorState.checkInterval = setInterval(checkFocusStatus, 1000);
         
-        // 觸發震動提示
-        if(navigator.vibrate) navigator.vibrate([50, 50]);
-        alert("👀 防睡監察已啟動！\n\n系統將偵測您的頁面操作 (如滾動、點擊)。\n若長時間未操作，將發出警報提醒。");
+        // 僅觸發震動提示，不跳出視窗
+        if(navigator.vibrate) navigator.vibrate([50]);
+        console.log("防睡監察已啟動");
  
     } else {
         // === 關閉功能 ===
         stopFocusMonitor();
-        alert("防睡監察已關閉。");
+        // 僅觸發輕微震動，不跳出視窗
+        if(navigator.vibrate) navigator.vibrate([30]);
+        console.log("防睡監察已關閉");
     }
 }
  
@@ -21747,7 +21755,7 @@ function checkFocusStatus() {
  
     // 狀態轉換邏輯
     if (idleTime >= LIMIT_RED) {
-        // --- 進入紅燈 (警報狀態) ---
+        // --- 紅燈 (莫蘭迪紅) ---
         if (focusMonitorState.currentState !== 'red') {
             focusMonitorState.currentState = 'red';
             if (btn) {
@@ -21762,7 +21770,7 @@ function checkFocusStatus() {
             triggerAlarm(); // 觸發警報
         }
     } else if (idleTime >= LIMIT_ORANGE) {
-        // --- 進入橙燈 (警告狀態) ---
+        // --- 橙燈 (莫蘭迪陶土色) ---
         if (focusMonitorState.currentState !== 'orange') {
             focusMonitorState.currentState = 'orange';
             if (btn) {
@@ -21776,7 +21784,7 @@ function checkFocusStatus() {
             stopAlarm(); // 確保橙燈時沒有聲音
         }
     } else {
-        // --- 保持綠燈 (正常狀態) ---
+        // --- 綠燈 (莫蘭迪綠) ---
         if (focusMonitorState.currentState !== 'green') {
             focusMonitorState.currentState = 'green';
             if (btn) {
