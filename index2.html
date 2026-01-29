@@ -21601,10 +21601,10 @@ function showArticleDetail(index) {
 }
 
 
-	// =======================================================
+// =======================================================
 // === [新增] 防入睡失神監察系統 (非鏡頭/頁面狀態版) ===
 // =======================================================
-
+ 
 // 監察系統全域狀態
 let focusMonitorState = {
     isActive: false,        // 功能是否開啟
@@ -21613,12 +21613,12 @@ let focusMonitorState = {
     currentState: 'green',  // 當前狀態: 'green' | 'orange' | 'red'
     audio: new Audio('閉眼警告.mp3') // 警報音效
 };
-
+ 
 // 1. 開啟/關閉 監察功能 (由按鈕觸發)
 function toggleFocusMonitor() {
     const btn = document.getElementById('focusMonitorBtn');
     if (!btn) return;
-
+ 
     if (!focusMonitorState.isActive) {
         // === 開啟功能 ===
         focusMonitorState.isActive = true;
@@ -21626,12 +21626,13 @@ function toggleFocusMonitor() {
         focusMonitorState.currentState = 'green';
         
         // 更新按鈕外觀：顯示開啟狀態 (綠色)
-        btn.innerHTML = '<i class="fas fa-eye"></i>'; 
+        btn.innerHTML = '<i class="fas fa-eye"></i>';
+        btn.classList.remove('minimized'); // 確保開始時不是縮小狀態
         btn.classList.add('focus-status-green');
         btn.title = "防睡監察中 (點擊關閉)";
         
         // 預先加載並設定音效 (解鎖瀏覽器自動播放限制)
-        focusMonitorState.audio.loop = true; 
+        focusMonitorState.audio.loop = true;
         focusMonitorState.audio.volume = 1.0;
         focusMonitorState.audio.load();
         
@@ -21642,14 +21643,14 @@ function toggleFocusMonitor() {
         // 觸發震動提示
         if(navigator.vibrate) navigator.vibrate([50, 50]);
         alert("👀 防睡監察已啟動！\n\n系統將偵測您的頁面操作 (如滾動、點擊)。\n若長時間未操作，將發出警報提醒。");
-
+ 
     } else {
         // === 關閉功能 ===
         stopFocusMonitor();
         alert("防睡監察已關閉。");
     }
 }
-
+ 
 // 停止並重置監察系統
 function stopFocusMonitor() {
     focusMonitorState.isActive = false;
@@ -21669,17 +21670,18 @@ function stopFocusMonitor() {
     // 重置按鈕外觀 (恢復成預設的 detail-float-btn 樣式)
     const btn = document.getElementById('focusMonitorBtn');
     if (btn) {
-        btn.className = "detail-float-btn scroll-hide-target"; // 移除所有顏色 class
+        btn.className = "detail-float-btn scroll-hide-target"; // 移除所有顏色與 minimized class
         btn.innerHTML = '<i class="fas fa-eye-slash"></i>';   // 顯示關閉圖示
         btn.title = "開啟防睡監察";
         btn.style.transform = ""; // 清除可能的動畫變形
+        btn.style.display = 'flex'; // 確保顯示
     }
 }
-
+ 
 // 2. 狀態檢查核心邏輯 (判斷手機 vs 電腦)
 function checkFocusStatus() {
     if (!focusMonitorState.isActive) return;
-
+ 
     const now = Date.now();
     const idleTime = now - focusMonitorState.lastActivityTime; // 閒置毫秒數
     const btn = document.getElementById('focusMonitorBtn');
@@ -21692,7 +21694,7 @@ function checkFocusStatus() {
     // 電腦: 橙燈 60s / 紅燈 100s
     const LIMIT_ORANGE = isMobile ? 30000 : 60000;
     const LIMIT_RED    = isMobile ? 80000 : 100000;
-
+ 
     // 狀態轉換邏輯
     if (idleTime >= LIMIT_RED) {
         // --- 進入紅燈 (警報狀態) ---
@@ -21702,7 +21704,10 @@ function checkFocusStatus() {
                 // 移除其他顏色，加入紅色警報樣式
                 btn.classList.remove('focus-status-green', 'focus-status-orange');
                 btn.classList.add('focus-status-red');
-                btn.innerHTML = '<i class="fas fa-bell"></i>'; // 圖示變鈴鐺
+                // 只有在非縮小模式下才更換圖示
+                if (!btn.classList.contains('minimized')) {
+                    btn.innerHTML = '<i class="fas fa-bell"></i>'; // 圖示變鈴鐺
+                }
             }
             triggerAlarm(); // 觸發警報
         }
@@ -21714,7 +21719,9 @@ function checkFocusStatus() {
                 // 移除其他顏色，加入橙色呼吸樣式
                 btn.classList.remove('focus-status-green', 'focus-status-red');
                 btn.classList.add('focus-status-orange');
-                btn.innerHTML = '<i class="fas fa-exclamation"></i>'; // 圖示變驚嘆號
+                if (!btn.classList.contains('minimized')) {
+                    btn.innerHTML = '<i class="fas fa-exclamation"></i>'; // 圖示變驚嘆號
+                }
             }
             stopAlarm(); // 確保橙燈時沒有聲音
         }
@@ -21726,13 +21733,15 @@ function checkFocusStatus() {
                 // 恢復綠色樣式
                 btn.classList.remove('focus-status-orange', 'focus-status-red');
                 btn.classList.add('focus-status-green');
-                btn.innerHTML = '<i class="fas fa-eye"></i>';
+                if (!btn.classList.contains('minimized')) {
+                    btn.innerHTML = '<i class="fas fa-eye"></i>';
+                }
             }
             stopAlarm();
         }
     }
 }
-
+ 
 // 3. 用戶活動監聽 (重置計時器)
 function resetFocusTimer() {
     if (!focusMonitorState.isActive) return;
@@ -21746,7 +21755,7 @@ function resetFocusTimer() {
         checkFocusStatus(); // 強制立即執行一次檢查，將 UI 變回綠色
     }
 }
-
+ 
 function startFocusListeners() {
     // 監聽各種用戶操作：滑鼠移動、點擊、鍵盤、滾動、觸控
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'touchmove', 'click'];
@@ -21762,7 +21771,7 @@ function startFocusListeners() {
         detailView.addEventListener('scroll', resetFocusTimer, { passive: true });
     }
 }
-
+ 
 function removeFocusListeners() {
     const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'touchmove', 'click'];
     
@@ -21775,7 +21784,7 @@ function removeFocusListeners() {
         detailView.removeEventListener('scroll', resetFocusTimer);
     }
 }
-
+ 
 // 4. 警報控制 (聲音 + 震動)
 function triggerAlarm() {
     // 播放聲音 (需確保檔案路徑正確)
@@ -21784,22 +21793,22 @@ function triggerAlarm() {
     // 強烈震動模式
     if (navigator.vibrate) {
         // 震動 500ms，停 200ms，重複
-        navigator.vibrate([500, 200, 500, 200, 500]); 
+        navigator.vibrate([500, 200, 500, 200, 500]);
     }
 }
-
+ 
 function stopAlarm() {
     focusMonitorState.audio.pause();
     focusMonitorState.audio.currentTime = 0;
     // 停止震動
     if (navigator.vibrate) navigator.vibrate(0);
 }
-
+ 
 // === [重要修訂] 返回文章列表時，強制停止監察 ===
 const originalBackToArticleList = window.backToArticleList;
 window.backToArticleList = function() {
     // 1. 強制停止防睡監察，避免回到列表後還在響
-    stopFocusMonitor(); 
+    stopFocusMonitor();
     
     // 2. 執行原有的返回邏輯
     if (typeof originalBackToArticleList === 'function') {
