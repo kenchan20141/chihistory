@@ -22128,7 +22128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // ==========================================
-// === 慢讀專用防睡管理器 (修正版) ===
+// === 慢讀專用防睡管理器 (修復點擊翻頁版) ===
 // ==========================================
 const SlowReaderFocusManager = {
     checkTimer: null,
@@ -22150,18 +22150,26 @@ const SlowReaderFocusManager = {
             // 點擊燈號 (喚醒)
             indicator.onclick = function(e) {
                 e.preventDefault();
-                e.stopPropagation();
+                e.stopPropagation(); // 阻止事件冒泡，所以必須在這裡手動執行翻頁
                 
                 if (SlowReaderFocusManager.isPrompting) {
-                    // 橙/紅燈狀態：點擊視為「用戶回來了」，重置計時並繼續閱讀
+                    // === 橙/紅燈狀態 ===
+                    // 1. 重置計時 (變回綠燈)
                     SlowReaderFocusManager.handleUserActivity(); 
                     
-                    // 如果原本是暫停狀態，點擊燈號後自動繼續
-                    if (readerState.timerInterval) {
+                    // 2. ★★★ 新增：手動執行下一頁 ★★★
+                    // 因為點擊被這裡攔截了，所以要主動呼叫翻頁
+                    if (typeof goToNextReaderPage === 'function') {
+                        goToNextReaderPage();
+                    }
+
+                    // 3. 恢復自動播放 (如果原本有設定)
+                    if (typeof startReaderAutoPage === 'function') {
                         startReaderAutoPage();
                     }
                 } else {
-                    // 綠燈狀態：切換防睡功能開關
+                    // === 綠燈狀態 ===
+                    // 只是切換防睡功能的開/關
                     SlowReaderFocusManager.toggle();
                 }
             };
@@ -22179,13 +22187,10 @@ const SlowReaderFocusManager = {
             indicator.style.display = 'block';
             this.resetMainTimer();
             
-            // 暫停全域的檢查，改由這裡接管
             if (focusMonitorState.checkInterval) {
                 clearInterval(focusMonitorState.checkInterval);
                 focusMonitorState.checkInterval = null;
             }
-            
-            // 注意：這裡移除了 document 的全域監聽，改由按鈕觸發重置
         } else {
             indicator.style.display = 'none';
             this.stop();
@@ -22205,7 +22210,6 @@ const SlowReaderFocusManager = {
 
         if (typeof stopAlarm === 'function') stopAlarm();
         
-        // 恢復全域檢查
         if (typeof focusMonitorState !== 'undefined' && focusMonitorState.isActive) {
             focusMonitorState.checkInterval = setInterval(checkFocusStatus, 1000);
             focusMonitorState.lastActivityTime = Date.now();
@@ -22289,7 +22293,6 @@ const SlowReaderFocusManager = {
         this.resetMainTimer();
     }
 };
-
 
 
 	
