@@ -23195,15 +23195,17 @@ document.addEventListener('DOMContentLoaded', function() {
 // =======================================================
 // === [終極整合版] 離開警報系統 (Android 背景觸發 + iOS 回來清算) ===
 // =======================================================
+// =======================================================
+// === [背景觸發版] 離開警報系統 (Android 背景震動 + iOS 返回清算) ===
+// =======================================================
 const LeaveWarningSystem = {
     checkTimer: null,
     lockInterval: null,
-    isPlaying: false,
     hasTriggered: false,
     isLocked: false,
     leaveTimestamp: 0, 
 
-    // 指定的震動模式：與閉眼警告完全一致
+    // 指定的震動模式：[震動, 停止, 震動, 停止, 震動]
     vibratePattern: [400, 200, 400, 200, 400],
 
     init: function() {
@@ -23218,7 +23220,6 @@ const LeaveWarningSystem = {
             return;
         }
         
-        // 只有在閱讀詳情頁面才啟動
         const detailView = document.getElementById('featuredDetailView');
         if (!detailView || detailView.style.display === 'none') {
             this.resetSystem();
@@ -23226,54 +23227,64 @@ const LeaveWarningSystem = {
         }
 
         if (document.hidden) {
-            // --- 【離開時】 ---
-            console.log("📍 [Leave] 偵測到離開");
+            // --- 【離開當下】 ---
+            console.log("📍 [Leave] 已進入背景，啟動 5 秒倒數...");
             this.leaveTimestamp = Date.now(); 
 
-            // 安卓與電腦版邏輯：啟動背景 5 秒計時器
-            // 藉由正在播放的無聲管道，安卓有機會在背景準時響起
+            // 在背景啟動計時器
             if (this.checkTimer) clearTimeout(this.checkTimer);
             this.checkTimer = setTimeout(() => {
-                this.triggerAlarmSound(); // 5秒後在背景(或準備)響起
+                // 此區塊在 Android 通常能準時執行
+                // 在 iOS 則可能被暫停，直到使用者「拉下通知欄」或「重新點開網頁」才執行
+                console.log("🚨 [Background] 離開達 5 秒，嘗試觸發震動與音效");
+                this.triggerAlarmSound(); 
             }, 5000);
 
         } else {
-            // --- 【返回時】 ---
-            console.log("📍 [Back] 使用者已返回");
+            // --- 【返回網頁】 ---
+            console.log("📍 [Back] 使用者已返回前景");
             
             const now = Date.now();
             const timeAway = now - this.leaveTimestamp;
             
-            // iOS 關鍵邏輯：如果在背景時計時器被凍結了，回來後立刻計算時間差
-            // 如果離開超過 5 秒，且剛才在背景還沒響過，就補發警報
+            // 清除背景計時器
+            if (this.checkTimer) {
+                clearTimeout(this.checkTimer);
+                this.checkTimer = null;
+            }
+
+            // 補償邏輯：
+            // 如果離開超過 5 秒
             if (this.leaveTimestamp > 0 && timeAway > 5000) {
+                // 情況 A：如果剛才在背景因為系統限制沒響過，現在立刻補響
                 if (!this.hasTriggered) {
-                    console.log(`⚠️ [iOS/Penalty] 補發離開警報 (離開 ${timeAway}ms)`);
+                    console.log("⚠️ [Compensate] 背景執行受阻，現在補發警報");
                     this.triggerAlarmSound();
                 }
-                // 無論是背景響過還是補發，只要超過5秒就執行鎖定懲罰
+                // 情況 B：無論背景響過沒，只要超過 5 秒，一回來就鎖定
                 this.enforcePenalty();
             } else {
-                // 離開不足 5 秒，平安無事
+                // 情況 C：5 秒內回來，當作沒事
                 this.stopSoundOnly();
             }
+            
             this.leaveTimestamp = 0; 
         }
     },
 
-    // 觸發警報 (聲音 + 統一震動)
+    // 核心觸發函數：音效 + 震動
     triggerAlarmSound: function() {
-        if (this.hasTriggered) return; // 避免重疊觸發
-        
-        console.log("🚨 [Alarm] 播放離開警告音與震動");
+        if (this.hasTriggered) return; 
         this.hasTriggered = true;
         
-        // 1. 播放聲音
+        console.log("🔊 啟動警報音效與強力震動");
+
+        // 1. 播放警告音 (利用 SansiAudio 持久管道)
         if (typeof SansiAudio !== 'undefined') {
             SansiAudio.play('leave_warning', true);
         }
         
-        // 2. 執行震動 (與閉眼警告完全一致的頻率和力度)
+        // 2. 執行震動 (Android 通常允許在背景執行短暫的震動)
         if (navigator.vibrate) {
             navigator.vibrate(this.vibratePattern);
         }
@@ -23298,7 +23309,7 @@ const LeaveWarningSystem = {
             timeLeft--;
             countSpan.innerText = timeLeft;
             
-            // 鎖定期間持續保持震動回饋 (可選，增加威懾力)
+            // 懲罰期間每 2 秒追加一次強力震動，直到解鎖
             if (timeLeft % 2 === 0 && navigator.vibrate) {
                 navigator.vibrate(this.vibratePattern);
             }
@@ -23317,10 +23328,9 @@ const LeaveWarningSystem = {
         this.isLocked = false;
         if (navigator.vibrate) navigator.vibrate(0);
         
-        // 停止聲音
         this.stopSoundOnly();
         
-        // 返回後重置防睡計時
+        // 重置主防睡計時器
         if (typeof focusMonitorState !== 'undefined') {
             focusMonitorState.lastActivityTime = Date.now();
         }
@@ -23330,7 +23340,6 @@ const LeaveWarningSystem = {
         if (typeof SansiAudio !== 'undefined') {
             SansiAudio.stop('leave_warning');
         }
-        this.isPlaying = false;
         if (this.checkTimer) { clearTimeout(this.checkTimer); this.checkTimer = null; }
     },
 
@@ -23342,7 +23351,7 @@ const LeaveWarningSystem = {
     }
 };
 
-// 啟動監聽
+// 啟動監聽系統
 document.addEventListener('DOMContentLoaded', () => {
     LeaveWarningSystem.init();
 });
