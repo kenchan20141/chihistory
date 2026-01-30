@@ -7361,28 +7361,38 @@ body.cat-dragging { cursor: grabbing !important; }
 
 /* === [修訂 V7] 慢讀專用：右緣全高防睡燈 (寬度 12px 版) === */
 
+/* === [修訂 V8] 慢讀專用：防睡燈 (85% 高度 + 圓角版) === */
+ 
 #slowReaderFocusIndicator {
     position: fixed;
-    top: 0;
-    bottom: 0;       /* 強制拉伸全高 */
-    right: 0;
     
-    width: 12px;     /* ★ 修改：寬度加倍 (原 6px -> 12px) ★ */
-    height: auto;
+    /* --- 修改開始：改為垂直置中，高度 85% --- */
+    top: 50% !important;           /* 定位到中間 */
+    transform: translateY(-50%);   /* 向上修正 50% 以達成絕對垂直置中 */
+    height: 85% !important;        /* 設定高度為 85% */
+    bottom: auto !important;       /* 取消原本的拉伸設定 */
+    /* --- 修改結束 --- */
+ 
+    right: 0;
+    width: 12px;
     
     /* 確保最上層 */
-    z-index: 2147483647; 
+    z-index: 2147483647;
     
-    display: none;   /* 預設隱藏 */
+    display: none;
     padding: 0;
     margin: 0;
     border: none;
-    border-radius: 0;
+    
+    /* --- 修改開始：左側圓角處理 (像一個膠囊貼在右邊) --- */
+    border-radius: 12px 0 0 12px !important;
+    /* --- 修改結束 --- */
+ 
     background-color: transparent;
     cursor: pointer;
     
     /* 預設不攔截點擊，但在 prompting 狀態會開啟 */
-    pointer-events: none; 
+    pointer-events: none;
     
     transition: background-color 0.4s ease, box-shadow 0.4s ease;
 }
@@ -7908,22 +7918,29 @@ function initGlobalInteraction() {
    function hitTest(x, y) {
         if (!modelContainer || modelContainer.children.length === 0) return false;
         const bounds = modelContainer.getBounds();
-        const padding = 20; 
-
-        // ★★★ 修改重點：縮減點擊判定範圍 ★★★
-        // 許多 Live2D 模型上方有大量留白。
-        // 這裡設定忽略頂部 30% 的高度，讓點擊區更貼近貓頭/身體
-        const topOffset = bounds.height * 0.15; 
-
+ 
+        // 1. 頂部設定 (您覺得理想，維持不變)
+        // 忽略頂部 15% 的高度
+        const topOffset = bounds.height * 0.15;
+ 
+        // 2. ★★★ 新增：左右縮減值 (Side Shrink) ★★★
+        // 數值越大，左右兩邊越難點到 (向內縮)
+        // 建議設定：bounds.width * 0.15 (代表左右各縮減 15% 的寬度)
+        const sideShrink = bounds.width * 0.15;
+ 
+        // 3. ★★★ 新增：底部縮減值 (Bottom Shrink) ★★★
+        // 數值越大，腳下判定區越短
+        // 建議設定：20 (代表底部向上縮 20px)
+        const bottomShrink = 20;
+ 
         // 計算有效範圍：
-        // X 軸保持不變 (左右)
-        // Y 軸從 (bounds.y + topOffset) 開始算起
-        return (x >= bounds.x - padding && 
-                x <= bounds.x + bounds.width + padding &&
-                y >= bounds.y + topOffset && 
-                y <= bounds.y + bounds.height + padding);
+        return (
+            x >= bounds.x + sideShrink &&                // 左邊界：向右縮
+            x <= bounds.x + bounds.width - sideShrink && // 右邊界：向左縮
+            y >= bounds.y + topOffset &&                 // 頂部：維持原樣
+            y <= bounds.y + bounds.height - bottomShrink // 底部：向上縮
+        );
     }
-
     function getPinchDistance(touches) {
         return Math.hypot(
             touches[0].clientX - touches[1].clientX,
@@ -16005,7 +16022,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         // ★★★ 【核心修復】戰術性冷卻：強制等待 3000 毫秒 (3秒) ★★★
         // 這能讓 API 有時間「喘口氣」，避免觸發 429 (Too Many Requests)
         console.log("正在等待 API 冷卻...");
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // 嘗試重寫點評
         finalCritiqueText = await callReadingAPI(rewritePrompt, 0.5); 
@@ -18626,35 +18643,65 @@ const _OS_KEY = _p1 + _p2;
  * @param {string} title - 通知標題
  * @param {string} message - 通知內容
  */
+/**
+* 發送推播通知 (經由 GAS 後端代理，解決 CORS 與隱私問題)
+* @param {string} targetGrade - 年級 (如 "4")
+* @param {string} targetClass - 班別 (如 "A")
+* @param {string} title - 通知標題
+* @param {string} message - 通知內容
+*/
 async function sendClassNotification(targetGrade, targetClass, title, message) {
-    const options = {
-        method: 'POST',
-        headers: {
-            accept: 'application/json',
-            'Content-Type': 'application/json',
-            Authorization: 'Basic ' + _OS_KEY
-        },
-        body: JSON.stringify({
-            app_id: "f85da4b8-abae-4c5e-8db9-c9f463fc9815",
-            headings: { en: title, zh: title },
-            contents: { en: message, zh: message },
-            // 關鍵：只發送給符合 Grade 和 Class 的用戶
-            filters: [
-                { field: "tag", key: "grade", relation: "=", value: targetGrade },
-                { operator: "AND" },
-                { field: "tag", key: "class", relation: "=", value: targetClass }
-            ],
-            // 點擊通知後打開的網址 (即本頁面)
-            url: window.location.href
-        })
+    // 1. 獲取 Firebase Token (因為後端有 verifyAuth 保護)
+    const user = firebase.auth().currentUser;
+    if (!user) {
+        console.error("無法發送通知：未登入");
+        return;
+    }
+    const token = await user.getIdToken();
+ 
+    // 2. 構建 OneSignal 的標準 Payload
+    const oneSignalData = {
+        app_id: "f85da4b8-abae-4c5e-8db9-c9f463fc9815",
+        headings: { en: title, zh: title },
+        contents: { en: message, zh: message },
+        // 過濾條件
+        filters: [
+            { field: "tag", key: "grade", relation: "=", value: targetGrade },
+            { operator: "AND" },
+            { field: "tag", key: "class", relation: "=", value: targetClass }
+        ],
+        // 點擊通知後打開的網址
+        url: window.location.href
     };
-
+ 
+    // 3. 構建發送給 GAS 的 Payload
+    const requestBody = {
+        token: token,             // 通過後端驗證
+        action: 'onesignal_proxy',// 告訴後端執行 OneSignal 轉發
+        data: oneSignalData       // 實際要轉發的資料
+    };
+ 
+    // 4. 發送請求到您的 GAS (API_URL 已經在您的代碼中定義為 CLOUDFLARE_WORKER_URL)
+    // 註：這裡假設 API_URL 指向的是您的 GAS Web App 網址
     try {
-        const response = await fetch('https://onesignal.com/api/v1/notifications', options);
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // GAS 慣用 text/plain 以避免 OPTIONS 預檢
+            body: JSON.stringify(requestBody)
+        });
+ 
         const data = await response.json();
-        console.log('OneSignal 發送成功:', data);
+        
+        if (data.id) {
+            console.log('OneSignal 發送成功 (Via Backend):', data);
+        } else if (data.error) {
+            console.error('OneSignal 發送失敗 (Backend Error):', data.error);
+        } else {
+            console.log('OneSignal 回應:', data);
+        }
+ 
     } catch (err) {
-        console.error('OneSignal 發送失敗:', err);
+        console.error('連線 GAS 後端失敗:', err);
     }
 }
 
@@ -21268,6 +21315,14 @@ function renderArticleList() {
         const item = document.createElement('div');
         item.className = itemClass;
         item.onclick = () => showArticleDetail(realIndex);
+
+		// ★★★ 新增：右鍵/長按 切換已讀狀態 ★★★
+item.oncontextmenu = function(e) {
+    e.preventDefault(); // 阻止瀏覽器預設選單
+    e.stopPropagation();
+    manualToggleReadStatus(article.title);
+    return false;
+};
         
         // 注意：padding-left 在 CSS 中針對 .read 有額外 border-left 設定
         item.innerHTML = `
@@ -21303,6 +21358,35 @@ function renderArticleList() {
     }, 50);
 }
 
+
+
+	// 1. 切換已讀狀態的邏輯函式
+function manualToggleReadStatus(title) {
+    let readList = getReadArticles();
+    const index = readList.indexOf(title);
+    
+    let msg = "";
+    if (index !== -1) {
+        // 已讀 -> 未讀 (移除)
+        readList.splice(index, 1);
+        msg = "已標記為未讀";
+    } else {
+        // 未讀 -> 已讀 (加入)
+        readList.push(title);
+        msg = "已標記為已讀";
+    }
+    
+    localStorage.setItem('sansi_read_articles_list', JSON.stringify(readList));
+    
+// 觸發震動回饋
+    if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+    
+    // 顯示一個極短的提示 (使用您現有的 Alert 系統)
+    // alert(msg);  <-- 將此行刪除或註解掉即可取消彈窗
+    
+    // 重新渲染列表以更新顏色和勾號
+    renderArticleList();
+}
 
 
 // === [新增] 觸發頁碼輸入模式 ===
@@ -22139,43 +22223,47 @@ const SlowReaderFocusManager = {
     INTERVAL_MS: 180 * 1000, 
     WARNING_MS: 30 * 1000,
     
-    // 初始化 UI
-    initUI: function() {
-        let indicator = document.getElementById('slowReaderFocusIndicator');
-        if (!indicator) {
-            indicator = document.createElement('button');
-            indicator.id = 'slowReaderFocusIndicator';
-            indicator.innerHTML = ''; 
+  // 在 SlowReaderFocusManager 物件內的 initUI 函數
+initUI: function() {
+    let indicator = document.getElementById('slowReaderFocusIndicator');
+    if (!indicator) {
+        indicator = document.createElement('button');
+        indicator.id = 'slowReaderFocusIndicator';
+        indicator.innerHTML = '';
+        
+       // 點擊燈號邏輯 (修改版：慢讀時點擊即翻頁)
+        indicator.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             
-            // 點擊燈號 (喚醒)
-            indicator.onclick = function(e) {
-                e.preventDefault();
-                e.stopPropagation(); // 阻止事件冒泡，所以必須在這裡手動執行翻頁
+            // ★★★ 修改：若正在慢讀中，點擊色條視為「下一頁」 ★★★
+            if (readerState.isReading) {
+                // 1. 無論是紅燈、橙燈還是綠燈，都視為用戶活躍 (重置防睡計時)
+                SlowReaderFocusManager.handleUserActivity();
                 
-                if (SlowReaderFocusManager.isPrompting) {
-                    // === 橙/紅燈狀態 ===
-                    // 1. 重置計時 (變回綠燈)
-                    SlowReaderFocusManager.handleUserActivity(); 
-                    
-                    // 2. ★★★ 新增：手動執行下一頁 ★★★
-                    // 因為點擊被這裡攔截了，所以要主動呼叫翻頁
-                    if (typeof goToNextReaderPage === 'function') {
-                        goToNextReaderPage();
-                    }
-
-                    // 3. 恢復自動播放 (如果原本有設定)
-                    if (typeof startReaderAutoPage === 'function') {
-                        startReaderAutoPage();
-                    }
-                } else {
-                    // === 綠燈狀態 ===
-                    // 只是切換防睡功能的開/關
-                    SlowReaderFocusManager.toggle();
+                // 2. 執行翻頁動作
+                if (typeof goToNextReaderPage === 'function') {
+                    goToNextReaderPage();
                 }
-            };
-            document.body.appendChild(indicator);
-        }
-    },
+                
+                // 3. 重置自動播放計時器 (避免剛翻頁馬上又自動翻)
+                if (typeof startReaderAutoPage === 'function') {
+                    startReaderAutoPage();
+                }
+                
+                // 結束執行，不觸發開關切換
+                return;
+            }
+            // 情境 C：非慢讀模式 -> 執行原本的開關切換邏輯
+            if (SlowReaderFocusManager.isPrompting) {
+                SlowReaderFocusManager.handleUserActivity();
+            } else {
+                SlowReaderFocusManager.toggle();
+            }
+        };
+        document.body.appendChild(indicator);
+    }
+},
 
     // 啟動
     start: function() {
