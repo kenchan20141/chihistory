@@ -23193,10 +23193,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // === [嚴厲版] 作家文粹：離開警報系統 (莫蘭迪極簡鎖定) ===
 // =======================================================
 // =======================================================
-// === [終極整合版] 離開警報系統 (Android 背景觸發 + iOS 回來清算) ===
-// =======================================================
-// =======================================================
-// === [背景觸發版] 離開警報系統 (Android 背景震動 + iOS 返回清算) ===
+// === [安卓背景強化版] 離開警報系統 (背景即時震動 + iOS 返回清算) ===
 // =======================================================
 const LeaveWarningSystem = {
     checkTimer: null,
@@ -23205,7 +23202,7 @@ const LeaveWarningSystem = {
     isLocked: false,
     leaveTimestamp: 0, 
 
-    // 指定的震動模式：[震動, 停止, 震動, 停止, 震動]
+    // 指定的震動模式：[震動, 停止, 震動, 停止, 震動] (與閉眼警告完全一致)
     vibratePattern: [400, 200, 400, 200, 400],
 
     init: function() {
@@ -23228,21 +23225,25 @@ const LeaveWarningSystem = {
 
         if (document.hidden) {
             // --- 【離開當下】 ---
-            console.log("📍 [Leave] 已進入背景，啟動 5 秒倒數...");
+            console.log("📍 [Leave] 進入背景，啟動 Persistence 模式...");
             this.leaveTimestamp = Date.now(); 
 
-            // 在背景啟動計時器
+            // ★ 安卓核心修訂：進入背景立刻播放警告音，但音量為 0
+            // 這樣能讓瀏覽器認為網頁正在進行「音訊作業」，從而不會在背景暫停 JS 計時器
+            if (typeof SansiAudio !== 'undefined') {
+                SansiAudio.play('leave_warning', true, 0); // 靜音循環播放
+            }
+
+            // 在背景啟動 5 秒計時
             if (this.checkTimer) clearTimeout(this.checkTimer);
             this.checkTimer = setTimeout(() => {
-                // 此區塊在 Android 通常能準時執行
-                // 在 iOS 則可能被暫停，直到使用者「拉下通知欄」或「重新點開網頁」才執行
-                console.log("🚨 [Background] 離開達 5 秒，嘗試觸發震動與音效");
+                console.log("🚨 [Background] 5 秒已到，背景觸發震動與警報");
                 this.triggerAlarmSound(); 
             }, 5000);
 
         } else {
             // --- 【返回網頁】 ---
-            console.log("📍 [Back] 使用者已返回前景");
+            console.log("📍 [Back] 使用者返回前景");
             
             const now = Date.now();
             const timeAway = now - this.leaveTimestamp;
@@ -23253,18 +23254,17 @@ const LeaveWarningSystem = {
                 this.checkTimer = null;
             }
 
-            // 補償邏輯：
-            // 如果離開超過 5 秒
+            // 補償/清算邏輯 (保持原本讓您滿意的 iOS 設定)
             if (this.leaveTimestamp > 0 && timeAway > 5000) {
-                // 情況 A：如果剛才在背景因為系統限制沒響過，現在立刻補響
+                // 如果在背景沒成功觸發震動（如 iOS），現在補發
                 if (!this.hasTriggered) {
-                    console.log("⚠️ [Compensate] 背景執行受阻，現在補發警報");
+                    console.log("⚠️ [Compensate] 返回清算：觸發補償警報");
                     this.triggerAlarmSound();
                 }
-                // 情況 B：無論背景響過沒，只要超過 5 秒，一回來就鎖定
+                // 只要超過 5 秒，一回來強制執行 10 秒鎖定
                 this.enforcePenalty();
             } else {
-                // 情況 C：5 秒內回來，當作沒事
+                // 5 秒內回來，無罪釋放
                 this.stopSoundOnly();
             }
             
@@ -23272,21 +23272,23 @@ const LeaveWarningSystem = {
         }
     },
 
-    // 核心觸發函數：音效 + 震動
+    // 核心觸發函數：音效復原 + 震動
     triggerAlarmSound: function() {
         if (this.hasTriggered) return; 
         this.hasTriggered = true;
         
-        console.log("🔊 啟動警報音效與強力震動");
-
-        // 1. 播放警告音 (利用 SansiAudio 持久管道)
+        // 1. 恢復警告音量 (或重新播放)
         if (typeof SansiAudio !== 'undefined') {
-            SansiAudio.play('leave_warning', true);
+            // 先設定音量到 1.0 (針對剛才的靜音播放)
+            SansiAudio.setVolume('leave_warning', 1.0);
+            // 確保有聲音 (若剛才靜音播失敗，這裡強制重播)
+            SansiAudio.play('leave_warning', true, 1.0);
         }
         
-        // 2. 執行震動 (Android 通常允許在背景執行短暫的震動)
+        // 2. 執行強力震動 (安卓在有音訊活動時，背景震動成功率極高)
         if (navigator.vibrate) {
             navigator.vibrate(this.vibratePattern);
+            console.log("📳 背景震動執行中...");
         }
     },
 
@@ -23309,7 +23311,7 @@ const LeaveWarningSystem = {
             timeLeft--;
             countSpan.innerText = timeLeft;
             
-            // 懲罰期間每 2 秒追加一次強力震動，直到解鎖
+            // 懲罰期間：每兩秒追加一次與「閉眼警告」一致的震動，強化懲罰感
             if (timeLeft % 2 === 0 && navigator.vibrate) {
                 navigator.vibrate(this.vibratePattern);
             }
@@ -23330,7 +23332,7 @@ const LeaveWarningSystem = {
         
         this.stopSoundOnly();
         
-        // 重置主防睡計時器
+        // 重置防睡計時
         if (typeof focusMonitorState !== 'undefined') {
             focusMonitorState.lastActivityTime = Date.now();
         }
@@ -23351,7 +23353,7 @@ const LeaveWarningSystem = {
     }
 };
 
-// 啟動監聽系統
+// 初始化
 document.addEventListener('DOMContentLoaded', () => {
     LeaveWarningSystem.init();
 });
