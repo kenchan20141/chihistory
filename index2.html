@@ -78,6 +78,34 @@ form-action 'self';
 	<script>
 
 
+		// 全局解鎖 iOS 音頻通道
+function unlockIOSAudio() {
+    const unlock = () => {
+        // 解鎖防睡警報
+        if (focusMonitorState.audio) {
+            focusMonitorState.audio.play().then(() => {
+                focusMonitorState.audio.pause();
+                focusMonitorState.audio.currentTime = 0;
+            }).catch(e => console.log("預熱音頻1受阻"));
+        }
+        // 解鎖離開警報
+        if (LeaveWarningSystem.audio) {
+            LeaveWarningSystem.audio.play().then(() => {
+                LeaveWarningSystem.audio.pause();
+                LeaveWarningSystem.audio.currentTime = 0;
+            }).catch(e => console.log("預熱音頻2受阻"));
+        }
+        // 執行一次後移除監聽，節省效能
+        document.removeEventListener('touchstart', unlock);
+        document.removeEventListener('click', unlock);
+    };
+    document.addEventListener('touchstart', unlock);
+    document.addEventListener('click', unlock);
+}
+// 頁面加載後啟動解鎖器
+document.addEventListener('DOMContentLoaded', unlockIOSAudio);
+
+
 // ==========================================
 // === 全域變數宣告 (請加在 script 最上方) ===
 // ==========================================
@@ -6264,31 +6292,21 @@ select:focus, select:hover {
     }
 }
 
-/* === 全螢幕閱讀模式專用樣式 (iOS 修復版) === */
+/* === 全螢幕閱讀模式專用樣式 === */
 #featuredDetailView {
-    position: fixed;         
+    position: fixed;         /* 強制固定定位，覆蓋全頁 */
     top: 0;
     left: 0;
     width: 100%;
-    height: 100%;            /* 確保填滿 */
-    height: 100vh;           /* iOS 兼容 */
-    height: -webkit-fill-available; /* 針對 Safari 的特殊高度修正 */
-    
-    background-color: #fdfcf8;
-    z-index: 25000;          
-    
-    /* === 關鍵修正：iOS 慣性捲動 === */
-    overflow-y: auto;        
-    -webkit-overflow-scrolling: touch; /* 讓滑動像原生 App 一樣順暢 */
-    overscroll-behavior: contain;      /* 防止捲動穿透到主頁 */
-    
-    display: none;           
+    height: 100%;
+    background-color: #fdfcf8; /* 米白護眼底色 */
+    z-index: 25000;          /* 確保在最上層 */
+    overflow-y: auto;        /* 允許內容捲動 */
+    display: none;           /* 預設隱藏 */
     padding: 0;
     box-sizing: border-box;
-    
-    /* 底部留白，避開 iPhone Home Bar */
-    padding-bottom: 80px;
 }
+
 /* 閱讀內容容器 (限制寬度以利閱讀) */
 .read-mode-container {
     max-width: 800px;        /* 最佳閱讀寬度 */
@@ -7467,138 +7485,6 @@ body.cat-dragging { cursor: grabbing !important; }
 
 <script>
 
-
-// ==========================================
-// === [核心] 神思音效引擎 (V5 - 循環播放修復版) ===
-// ==========================================
-const SansiAudio = {
-    context: null,
-    buffers: {},
-    activeSources: {},
- 
-    sounds: {
-        'sleep_warning': '閉眼警告.mp3',
-        'leave_warning': '離開警告.mp3'
-    },
- 
-    // 1. 初始化
-    init: async function() {
-        if (this.context) return;
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        this.context = new AudioContext();
-        
-        for (const [name, url] of Object.entries(this.sounds)) {
-            await this.load(name, url);
-        }
-    },
- 
-    // 2. 載入
-    load: async function(name, url) {
-        try {
-            let response = await fetch(url);
-            if (!response.ok) {
-                // 備用音源
-                let backupUrl = name === 'sleep_warning'
-                    ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
-                    : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
-                response = await fetch(backupUrl);
-            }
-            const arrayBuffer = await response.arrayBuffer();
-            this.buffers[name] = await this.context.decodeAudioData(arrayBuffer);
-        } catch (e) {
-            console.error(`音效載入失敗 [${name}]:`, e);
-        }
-    },
- 
-    // 3. iOS 解鎖
-    unlock: function() {
-        if (!this.context) this.init();
-        if (this.context.state === 'suspended') this.context.resume();
- 
-        const oscillator = this.context.createOscillator();
-        const gainNode = this.context.createGain();
-        gainNode.gain.value = 0;
-        oscillator.connect(gainNode);
-        gainNode.connect(this.context.destination);
-        oscillator.start(0);
-        oscillator.stop(0.001);
-    },
- 
-    // 4. 播放音效 (核心修復：自動清理機制)
-    play: function(name, loop = false, startVolume = 1.0) {
-        if (!this.context || !this.buffers[name]) return;
- 
-        // ★ iOS 防呆：每次播放前強制檢查狀態
-        if (this.context.state === 'suspended') {
-            this.context.resume();
-        }
- 
-        // 如果該聲音正在播放，先強制停止舊的
-        this.stop(name);
- 
-        const source = this.context.createBufferSource();
-        const gainNode = this.context.createGain();
- 
-        source.buffer = this.buffers[name];
-        source.loop = loop;
-        
-        // 設定音量
-        gainNode.gain.setValueAtTime(startVolume, this.context.currentTime);
- 
-        source.connect(gainNode);
-        gainNode.connect(this.context.destination);
-        
-        // ★ 新增：播放結束後的自動清理
-        source.onended = () => {
-            if (!loop) {
-                // 只有非循環播放才自動清理，循環播放需手動 stop
-                this.activeSources[name] = null;
-            }
-        };
- 
-        source.start(0);
-        this.activeSources[name] = { source: source, gain: gainNode };
-    },
- 
-    // 5. 設定音量
-    setVolume: function(name, volume) {
-        const active = this.activeSources[name];
-        if (active && active.gain) {
-            try {
-                active.gain.gain.setTargetAtTime(volume, this.context.currentTime, 0.1);
-            } catch(e) {
-                active.gain.gain.value = volume;
-            }
-        }
-    },
- 
-    // 6. 停止音效 (核心修復：斷開連接)
-    stop: function(name) {
-        const active = this.activeSources[name];
-        if (active) {
-            try {
-                active.source.stop();
-                active.source.disconnect(); // 斷開連接
-                active.gain.disconnect();   // 斷開連接
-            } catch(e){}
-            this.activeSources[name] = null;
-        }
-    }
-};
- 
-// 自動初始化
-document.addEventListener('DOMContentLoaded', () => {
-    const unlockHandler = () => {
-        SansiAudio.unlock();
-        document.removeEventListener('touchstart', unlockHandler);
-        document.removeEventListener('click', unlockHandler);
-    };
-    document.addEventListener('touchstart', unlockHandler, {passive: true});
-    document.addEventListener('click', unlockHandler, {passive: true});
-    SansiAudio.init();
-});
-
-	
 
 // ==========================================
 // === [新增] 已讀狀態管理模組 ===
@@ -21863,282 +21749,275 @@ function scrollToAnalysis() {
     }
 }
 
-// === [修訂 V10] 顯示文章詳情 (修復底部殘留問題) ===
+// === [修訂 V8] 顯示文章詳情 (權限判斷 + 預設狀態控制) ===
 function showArticleDetail(index) {
-    try {
-        const article = filteredArticles[index];
-        if (!article) return;
+    const article = filteredArticles[index];
+    if (!article) return;
+ 
+    currentReadingArticleTitle = article.title;
+ 
+    const isSaved = isArticleBookmarked(article.title);
+    const bookmarkClass = isSaved ? 'bookmarked' : '';
     
-        currentReadingArticleTitle = article.title;
+    const titleColor = MORANDI_TITLES[index % MORANDI_TITLES.length];
+    const detailView = document.getElementById('featuredDetailView');
+    
+    currentContextContent = `【文章標題】${article.title}\n【作者】${article.author}\n\n【文章正文】\n${article.content}\n\n【文章賞析】\n${article.analysis || "（無賞析資料）"}`;
+    currentContextType = 'featured_discussion';
+    currentContextReview = "（這是精選文章的閱讀討論）";
+    
+    const isPoetry = /^\s*<br\s*\/?>/i.test(article.content);
+    let contentHtml = '';
+ 
+    if (isPoetry) {
+        let cleanContent = article.content.replace(/^\s*<br\s*\/?>/i, '').trim();
+        cleanContent = cleanContent.replace(/\\n/g, '\n');
+        contentHtml = `<div style="width: 100%; display: flex; justify-content: center;"><div id="poetryContent" style="white-space: pre; word-wrap: normal; display: inline-block; text-align: left; line-height: 1.7; font-family: 'Noto Serif TC', serif; margin-top: 0px;">${cleanContent}</div></div>`;
+    } else {
+        contentHtml = article.content.split('\n').filter(p => p.trim()).map((p, i) => {
+            return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
+        }).join('');
+    }
+ 
+    let analysisHtmlBlock = '';
+    const hasAnalysis = article.analysis && article.analysis.trim() !== '';
+ 
+    if (hasAnalysis) {
+        const analysisText = article.analysis.split('\n').filter(p => p.trim()).map((p, i) => {
+            return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
+        }).join('');
         
-        // 1. 隱藏列表頁 (關鍵修正)
-        const listView = document.getElementById('featuredListView');
-        if (listView) listView.style.display = 'none';
+        analysisHtmlBlock = `
+        <div id="articleAnalysisSection" class="analysis-container" style="margin-top: 50px !important; padding-top: 40px !important; border-top: 1px dashed #d1cdc5;">
+            <div class="analysis-header" style="text-align: center; font-size: 1.4rem; font-weight: bold; color: #8d6e63; margin-bottom: 20px !important; line-height: 1.2; letter-spacing: 2px;">文章賞析</div>
+            <div class="analysis-body" style="margin-top: 0 !important; font-size: 1.05rem !important;">${analysisText}</div>
+        </div>`;
+    }
+ 
+    const analysisBtnHtml = hasAnalysis ?
+        `<button class="detail-float-btn scroll-hide-target" onclick="scrollToAnalysis()" title="跳至賞析">
+            <i class="fas fa-comment-dots"></i>
+         </button>` : '';
+ 
+    const disclaimerHtml = `
+        <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">
+            本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。
+        </div>`;
+ 
+    const safeContent = encodeURIComponent(article.content);
+    const safeTitle = encodeURIComponent(article.title);
+ 
+    let chatHTML = getCanvasChatHTML('featured_discussion');
+    chatHTML = chatHTML.replace('閱卷員追問區', '與陳SIR討論');
+    chatHTML = chatHTML.replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？');
 
-        // 2. 顯示詳情頁容器
-        const detailView = document.getElementById('featuredDetailView');
-        if (!detailView) return;
+    // ★★★ [核心修改] 判斷防睡模式預設狀態 ★★★
+    const isFocusUnlocked = localStorage.getItem('sansi_focus_permission') === 'true';
+    let focusBtnHTML = '';
 
-        // ... (以下是原本的內容生成邏輯，為了節省篇幅，保留您的核心變數) ...
-        const isSaved = isArticleBookmarked(article.title);
-        const bookmarkClass = isSaved ? 'bookmarked' : '';
-        const titleColor = MORANDI_TITLES[index % MORANDI_TITLES.length];
+    if (isFocusUnlocked) {
+        // --- 情況 A: 已解鎖 -> 預設關閉 (OFF) ---
+        // 樣式：普通白色按鈕，圖示：閉眼
+        focusBtnHTML = `<button id="focusMonitorBtn" class="detail-float-btn scroll-hide-target" onclick="toggleFocusMonitor()" title="開啟防睡監察"><i class="fas fa-eye-slash"></i></button>`;
         
-        currentContextContent = `【文章標題】${article.title}\n【作者】${article.author}\n\n【文章正文】\n${article.content}\n\n【文章賞析】\n${article.analysis || "（無賞析資料）"}`;
-        currentContextType = 'featured_discussion';
-        currentContextReview = "（這是精選文章的閱讀討論）";
+        // 設定狀態
+        focusMonitorState.isActive = false;
+        if (focusMonitorState.checkInterval) clearInterval(focusMonitorState.checkInterval);
+        removeFocusListeners(); // 確保移除監聽
+    } else {
+        // --- 情況 B: 未解鎖 -> 強制開啟 (ON) ---
+        // 樣式：綠色按鈕，圖示：張眼
+        focusBtnHTML = `<button id="focusMonitorBtn" class="detail-float-btn scroll-hide-target focus-status-green" onclick="toggleFocusMonitor()" title="防睡監察中 (點擊關閉)"><i class="fas fa-eye"></i></button>`;
         
-        // 處理正文 (詩歌/散文)
-        const isPoetry = /^\s*<br\s*\/?>/i.test(article.content);
-        let contentHtml = '';
+        // 設定狀態
+        focusMonitorState.isActive = true;
+        focusMonitorState.lastActivityTime = Date.now();
+        focusMonitorState.currentState = 'green';
+        
+        // 音效準備
+        focusMonitorState.audio.loop = true; 
+        focusMonitorState.audio.volume = 1.0;
+        
+        // 啟動監聽
+        startFocusListeners();
+        if (focusMonitorState.checkInterval) clearInterval(focusMonitorState.checkInterval);
+        focusMonitorState.checkInterval = setInterval(checkFocusStatus, 1000);
+    }
+ 
+    detailView.innerHTML = `
+        <style>
+            @keyframes stamp-slam {
+                0% { opacity: 0; transform: scale(3) rotate(-5deg); }
+                60% { opacity: 1; transform: scale(0.9) rotate(-3deg); }
+                80% { transform: scale(1.05) rotate(-3deg); }
+                100% { opacity: 1; transform: scale(1) rotate(-3deg); }
+            }
+            #fullArticleBody b, #fullArticleBody strong, #poetryContent b, #poetryContent strong {
+                font-weight: bold !important; color: #2c3e50 !important; text-shadow: none !important; font-family: 'Noto Serif TC', serif;
+            }
+        </style>
+        <div id="readingProgressBarContainer"><div id="readingProgressBar"></div></div>
+        
+        <div class="detail-action-group">
+            <button id="detailBookmarkBtn" class="detail-float-btn scroll-hide-target ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤"><i class="fas fa-bookmark"></i></button>
+            ${analysisBtnHtml}
+            <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀"><i class="fas fa-book-reader"></i></button>
+            <button class="detail-float-btn scroll-hide-target" onclick="openReaderSettings()" title="慢讀設定"><i class="fas fa-cog"></i></button>
+            
+            <!-- ★★★ 插入動態生成的按鈕 ★★★ -->
+            ${focusBtnHTML}
+            
+            <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;"><i class="fas fa-arrow-up"></i></button>
+            
+            <button class="detail-float-btn close-mode" onclick="backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div class="read-mode-container">
+            <div class="detail-header-group" style="display: flex; flex-direction: column; align-items: center; border-bottom: 2px dashed #e0ddd7; margin-bottom: 25px !important; padding-bottom: 15px !important;">
+                <div class="detail-title-text auto-fit-title" id="detailTitleText" style="color: ${titleColor}; font-weight: bold; margin-bottom: 20px; text-align: center; width: 100%;">
+                    ${article.title}
+                </div>
+                <div class="detail-author-box" style="display: inline-block; padding: 6px 20px; background-color: #f5f5f5; border-radius: 4px; margin-bottom: 10px;">
+                    <span class="detail-author-text" style="color: #5d4037; font-weight: bold;">${article.author}</span>
+                </div>
+                <div class="detail-date" style="color: #9e9e9e; font-family: 'Courier New', monospace; font-size: 0.9rem;">${article.date}</div>
+            </div>
+            <div class="article-body" id="fullArticleBody" style="font-size: 1.15rem; color: #4a4a4a; text-align: justify; line-height: 1.8;">
+                ${contentHtml}
+            </div>
+            ${analysisHtmlBlock}
+            ${disclaimerHtml}
+            <div style="margin-top: 80px; margin-bottom: 30px;">
+                <div id="chatToggleButtonContainer" style="text-align: center;">
+                    <div style="height: 1px; background: linear-gradient(to right, transparent, #e0ddd7, transparent); width: 50%; margin: 0 auto 30px auto;"></div>
+                    <button id="showFeaturedChatBtn" onclick="toggleFeaturedChat()"
+                        style="width: 60px; height: 60px; background-color: transparent; color: #d69a92; border: 3px solid #d69a92; border-radius: 8px; font-family: 'Noto Serif TC', serif; font-size: 1.1rem; font-weight: 900; line-height: 1; padding: 0; transform: rotate(-3deg); cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; justify-content: center;"
+                        onmouseover="this.style.transform='rotate(0deg) scale(1.1)';"
+                        onmouseout="this.style.transform='rotate(-3deg) scale(1)';"
+                        title="點擊落款"
+                    >討論</button>
+                    <div style="margin-top: 15px; color: #a1887f; font-size: 0.8rem; font-family: 'Noto Serif TC', serif; opacity: 0.6; letter-spacing: 2px; transform: scale(0.9); transition: opacity 0.5s;">
+                        [ 點 擊 落 款 ]
+                    </div>
+                </div>
+                <div id="featuredChatArea" style="display: none; text-align: left; animation: fadeIn 1s ease; margin-top: 30px;">
+                    <div style="height: 1px; background: linear-gradient(to right, transparent, #e0ddd7, transparent); width: 80%; margin: 0 auto 30px auto;"></div>
+                    ${chatHTML}
+                </div>
+            </div>
+        </div>
+    `;
+ 
+    detailView.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+ 
+    setTimeout(() => {
+        const titleEl = document.getElementById('detailTitleText');
+        if (titleEl) fitTextToContainer(titleEl, 24, 38);
+ 
         if (isPoetry) {
-            let cleanContent = article.content.replace(/^\s*<br\s*\/?>/i, '').trim().replace(/\\n/g, '\n');
-            contentHtml = `<div style="width: 100%; display: flex; justify-content: center;"><div id="poetryContent" style="white-space: pre; word-wrap: normal; display: inline-block; text-align: left; line-height: 1.7; font-family: 'Noto Serif TC', serif; margin-top: 0px;">${cleanContent}</div></div>`;
-        } else {
-            contentHtml = article.content.split('\n').filter(p => p.trim()).map((p, i) => {
-                return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
-            }).join('');
-        }
-    
-        // 處理賞析
-        let analysisHtmlBlock = '';
-        const hasAnalysis = article.analysis && article.analysis.trim() !== '';
-        if (hasAnalysis) {
-            const analysisText = article.analysis.split('\n').filter(p => p.trim()).map((p, i) => {
-                return `<p style="margin-bottom: 1.5em; ${i === 0 ? 'margin-top:0;' : ''}">${p}</p>`;
-            }).join('');
-            analysisHtmlBlock = `
-            <div id="articleAnalysisSection" class="analysis-container" style="margin-top: 50px !important; padding-top: 40px !important; border-top: 1px dashed #d1cdc5;">
-                <div class="analysis-header" style="text-align: center; font-size: 1.4rem; font-weight: bold; color: #8d6e63; margin-bottom: 20px !important; line-height: 1.2; letter-spacing: 2px;">文章賞析</div>
-                <div class="analysis-body" style="margin-top: 0 !important; font-size: 1.05rem !important;">${analysisText}</div>
-            </div>`;
-        }
-    
-        // 按鈕區
-        const analysisBtnHtml = hasAnalysis ? `<button class="detail-float-btn scroll-hide-target" onclick="scrollToAnalysis()" title="跳至賞析"><i class="fas fa-comment-dots"></i></button>` : '';
-        const disclaimerHtml = `<div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。</div>`;
-        const safeContent = encodeURIComponent(article.content);
-        const safeTitle = encodeURIComponent(article.title);
-    
-        // 防睡按鈕邏輯
-        const isFocusUnlocked = localStorage.getItem('sansi_focus_permission') === 'true';
-        let focusBtnHTML = '';
-        if (isFocusUnlocked) {
-            focusBtnHTML = `<button id="focusMonitorBtn" class="detail-float-btn scroll-hide-target" onclick="toggleFocusMonitor()" title="開啟防睡監察"><i class="fas fa-eye-slash"></i></button>`;
-            if (typeof focusMonitorState !== 'undefined') {
-                focusMonitorState.isActive = false;
-                if (focusMonitorState.checkInterval) clearInterval(focusMonitorState.checkInterval);
-            }
-        } else {
-            focusBtnHTML = `<button id="focusMonitorBtn" class="detail-float-btn scroll-hide-target focus-status-green" onclick="toggleFocusMonitor()" title="防睡監察中 (點擊關閉)"><i class="fas fa-eye"></i></button>`;
-            if (typeof activateFocusMonitor === 'function') {
-                setTimeout(() => { const btn = document.getElementById('focusMonitorBtn'); if(btn) activateFocusMonitor(btn); }, 500);
-            }
-        }
-    
-        let chatHTML = getCanvasChatHTML('featured_discussion');
-        chatHTML = chatHTML.replace('閱卷員追問區', '與陳SIR討論').replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？');
-
-        // 注入 HTML
-        detailView.innerHTML = `
-            <style>
-                @keyframes stamp-slam { 0% { opacity: 0; transform: scale(3) rotate(-5deg); } 60% { opacity: 1; transform: scale(0.9) rotate(-3deg); } 80% { transform: scale(1.05) rotate(-3deg); } 100% { opacity: 1; transform: scale(1) rotate(-3deg); } }
-                #fullArticleBody b, #fullArticleBody strong, #poetryContent b, #poetryContent strong { font-weight: bold !important; color: #2c3e50 !important; text-shadow: none !important; font-family: 'Noto Serif TC', serif; }
-            </style>
-            <div id="readingProgressBarContainer"><div id="readingProgressBar"></div></div>
-            <div class="detail-action-group">
-                <button id="detailBookmarkBtn" class="detail-float-btn scroll-hide-target ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤"><i class="fas fa-bookmark"></i></button>
-                ${analysisBtnHtml}
-                <button class="detail-float-btn scroll-hide-target" onclick="startSlowRead('${safeContent}')" title="開始慢讀"><i class="fas fa-book-reader"></i></button>
-                <button class="detail-float-btn scroll-hide-target" onclick="openReaderSettings()" title="慢讀設定"><i class="fas fa-cog"></i></button>
-                ${focusBtnHTML}
-                <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;"><i class="fas fa-arrow-up"></i></button>
-                <button class="detail-float-btn close-mode" onclick="backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="read-mode-container">
-                <div class="detail-header-group" style="display: flex; flex-direction: column; align-items: center; border-bottom: 2px dashed #e0ddd7; margin-bottom: 25px !important; padding-bottom: 15px !important;">
-                    <div class="detail-title-text auto-fit-title" id="detailTitleText" style="color: ${titleColor}; font-weight: bold; margin-bottom: 20px; text-align: center; width: 100%;">
-                        ${article.title}
-                    </div>
-                    <div class="detail-author-box" style="display: inline-block; padding: 6px 20px; background-color: #f5f5f5; border-radius: 4px; margin-bottom: 10px;">
-                        <span class="detail-author-text" style="color: #5d4037; font-weight: bold;">${article.author}</span>
-                    </div>
-                    <div class="detail-date" style="color: #9e9e9e; font-family: 'Courier New', monospace; font-size: 0.9rem;">${article.date}</div>
-                </div>
-                <div class="article-body" id="fullArticleBody" style="font-size: 1.15rem; color: #4a4a4a; text-align: justify; line-height: 1.8;">
-                    ${contentHtml}
-                </div>
-                ${analysisHtmlBlock}
-                ${disclaimerHtml}
-                <div style="margin-top: 80px; margin-bottom: 30px;">
-                    <div id="chatToggleButtonContainer" style="text-align: center;">
-                        <div style="height: 1px; background: linear-gradient(to right, transparent, #e0ddd7, transparent); width: 50%; margin: 0 auto 30px auto;"></div>
-                        <button id="showFeaturedChatBtn" onclick="toggleFeaturedChat()"
-                            style="width: 60px; height: 60px; background-color: transparent; color: #d69a92; border: 3px solid #d69a92; border-radius: 8px; font-family: 'Noto Serif TC', serif; font-size: 1.1rem; font-weight: 900; line-height: 1; padding: 0; transform: rotate(-3deg); cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; justify-content: center;"
-                            title="點擊落款">討論</button>
-                        <div style="margin-top: 15px; color: #a1887f; font-size: 0.8rem; font-family: 'Noto Serif TC', serif; opacity: 0.6; letter-spacing: 2px; transform: scale(0.9); transition: opacity 0.5s;">[ 點 擊 落 款 ]</div>
-                    </div>
-                    <div id="featuredChatArea" style="display: none; text-align: left; animation: fadeIn 1s ease; margin-top: 30px;">
-                        <div style="height: 1px; background: linear-gradient(to right, transparent, #e0ddd7, transparent); width: 80%; margin: 0 auto 30px auto;"></div>
-                        ${chatHTML}
-                    </div>
-                </div>
-            </div>
-        `;
-    
-        // 顯示
-        detailView.style.display = 'block';
-        void detailView.offsetWidth; 
-        document.body.style.overflow = 'hidden';
-    
-        // 文字縮放
-        setTimeout(() => {
-            const titleEl = document.getElementById('detailTitleText');
-            if (titleEl) fitTextToContainer(titleEl, 24, 38);
-            if (isPoetry) {
-                const poetryEl = document.getElementById('poetryContent');
-                if (poetryEl) {
-                    let fontSize = 1.25 * 16;
+            const poetryEl = document.getElementById('poetryContent');
+            if (poetryEl) {
+                let fontSize = 1.25 * 16;
+                poetryEl.style.fontSize = fontSize + 'px';
+                const containerWidth = poetryEl.parentElement.clientWidth;
+                let safety = 0;
+                while (poetryEl.scrollWidth > containerWidth && fontSize > 11 && safety < 100) {
+                    fontSize -= 0.5;
                     poetryEl.style.fontSize = fontSize + 'px';
-                    const containerWidth = poetryEl.parentElement.clientWidth;
-                    let safety = 0;
-                    while (poetryEl.scrollWidth > containerWidth && fontSize > 11 && safety < 100) {
-                        fontSize -= 0.5;
-                        poetryEl.style.fontSize = fontSize + 'px';
-                        safety++;
-                    }
+                    safety++;
                 }
             }
-        }, 50);
-    
-        // 滾動與防睡 UI 控制
-        detailView.onscroll = function() {
-            const scrollTop = detailView.scrollTop;
-            const docHeight = detailView.scrollHeight;
-            const winHeight = detailView.clientHeight;
-            const scrollPercent = (scrollTop / (docHeight - winHeight)) * 100;
-            
-            const progressBar = document.getElementById('readingProgressBar');
-            const progressContainer = document.getElementById('readingProgressBarContainer');
-            if(progressBar) progressBar.style.width = scrollPercent + "%";
-            if(progressContainer) progressContainer.style.opacity = scrollTop > 10 ? '1' : '0';
-     
-            const hideTargets = document.querySelectorAll('.scroll-hide-target');
-            const topBtn = document.getElementById('detailTopBtn');
-            
-            if (scrollTop > 100) {
-                if (topBtn) topBtn.style.display = 'flex';
-                hideTargets.forEach(btn => {
-                    if (btn.id === 'focusMonitorBtn') {
-                        if (focusMonitorState && focusMonitorState.isActive) {
-                            btn.style.display = 'flex';
-                            btn.classList.add('minimized');
-                        } else {
-                            btn.style.display = 'none';
-                            btn.classList.remove('minimized');
-                        }
+        }
+    }, 50);
+ 
+    // 滾動邏輯
+    detailView.onscroll = function() {
+        const scrollTop = detailView.scrollTop;
+        const docHeight = detailView.scrollHeight;
+        const winHeight = detailView.clientHeight;
+        const scrollPercent = (scrollTop / (docHeight - winHeight)) * 100;
+        
+        const progressBar = document.getElementById('readingProgressBar');
+        const progressContainer = document.getElementById('readingProgressBarContainer');
+        if(progressBar) progressBar.style.width = scrollPercent + "%";
+        if(progressContainer) progressContainer.style.opacity = scrollTop > 10 ? '1' : '0';
+ 
+        const hideTargets = document.querySelectorAll('.scroll-hide-target');
+        const topBtn = document.getElementById('detailTopBtn');
+        
+        if (scrollTop > 100) {
+            if (topBtn) topBtn.style.display = 'flex';
+            hideTargets.forEach(btn => {
+                if (btn.id === 'focusMonitorBtn') {
+                    if (focusMonitorState.isActive) {
+                        btn.style.display = 'flex';
+                        btn.classList.add('minimized');
                     } else {
                         btn.style.display = 'none';
-                    }
-                });
-            } else {
-                if (topBtn) topBtn.style.display = 'none';
-                hideTargets.forEach(btn => {
-                    btn.style.display = 'flex';
-                    if (btn.id === 'focusMonitorBtn') {
                         btn.classList.remove('minimized');
                     }
-                });
-            }
-     
-            // 已讀標記
-            const analysisSection = document.getElementById('articleAnalysisSection');
-            if (analysisSection && !isAutoScrollingToAnalysis) {
-                const rect = analysisSection.getBoundingClientRect();
-                if (rect.top <= winHeight * 0.8 && rect.bottom >= 0) {
-                    markArticleAsRead(currentReadingArticleTitle);
+                } else {
+                    btn.style.display = 'none';
                 }
-            }
-        };
-
-    } catch (err) {
-        console.error("開啟文章詳情失敗:", err);
-        alert("無法開啟文章，請重新整理頁面試試。");
-    }
-}
-
-// === [修訂 V2] 返回列表 (修復：恢復列表顯示) ===
-function backToArticleList() {
-    // 1. 隱藏詳情頁
-    const detailView = document.getElementById('featuredDetailView');
-    if (detailView) detailView.style.display = 'none';
-    
-    // 2. 顯示列表頁 (關鍵)
-    const listView = document.getElementById('featuredListView');
-    if (listView) listView.style.display = 'block';
-
-    // 恢復 Body 捲動
-    document.body.style.overflow = 'auto';
-    
-    // 停止防睡
-    if (typeof stopFocusMonitor === 'function') stopFocusMonitor();
-
-    // 重新過濾列表
-    if (isBookmarkMode) {
-        const bookmarks = getBookmarkedTitles();
-        filteredArticles = allArticles.filter(a => bookmarks.includes(a.title));
-        
-        const searchInput = document.getElementById('articleSearchInput');
-        if (searchInput && searchInput.value.trim() !== "") {
-            const query = searchInput.value.trim().toLowerCase();
-            filteredArticles = filteredArticles.filter(a => 
-                a.title.toLowerCase().includes(query) || 
-                a.author.toLowerCase().includes(query)
-            );
+            });
+        } else {
+            if (topBtn) topBtn.style.display = 'none';
+            hideTargets.forEach(btn => {
+                btn.style.display = 'flex';
+                if (btn.id === 'focusMonitorBtn') {
+                    btn.classList.remove('minimized');
+                }
+            });
         }
-    }
-    
-    // 重新渲染列表以更新「已讀」狀態
-    renderArticleList();
+ 
+        const analysisSection = document.getElementById('articleAnalysisSection');
+        if (analysisSection && !isAutoScrollingToAnalysis) {
+            const rect = analysisSection.getBoundingClientRect();
+            if (rect.top <= winHeight * 0.8 && rect.bottom >= 0) {
+                markArticleAsRead(currentReadingArticleTitle);
+            }
+        }
+    };
 }
 // =======================================================
 // === [修訂 V5] 防入睡失神監察系統 (400ms 輕震版) ===
 // =======================================================
  
-// =======================================================
-// === [修訂 V6] 防入睡失神監察系統 (Web Audio API 版) ===
-// =======================================================
-// 監察系統全域狀態 (移除 audio 物件，改用 SansiAudio)
+// 監察系統全域狀態
 let focusMonitorState = {
     isActive: false,        
     lastActivityTime: 0,    
     checkInterval: null,    
-    currentState: 'green'
+    currentState: 'green',  
+    audio: new Audio('閉眼警告.mp3') 
 };
+ 
+// === [修訂] 監察開關與密碼驗證邏輯 ===
+ 
 // 檢查本地是否已經解鎖過權限
 let isFocusPermissionUnlocked = localStorage.getItem('sansi_focus_permission') === 'true';
+ 
 function toggleFocusMonitor() {
     const btn = document.getElementById('focusMonitorBtn');
     if (!btn) return;
     if (!focusMonitorState.isActive) {
-        // === [開啟] ===
-        // ★ 關鍵：在這裡解鎖 iOS 音訊
-        SansiAudio.unlock();
+        // === [開啟] 任何時候都可以開啟 ===
         activateFocusMonitor(btn);
     } else {
-        // === [關閉] ===
+        // === [關閉] 需要檢查權限 ===
         if (isFocusPermissionUnlocked) {
+            // 已經輸入過密碼，直接關閉
             stopFocusMonitor();
             if (navigator.vibrate) navigator.vibrate([30]);
             console.log("防睡監察已關閉 (已授權)");
         } else {
+            // 尚未解鎖，彈出密碼視窗
             openFocusUnlockModal();
         }
     }
 }
  
-// 輔助函式：執行開啟動作
-// 輔助函式：執行開啟動作
 function activateFocusMonitor(btn) {
     focusMonitorState.isActive = true;
     focusMonitorState.lastActivityTime = Date.now();
@@ -22149,13 +22028,22 @@ function activateFocusMonitor(btn) {
     btn.classList.add('focus-status-green');
     btn.title = "防睡監察中 (點擊關閉)";
     
-    // 啟動監聽
+    // === iOS 關鍵修正：在點擊事件中立即「熱啟動」音頻 ===
+    focusMonitorState.audio.muted = true; // 先靜音
+    focusMonitorState.audio.play().then(() => {
+        // 播放成功後暫停並恢復音量，此時該 Audio 對象已獲得 iOS 授權
+        focusMonitorState.audio.pause();
+        focusMonitorState.audio.muted = false;
+        focusMonitorState.audio.volume = 1.0;
+        focusMonitorState.audio.loop = true;
+    }).catch(e => console.log("音頻授權失敗:", e));
+    
     startFocusListeners();
     if (focusMonitorState.checkInterval) clearInterval(focusMonitorState.checkInterval);
     focusMonitorState.checkInterval = setInterval(checkFocusStatus, 1000);
     
     if(navigator.vibrate) navigator.vibrate([50]);
-    console.log("防睡監察已啟動");
+    console.log("防睡監察已啟動，音頻通道已授權");
 }
  
 // === [新增] 密碼視窗控制函式 ===
@@ -22247,17 +22135,25 @@ async function verifyFocusPassword() {
 function stopFocusMonitor() {
     focusMonitorState.isActive = false;
     
+    // 清除計時器
     if (focusMonitorState.checkInterval) {
         clearInterval(focusMonitorState.checkInterval);
         focusMonitorState.checkInterval = null;
     }
     
+    // 移除所有事件監聽器
     removeFocusListeners();
-    stopAlarm(); // 停止 Web Audio
+    
+    // 停止警報聲音與震動
+    stopAlarm();
+ 
+    // ★★★ 新增：同步重置離開警報系統 ★★★
+    // 這樣一旦關閉防睡，離開頁面計時器也會立刻被殺死
     if (typeof LeaveWarningSystem !== 'undefined') {
         LeaveWarningSystem.resetSystem();
     }
     
+    // 重置按鈕外觀
     const btn = document.getElementById('focusMonitorBtn');
     if (btn) {
         btn.className = "detail-float-btn scroll-hide-target";
@@ -22269,59 +22165,60 @@ function stopFocusMonitor() {
 }
  
 // 2. 狀態檢查核心邏輯 (判斷手機 vs 電腦)
-// 狀態檢查核心邏輯
 function checkFocusStatus() {
     if (!focusMonitorState.isActive) return;
+
     const now = Date.now();
     const idleTime = now - focusMonitorState.lastActivityTime;
     const btn = document.getElementById('focusMonitorBtn');
     
-    const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPod|BlackBerry/i.test(navigator.userAgent);
-    
+    const isMobile = window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const LIMIT_ORANGE = isMobile ? 30000 : 60000;
     const LIMIT_RED    = isMobile ? 80000 : 100000;
-    // --- 狀態轉換邏輯 ---
+
     if (idleTime >= LIMIT_RED) {
-        // [紅燈] 入睡警報狀態
-        if (navigator.vibrate) navigator.vibrate(400);
+        if (navigator.vibrate) navigator.vibrate(400); 
+
         if (focusMonitorState.currentState !== 'red') {
             focusMonitorState.currentState = 'red';
             if (btn) {
                 btn.classList.remove('focus-status-green', 'focus-status-orange');
                 btn.classList.add('focus-status-red');
                 if (!btn.classList.contains('minimized')) {
-                    btn.innerHTML = '<i class="fas fa-bell"></i>';
+                    btn.innerHTML = '<i class="fas fa-bell"></i>'; 
                 }
             }
-            // ★ 修改：使用 Web Audio API 播放 (循環)
-            SansiAudio.play('sleep_warning', true);
+            
+            // === iOS 修正：不要使用 load()，直接 play() 之前授權過的對象 ===
+            focusMonitorState.audio.play().catch(e => {
+                // 如果還是失敗，嘗試靜音播放再取消靜音 (Force Overdrive)
+                focusMonitorState.audio.muted = true;
+                focusMonitorState.audio.play().then(() => {
+                    focusMonitorState.audio.muted = false;
+                });
+            });
         }
-        
     } else if (idleTime >= LIMIT_ORANGE) {
-        // [橙燈] 閒置警告狀態
+        // ... 橙燈邏輯保持不變 ...
         if (focusMonitorState.currentState !== 'orange') {
             focusMonitorState.currentState = 'orange';
             if (btn) {
                 btn.classList.remove('focus-status-green', 'focus-status-red');
                 btn.classList.add('focus-status-orange');
-                if (!btn.classList.contains('minimized')) {
-                    btn.innerHTML = '<i class="fas fa-exclamation"></i>';
-                }
+                if (!btn.classList.contains('minimized')) btn.innerHTML = '<i class="fas fa-exclamation"></i>'; 
             }
-            stopAlarm(); // 確保橙燈時沒有聲音
+            stopAlarm(); 
         }
     } else {
-        // [綠燈] 正常狀態
+        // ... 綠燈邏輯保持不變 ...
         if (focusMonitorState.currentState !== 'green') {
             focusMonitorState.currentState = 'green';
             if (btn) {
                 btn.classList.remove('focus-status-orange', 'focus-status-red');
                 btn.classList.add('focus-status-green');
-                if (!btn.classList.contains('minimized')) {
-                    btn.innerHTML = '<i class="fas fa-eye"></i>';
-                }
+                if (!btn.classList.contains('minimized')) btn.innerHTML = '<i class="fas fa-eye"></i>';
             }
-            stopAlarm();
+            stopAlarm(); 
         }
     }
 }
@@ -22366,12 +22263,13 @@ function removeFocusListeners() {
     }
 }
  
-// 停止警報 (Web Audio 版)
+// 4. 停止警報 (聲音 + 震動)
 function stopAlarm() {
-    // ★ 修改：停止 Web Audio
-    SansiAudio.stop('sleep_warning');
-    SansiAudio.stop('leave_warning');
+    // 停止聲音
+    focusMonitorState.audio.pause();
+    focusMonitorState.audio.currentTime = 0;
     
+    // 停止震動 (傳入 0 立即中止所有震動)
     if (navigator.vibrate) navigator.vibrate(0);
 }
  
@@ -22400,29 +22298,29 @@ window.backToArticleList = function() {
 function backToArticleList() {
     const detailView = document.getElementById('featuredDetailView');
     detailView.style.display = 'none';
-    
-    // ★★★ 關鍵：恢復 Body 捲動 ★★★
     document.body.style.overflow = 'auto';
     
-    // 停止防睡功能 (如果是自動開啟的)
-    if (typeof stopFocusMonitor === 'function') stopFocusMonitor();
- 
-    // 重新過濾並渲染列表 (保持原有邏輯)
+    // 1. 如果目前正在「只看書籤」模式，需重新過濾資料
+    // (這樣如果使用者剛剛取消了收藏，該文章就會從列表中立即消失)
     if (isBookmarkMode) {
         const bookmarks = getBookmarkedTitles();
         filteredArticles = allArticles.filter(a => bookmarks.includes(a.title));
         
+        // 重新套用搜尋關鍵字 (如果有)
         const searchInput = document.getElementById('articleSearchInput');
         if (searchInput && searchInput.value.trim() !== "") {
             const query = searchInput.value.trim().toLowerCase();
-            filteredArticles = filteredArticles.filter(a =>
-                a.title.toLowerCase().includes(query) ||
+            filteredArticles = filteredArticles.filter(a => 
+                a.title.toLowerCase().includes(query) || 
                 a.author.toLowerCase().includes(query)
             );
         }
     }
     
+    // 2. ★★★ 關鍵修改：無論是否為書籤模式，都強制重新渲染列表 ★★★
+    // 這會讀取最新的 LocalStorage，將剛看完的文章立即變成「暖灰岩色」
     renderArticleList();
+    
     document.getElementById('featuredListView').style.display = 'block';
 }
  
@@ -23230,160 +23128,84 @@ document.addEventListener('DOMContentLoaded', function() {
 // =======================================================
 // === [嚴厲版] 作家文粹：離開警報系統 (莫蘭迪極簡鎖定) ===
 // =======================================================
-// =======================================================
-// === [修訂 V4] 離開警報系統 (iOS/Android 分流版) ===
-// =======================================================
 const LeaveWarningSystem = {
     checkTimer: null,
     lockInterval: null,
-    
+    audio: new Audio('離開警告.mp3'),
     isPlaying: false,
     hasTriggered: false,
     isLocked: false,
-    leaveTimestamp: 0, // 記錄離開時間
- 
-    // 判斷是否為 iOS 裝置
-    isIOS: function() {
-        return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    },
- 
+
     init: function() {
+        this.audio.loop = true;
+        this.audio.volume = 1.0;
+        this.audio.muted = true; // 預設靜音
+
         document.addEventListener('visibilitychange', () => {
             this.handleVisibilityChange();
         });
+
+        // 關鍵：在任何點擊文章的動作中「啟動」這個靜音循環
+        const unlockAndLoop = () => {
+            this.audio.play().then(() => {
+                // 成功啟動靜音循環
+                console.log("離開警報後台循環已就緒");
+            }).catch(e => console.log("循環啟動失敗，等待下次交互"));
+        };
+        document.addEventListener('click', unlockAndLoop, { once: true });
     },
- 
+
     handleVisibilityChange: function() {
-        // 檢查防睡模式是否開啟
         if (typeof focusMonitorState === 'undefined' || !focusMonitorState.isActive) {
             this.resetSystem();
             return;
         }
+
         const detailView = document.getElementById('featuredDetailView');
         if (!detailView || detailView.style.display === 'none') {
             this.resetSystem();
             return;
         }
- 
+
         if (document.hidden) {
-            console.log("偵測到離開...");
-            this.leaveTimestamp = Date.now(); // 記錄離開當下的時間
- 
-            // === 分流邏輯：離開時 ===
-            if (this.isIOS()) {
-                // [iOS] 什麼都不做，因為做什麼都會被凍結。
-                // 僅依賴「返回時計算時間差」。
-                console.log("iOS 模式：記錄時間，等待返回...");
-            } else {
-                // [Android/PC] 啟動背景存活機制 (靜音播放 + 計時器)
-                console.log("非 iOS 模式：啟動背景播放...");
-                if (!this.isPlaying) {
-                    SansiAudio.play('leave_warning', true, 0); // 靜音播放
-                    this.isPlaying = true;
-                }
-                if (this.checkTimer) clearTimeout(this.checkTimer);
-                this.checkTimer = setTimeout(() => {
-                    this.triggerAlarmSound(); // 5秒後開音量
-                }, 5000);
-            }
- 
+            // 開始 5 秒計時
+            if (this.checkTimer) clearTimeout(this.checkTimer);
+            this.checkTimer = setTimeout(() => {
+                this.triggerAlarm();
+            }, 5000);
         } else {
-            console.log("使用者已返回。");
-            SansiAudio.unlock(); // 確保 AudioContext 活著
- 
-            // === 分流邏輯：返回時 ===
-            if (this.isIOS()) {
-                // [iOS] 計算時間差
-                const timeDiff = Date.now() - this.leaveTimestamp;
-                console.log(`iOS 返回，離開時間: ${timeDiff}ms`);
-                
-                // 如果離開超過 5 秒 (5000ms)
-                if (this.leaveTimestamp > 0 && timeDiff > 5000) {
-                    // ★ 觸發處罰 (即使聲音沒響，鎖定畫面一定會出來)
-                    this.triggerAlarmSound();
-                    this.enforcePenalty();
-                } else {
-                    // 沒超過 5 秒，當作沒事，停止可能殘留的狀態
-                    this.stopSoundOnly();
-                }
-                this.leaveTimestamp = 0; // 重置
-            } else {
-                // [Android/PC] 清除計時器
-                if (this.checkTimer) {
-                    clearTimeout(this.checkTimer);
-                    this.checkTimer = null;
-                }
-                // 如果背景已經觸發了警報，執行鎖定
-                if (this.hasTriggered) {
-                    this.enforcePenalty();
-                }
-                this.stopSoundOnly();
+            if (this.checkTimer) {
+                clearTimeout(this.checkTimer);
+                this.checkTimer = null;
             }
+            if (this.hasTriggered) {
+                this.enforcePenalty();
+            }
+            this.stopSoundOnly();
         }
     },
- 
-    // 觸發警報 (開音量 + 標記狀態)
-    triggerAlarmSound: function() {
-        console.log("觸發違規警報！");
+
+    triggerAlarm: function() {
         this.hasTriggered = true;
-        
-        // 嘗試播放聲音 (iOS 回到前景時通常可以播放)
-        SansiAudio.setVolume('leave_warning', 1.0);
-        SansiAudio.play('leave_warning', true, 1.0);
+        // === iOS 核心修正：不使用 play()，僅取消靜音 ===
+        this.audio.muted = false;
+        this.isPlaying = true;
+        console.log("警報已解除靜音");
     },
- 
-    enforcePenalty: function() {
-        const overlay = document.getElementById('penaltyLockOverlay');
-        const countSpan = document.getElementById('penaltyCountdown');
-        if (!overlay || !countSpan) return;
-        
-        overlay.style.display = 'flex';
-        this.isLocked = true;
-        
-        // 震動懲罰
-        if (navigator.vibrate) navigator.vibrate([1000, 500, 1000]);
-        
-        let timeLeft = 10;
-        countSpan.innerText = timeLeft;
-        
-        if (this.lockInterval) clearInterval(this.lockInterval);
-        this.lockInterval = setInterval(() => {
-            timeLeft--;
-            countSpan.innerText = timeLeft;
-            if (timeLeft <= 0) this.releasePenalty();
-        }, 1000);
-    },
- 
-    releasePenalty: function() {
-        const overlay = document.getElementById('penaltyLockOverlay');
-        if (overlay) overlay.style.display = 'none';
-        
-        if (this.lockInterval) { clearInterval(this.lockInterval); this.lockInterval = null; }
-        
-        this.hasTriggered = false;
-        this.isLocked = false;
-        if (navigator.vibrate) navigator.vibrate(0);
-        
-        // 停止聲音
-        SansiAudio.stop('leave_warning');
-    },
- 
+
     stopSoundOnly: function() {
-        SansiAudio.stop('leave_warning');
+        // === iOS 核心修正：不使用 pause()，改回靜音循環 ===
+        this.audio.muted = true;
         this.isPlaying = false;
-        // 注意：這裡不重置 hasTriggered，因為如果已經觸發，返回時需要鎖定
     },
- 
+
     resetSystem: function() {
         this.stopSoundOnly();
         this.releasePenalty();
         if (this.checkTimer) clearTimeout(this.checkTimer);
         this.hasTriggered = false;
-        this.leaveTimestamp = 0;
     }
 };
- 
 document.addEventListener('DOMContentLoaded', () => {
     LeaveWarningSystem.init();
 });
