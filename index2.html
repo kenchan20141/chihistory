@@ -7469,13 +7469,7 @@ body.cat-dragging { cursor: grabbing !important; }
 
 
 // ==========================================
-// === [核心] 神思音效引擎 (Web Audio API) ===
-// ==========================================
-// ==========================================
-// === [核心] 神思音效引擎 (Web Audio API - 背景播放增強版) ===
-// ==========================================
-// ==========================================
-// === [核心] 神思音效引擎 (iOS 強制喚醒版) ===
+// === [核心] 神思音效引擎 (V5 - 循環播放修復版) ===
 // ==========================================
 const SansiAudio = {
     context: null,
@@ -7487,15 +7481,18 @@ const SansiAudio = {
         'leave_warning': '離開警告.mp3'
     },
  
+    // 1. 初始化
     init: async function() {
         if (this.context) return;
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         this.context = new AudioContext();
+        
         for (const [name, url] of Object.entries(this.sounds)) {
             await this.load(name, url);
         }
     },
  
+    // 2. 載入
     load: async function(name, url) {
         try {
             let response = await fetch(url);
@@ -7513,12 +7510,11 @@ const SansiAudio = {
         }
     },
  
-    // iOS 解鎖 (必須在 click/touch 事件中呼叫)
+    // 3. iOS 解鎖
     unlock: function() {
         if (!this.context) this.init();
         if (this.context.state === 'suspended') this.context.resume();
  
-        // 播放極短靜音來獲取權限
         const oscillator = this.context.createOscillator();
         const gainNode = this.context.createGain();
         gainNode.gain.value = 0;
@@ -7528,38 +7524,47 @@ const SansiAudio = {
         oscillator.stop(0.001);
     },
  
-    // 播放音效 (包含強制喚醒邏輯)
+    // 4. 播放音效 (核心修復：自動清理機制)
     play: function(name, loop = false, startVolume = 1.0) {
         if (!this.context || !this.buffers[name]) return;
  
-        // ★★★ 關鍵修復：每次播放前，強制檢查並喚醒 Context ★★★
+        // ★ iOS 防呆：每次播放前強制檢查狀態
         if (this.context.state === 'suspended') {
-            this.context.resume().then(() => {
-                console.log("🔊 AudioContext 已強制喚醒");
-            });
+            this.context.resume();
         }
  
-        this.stop(name); // 停止舊的
+        // 如果該聲音正在播放，先強制停止舊的
+        this.stop(name);
  
         const source = this.context.createBufferSource();
         const gainNode = this.context.createGain();
  
         source.buffer = this.buffers[name];
         source.loop = loop;
+        
+        // 設定音量
         gainNode.gain.setValueAtTime(startVolume, this.context.currentTime);
  
         source.connect(gainNode);
         gainNode.connect(this.context.destination);
         
+        // ★ 新增：播放結束後的自動清理
+        source.onended = () => {
+            if (!loop) {
+                // 只有非循環播放才自動清理，循環播放需手動 stop
+                this.activeSources[name] = null;
+            }
+        };
+ 
         source.start(0);
         this.activeSources[name] = { source: source, gain: gainNode };
     },
  
+    // 5. 設定音量
     setVolume: function(name, volume) {
         const active = this.activeSources[name];
         if (active && active.gain) {
             try {
-                // 即時調整音量
                 active.gain.gain.setTargetAtTime(volume, this.context.currentTime, 0.1);
             } catch(e) {
                 active.gain.gain.value = volume;
@@ -7567,17 +7572,22 @@ const SansiAudio = {
         }
     },
  
+    // 6. 停止音效 (核心修復：斷開連接)
     stop: function(name) {
         const active = this.activeSources[name];
         if (active) {
-            try { active.source.stop(); } catch(e){}
+            try {
+                active.source.stop();
+                active.source.disconnect(); // 斷開連接
+                active.gain.disconnect();   // 斷開連接
+            } catch(e){}
             this.activeSources[name] = null;
         }
     }
 };
  
+// 自動初始化
 document.addEventListener('DOMContentLoaded', () => {
-    // 綁定全域解鎖
     const unlockHandler = () => {
         SansiAudio.unlock();
         document.removeEventListener('touchstart', unlockHandler);
@@ -21853,32 +21863,34 @@ function scrollToAnalysis() {
     }
 }
 
-// === [修訂 V9] 顯示文章詳情 (iOS 強制開啟版) ===
+// === [修訂 V10] 顯示文章詳情 (修復底部殘留問題) ===
 function showArticleDetail(index) {
-    console.log("嘗試打開文章 index:", index); // 除錯用
-
     try {
         const article = filteredArticles[index];
         if (!article) return;
     
         currentReadingArticleTitle = article.title;
-    
+        
+        // 1. 隱藏列表頁 (關鍵修正)
+        const listView = document.getElementById('featuredListView');
+        if (listView) listView.style.display = 'none';
+
+        // 2. 顯示詳情頁容器
+        const detailView = document.getElementById('featuredDetailView');
+        if (!detailView) return;
+
+        // ... (以下是原本的內容生成邏輯，為了節省篇幅，保留您的核心變數) ...
         const isSaved = isArticleBookmarked(article.title);
         const bookmarkClass = isSaved ? 'bookmarked' : '';
         const titleColor = MORANDI_TITLES[index % MORANDI_TITLES.length];
         
-        const detailView = document.getElementById('featuredDetailView');
-        if (!detailView) return console.error("找不到 featuredDetailView 容器");
-
-        // 1. 準備內容
         currentContextContent = `【文章標題】${article.title}\n【作者】${article.author}\n\n【文章正文】\n${article.content}\n\n【文章賞析】\n${article.analysis || "（無賞析資料）"}`;
         currentContextType = 'featured_discussion';
         currentContextReview = "（這是精選文章的閱讀討論）";
         
-        // 處理詩歌與換行
+        // 處理正文 (詩歌/散文)
         const isPoetry = /^\s*<br\s*\/?>/i.test(article.content);
         let contentHtml = '';
-    
         if (isPoetry) {
             let cleanContent = article.content.replace(/^\s*<br\s*\/?>/i, '').trim().replace(/\\n/g, '\n');
             contentHtml = `<div style="width: 100%; display: flex; justify-content: center;"><div id="poetryContent" style="white-space: pre; word-wrap: normal; display: inline-block; text-align: left; line-height: 1.7; font-family: 'Noto Serif TC', serif; margin-top: 0px;">${cleanContent}</div></div>`;
@@ -21902,23 +21914,17 @@ function showArticleDetail(index) {
             </div>`;
         }
     
-        const analysisBtnHtml = hasAnalysis ?
-            `<button class="detail-float-btn scroll-hide-target" onclick="scrollToAnalysis()" title="跳至賞析"><i class="fas fa-comment-dots"></i></button>` : '';
-    
-        const disclaimerHtml = `
-            <div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">
-                本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。
-            </div>`;
-    
+        // 按鈕區
+        const analysisBtnHtml = hasAnalysis ? `<button class="detail-float-btn scroll-hide-target" onclick="scrollToAnalysis()" title="跳至賞析"><i class="fas fa-comment-dots"></i></button>` : '';
+        const disclaimerHtml = `<div style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #eee; color: #aaa; font-size: 0.85rem; text-align: center; font-family: 'Noto Serif TC', serif;">本文僅供校內教學研習之用。<br>原文版權歸原作者/出版社所有。</div>`;
         const safeContent = encodeURIComponent(article.content);
         const safeTitle = encodeURIComponent(article.title);
     
-        // 處理防睡按鈕
+        // 防睡按鈕邏輯
         const isFocusUnlocked = localStorage.getItem('sansi_focus_permission') === 'true';
         let focusBtnHTML = '';
         if (isFocusUnlocked) {
             focusBtnHTML = `<button id="focusMonitorBtn" class="detail-float-btn scroll-hide-target" onclick="toggleFocusMonitor()" title="開啟防睡監察"><i class="fas fa-eye-slash"></i></button>`;
-            // 確保重置狀態
             if (typeof focusMonitorState !== 'undefined') {
                 focusMonitorState.isActive = false;
                 if (focusMonitorState.checkInterval) clearInterval(focusMonitorState.checkInterval);
@@ -21926,26 +21932,20 @@ function showArticleDetail(index) {
         } else {
             focusBtnHTML = `<button id="focusMonitorBtn" class="detail-float-btn scroll-hide-target focus-status-green" onclick="toggleFocusMonitor()" title="防睡監察中 (點擊關閉)"><i class="fas fa-eye"></i></button>`;
             if (typeof activateFocusMonitor === 'function') {
-                // 延遲啟動以避免阻塞 UI
-                setTimeout(() => {
-                    const btn = document.getElementById('focusMonitorBtn');
-                    if(btn) activateFocusMonitor(btn);
-                }, 500);
+                setTimeout(() => { const btn = document.getElementById('focusMonitorBtn'); if(btn) activateFocusMonitor(btn); }, 500);
             }
         }
     
-        // 渲染 HTML
         let chatHTML = getCanvasChatHTML('featured_discussion');
-        chatHTML = chatHTML.replace('閱卷員追問區', '與陳SIR討論');
-        chatHTML = chatHTML.replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？');
+        chatHTML = chatHTML.replace('閱卷員追問區', '與陳SIR討論').replace('對於剛才的點評或改寫，有甚麼想進一步了解的嗎？', '看完這篇文章，有甚麼想和我討論嗎？');
 
+        // 注入 HTML
         detailView.innerHTML = `
             <style>
                 @keyframes stamp-slam { 0% { opacity: 0; transform: scale(3) rotate(-5deg); } 60% { opacity: 1; transform: scale(0.9) rotate(-3deg); } 80% { transform: scale(1.05) rotate(-3deg); } 100% { opacity: 1; transform: scale(1) rotate(-3deg); } }
                 #fullArticleBody b, #fullArticleBody strong, #poetryContent b, #poetryContent strong { font-weight: bold !important; color: #2c3e50 !important; text-shadow: none !important; font-family: 'Noto Serif TC', serif; }
             </style>
             <div id="readingProgressBarContainer"><div id="readingProgressBar"></div></div>
-            
             <div class="detail-action-group">
                 <button id="detailBookmarkBtn" class="detail-float-btn scroll-hide-target ${bookmarkClass}" onclick="handleDetailBookmarkClick('${safeTitle}')" title="加入/移除書籤"><i class="fas fa-bookmark"></i></button>
                 ${analysisBtnHtml}
@@ -21955,7 +21955,6 @@ function showArticleDetail(index) {
                 <button id="detailTopBtn" class="detail-float-btn" onclick="scrollToArticleTop()" title="返回頂部" style="display: none;"><i class="fas fa-arrow-up"></i></button>
                 <button class="detail-float-btn close-mode" onclick="backToArticleList()" title="返回列表"><i class="fas fa-times"></i></button>
             </div>
-    
             <div class="read-mode-container">
                 <div class="detail-header-group" style="display: flex; flex-direction: column; align-items: center; border-bottom: 2px dashed #e0ddd7; margin-bottom: 25px !important; padding-bottom: 15px !important;">
                     <div class="detail-title-text auto-fit-title" id="detailTitleText" style="color: ${titleColor}; font-weight: bold; margin-bottom: 20px; text-align: center; width: 100%;">
@@ -21976,8 +21975,7 @@ function showArticleDetail(index) {
                         <div style="height: 1px; background: linear-gradient(to right, transparent, #e0ddd7, transparent); width: 50%; margin: 0 auto 30px auto;"></div>
                         <button id="showFeaturedChatBtn" onclick="toggleFeaturedChat()"
                             style="width: 60px; height: 60px; background-color: transparent; color: #d69a92; border: 3px solid #d69a92; border-radius: 8px; font-family: 'Noto Serif TC', serif; font-size: 1.1rem; font-weight: 900; line-height: 1; padding: 0; transform: rotate(-3deg); cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; justify-content: center;"
-                            title="點擊落款"
-                        >討論</button>
+                            title="點擊落款">討論</button>
                         <div style="margin-top: 15px; color: #a1887f; font-size: 0.8rem; font-family: 'Noto Serif TC', serif; opacity: 0.6; letter-spacing: 2px; transform: scale(0.9); transition: opacity 0.5s;">[ 點 擊 落 款 ]</div>
                     </div>
                     <div id="featuredChatArea" style="display: none; text-align: left; animation: fadeIn 1s ease; margin-top: 30px;">
@@ -21988,20 +21986,15 @@ function showArticleDetail(index) {
             </div>
         `;
     
-        // 2. ★★★ iOS 關鍵修復：先隱藏，強制重繪，再顯示 ★★★
+        // 顯示
         detailView.style.display = 'block';
-        
-        // 強制 Reflow (讓瀏覽器重新計算佈局)
         void detailView.offsetWidth; 
-        
-        // 3. 鎖定 Body 捲動
         document.body.style.overflow = 'hidden';
     
-        // 4. 文字縮放 (延遲執行確保 DOM 存在)
+        // 文字縮放
         setTimeout(() => {
             const titleEl = document.getElementById('detailTitleText');
             if (titleEl) fitTextToContainer(titleEl, 24, 38);
-     
             if (isPoetry) {
                 const poetryEl = document.getElementById('poetryContent');
                 if (poetryEl) {
@@ -22018,7 +22011,7 @@ function showArticleDetail(index) {
             }
         }, 50);
     
-        // 5. 綁定捲動事件
+        // 滾動與防睡 UI 控制
         detailView.onscroll = function() {
             const scrollTop = detailView.scrollTop;
             const docHeight = detailView.scrollHeight;
@@ -22037,7 +22030,6 @@ function showArticleDetail(index) {
                 if (topBtn) topBtn.style.display = 'flex';
                 hideTargets.forEach(btn => {
                     if (btn.id === 'focusMonitorBtn') {
-                        // 縮小模式
                         if (focusMonitorState && focusMonitorState.isActive) {
                             btn.style.display = 'flex';
                             btn.classList.add('minimized');
@@ -22059,7 +22051,7 @@ function showArticleDetail(index) {
                 });
             }
      
-            // 已讀標記邏輯
+            // 已讀標記
             const analysisSection = document.getElementById('articleAnalysisSection');
             if (analysisSection && !isAutoScrollingToAnalysis) {
                 const rect = analysisSection.getBoundingClientRect();
@@ -22073,6 +22065,41 @@ function showArticleDetail(index) {
         console.error("開啟文章詳情失敗:", err);
         alert("無法開啟文章，請重新整理頁面試試。");
     }
+}
+
+// === [修訂 V2] 返回列表 (修復：恢復列表顯示) ===
+function backToArticleList() {
+    // 1. 隱藏詳情頁
+    const detailView = document.getElementById('featuredDetailView');
+    if (detailView) detailView.style.display = 'none';
+    
+    // 2. 顯示列表頁 (關鍵)
+    const listView = document.getElementById('featuredListView');
+    if (listView) listView.style.display = 'block';
+
+    // 恢復 Body 捲動
+    document.body.style.overflow = 'auto';
+    
+    // 停止防睡
+    if (typeof stopFocusMonitor === 'function') stopFocusMonitor();
+
+    // 重新過濾列表
+    if (isBookmarkMode) {
+        const bookmarks = getBookmarkedTitles();
+        filteredArticles = allArticles.filter(a => bookmarks.includes(a.title));
+        
+        const searchInput = document.getElementById('articleSearchInput');
+        if (searchInput && searchInput.value.trim() !== "") {
+            const query = searchInput.value.trim().toLowerCase();
+            filteredArticles = filteredArticles.filter(a => 
+                a.title.toLowerCase().includes(query) || 
+                a.author.toLowerCase().includes(query)
+            );
+        }
+    }
+    
+    // 重新渲染列表以更新「已讀」狀態
+    renderArticleList();
 }
 // =======================================================
 // === [修訂 V5] 防入睡失神監察系統 (400ms 輕震版) ===
