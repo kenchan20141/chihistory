@@ -7471,101 +7471,127 @@ body.cat-dragging { cursor: grabbing !important; }
 // ==========================================
 // === [核心] 神思音效引擎 (Web Audio API) ===
 // ==========================================
+// ==========================================
+// === [核心] 神思音效引擎 (Web Audio API - 背景播放增強版) ===
+// ==========================================
 const SansiAudio = {
     context: null,
-    buffers: {}, // 儲存載入的音訊數據
-    activeSources: {}, // 儲存正在播放的聲音 (用於停止循環)
+    buffers: {},
+    activeSources: {}, // 結構: { name: { source: AudioBufferSourceNode, gain: GainNode } }
  
-    // 1. 初始化並載入音效
+    // 定義音效路徑
+    sounds: {
+        'sleep_warning': '閉眼警告.mp3',
+        'leave_warning': '離開警告.mp3'
+    },
+ 
+    // 1. 初始化
     init: async function() {
         if (this.context) return;
         
-        // 兼容各瀏覽器
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         this.context = new AudioContext();
  
-        // 預載音效
-        await this.load('sleep_warning', '閉眼警告.mp3');
-        await this.load('leave_warning', '離開警告.mp3');
+        for (const [name, url] of Object.entries(this.sounds)) {
+            await this.load(name, url);
+        }
         console.log("🔊 音效引擎已就緒");
     },
  
-    // 2. 載入並解碼 MP3
+    // 2. 載入
     load: async function(name, url) {
         try {
-            const response = await fetch(url);
+            let response = await fetch(url);
+            if (!response.ok) {
+                // 備用音源
+                let backupUrl = name === 'sleep_warning'
+                    ? "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
+                    : "https://actions.google.com/sounds/v1/alarms/beep_short.ogg";
+                response = await fetch(backupUrl);
+            }
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
             this.buffers[name] = audioBuffer;
         } catch (e) {
-            console.error(`無法載入音效 ${name}:`, e);
+            console.error(`音效載入失敗 [${name}]:`, e);
         }
     },
  
-    // 3. 關鍵：iOS 解鎖 (必須在 click/touch 事件中呼叫)
+    // 3. iOS 解鎖
     unlock: function() {
         if (!this.context) this.init();
-        
-        // 如果 Context 被暫停 (iOS 預設狀態)，則恢復它
-        if (this.context.state === 'suspended') {
-            this.context.resume().then(() => {
-                console.log("🔊 iOS 音訊已解鎖 (Resumed)");
-            });
-        }
+        if (this.context.state === 'suspended') this.context.resume();
  
-        // 播放一個極短的無聲震盪器，徹底騙過 iOS 的檢查機制
         const oscillator = this.context.createOscillator();
         const gainNode = this.context.createGain();
-        gainNode.gain.value = 0; // 無聲
+        gainNode.gain.value = 0;
         oscillator.connect(gainNode);
         gainNode.connect(this.context.destination);
         oscillator.start(0);
         oscillator.stop(0.001);
     },
  
-    // 4. 播放音效
-    play: function(name, loop = false) {
+    // 4. 播放音效 (支援即時音量設定)
+    play: function(name, loop = false, startVolume = 1.0) {
         if (!this.context || !this.buffers[name]) return;
  
-        // 如果已經在播放同名音效且是循環模式，先停止舊的
-        if (this.activeSources[name]) {
-            try { this.activeSources[name].stop(); } catch(e){}
-        }
+        // 停止舊的同名音效
+        this.stop(name);
  
         const source = this.context.createBufferSource();
+        const gainNode = this.context.createGain(); // 建立音量節點
+ 
         source.buffer = this.buffers[name];
         source.loop = loop;
-        source.connect(this.context.destination);
+        
+        // 設定初始音量
+        gainNode.gain.setValueAtTime(startVolume, this.context.currentTime);
+ 
+        // 連接：Source -> Gain -> Destination
+        source.connect(gainNode);
+        gainNode.connect(this.context.destination);
         
         source.start(0);
-        this.activeSources[name] = source;
+ 
+        // 儲存參照以便後續控制
+        this.activeSources[name] = { source: source, gain: gainNode };
     },
  
-    // 5. 停止音效
-    stop: function(name) {
-        if (this.activeSources[name]) {
+    // 5. 設定音量 (這是背景播放的關鍵)
+    setVolume: function(name, volume) {
+        const active = this.activeSources[name];
+        if (active && active.gain) {
+            // 使用 linearRamp 避免爆音，但設為極短時間以達即時效果
             try {
-                this.activeSources[name].stop();
-                this.activeSources[name] = null;
-            } catch(e){}
+                const currentTime = this.context.currentTime;
+                active.gain.gain.cancelScheduledValues(currentTime);
+                active.gain.gain.setValueAtTime(volume, currentTime);
+            } catch(e) {
+                // Fallback
+                active.gain.gain.value = volume;
+            }
+        }
+    },
+ 
+    // 6. 停止
+    stop: function(name) {
+        const active = this.activeSources[name];
+        if (active) {
+            try { active.source.stop(); } catch(e){}
+            this.activeSources[name] = null;
         }
     }
 };
  
-// 頁面載入後自動嘗試初始化 (非阻塞)
+// 自動初始化
 document.addEventListener('DOMContentLoaded', () => {
-    // 綁定全域點擊事件來解鎖 iOS 音訊 (這是最保險的做法)
     const unlockHandler = () => {
         SansiAudio.unlock();
-        // 解鎖一次後即可移除監聽，節省資源
         document.removeEventListener('touchstart', unlockHandler);
         document.removeEventListener('click', unlockHandler);
     };
-    
     document.addEventListener('touchstart', unlockHandler, {passive: true});
     document.addEventListener('click', unlockHandler, {passive: true});
-    
-    // 預先載入
     SansiAudio.init();
 });
 
@@ -23187,17 +23213,18 @@ document.addEventListener('DOMContentLoaded', function() {
 // =======================================================
 // === [修訂 V2] 離開警報系統 (Web Audio API 版) ===
 // =======================================================
+// =======================================================
+// === [修訂 V3] 離開警報系統 (iOS 背景存活版) ===
+// =======================================================
 const LeaveWarningSystem = {
     checkTimer: null,
     lockInterval: null,
-    // 移除舊的 audio 物件
     
     isPlaying: false,
     hasTriggered: false,
     isLocked: false,
  
     init: function() {
-        // 初始化時不需載入，SansiAudio.init() 會處理
         document.addEventListener('visibilitychange', () => {
             this.handleVisibilityChange();
         });
@@ -23216,35 +23243,51 @@ const LeaveWarningSystem = {
         }
  
         if (document.hidden) {
-            console.log("偵測到離開，開始 5 秒計時...");
+            console.log("偵測到離開，啟動背景存活機制...");
+            
+            // ★★★ 關鍵策略：立即播放，但設為靜音 ★★★
+            // 這樣做是為了騙過 iOS，讓它不要凍結我們的計時器
+            if (!this.isPlaying) {
+                SansiAudio.play('leave_warning', true, 0); // 播放，音量 0
+                this.isPlaying = true;
+            }
+ 
             if (this.checkTimer) clearTimeout(this.checkTimer);
+            
+            // 啟動 5 秒倒數
             this.checkTimer = setTimeout(() => {
-                this.triggerAlarm();
+                this.triggerAlarmSound(); // 時間到，開啟音量
             }, 5000);
+ 
         } else {
             console.log("使用者已返回。");
-            // ★ 關鍵：使用者返回時，立即嘗試解鎖 AudioContext (防止因長時間背景而被凍結)
-            SansiAudio.unlock();
+            SansiAudio.unlock(); // 確保 Context 活著
  
             if (this.checkTimer) {
                 clearTimeout(this.checkTimer);
                 this.checkTimer = null;
             }
+            
+            // 如果已經觸發過警報 (音量已經打開了)，則執行鎖定懲罰
             if (this.hasTriggered) {
                 this.enforcePenalty();
             }
+            
             this.stopSoundOnly();
         }
     },
  
-    triggerAlarm: function() {
+    // 真正發出聲音
+    triggerAlarmSound: function() {
+        console.log("離開超過 5 秒，開啟警報音量！");
         this.hasTriggered = true;
-        if (!this.isPlaying) {
-            this.isPlaying = true;
-            console.log("觸發離開警報音效");
-            // ★ 修改：使用 Web Audio API 播放
-            SansiAudio.play('leave_warning', true);
-        }
+        
+        // ★★★ 關鍵：將正在背景播放的靜音軌道，音量瞬間拉大 ★★★
+        SansiAudio.setVolume('leave_warning', 1.0);
+        
+        // 為了確保萬無一失，如果之前的靜音播放被系統殺了，這裡重新播放一次
+        // (SansiAudio 內部會處理重複播放的問題)
+        SansiAudio.play('leave_warning', true, 1.0);
     },
  
     enforcePenalty: function() {
@@ -23280,16 +23323,15 @@ const LeaveWarningSystem = {
     },
  
     stopSoundOnly: function() {
-        // ★ 修改：停止 Web Audio
         SansiAudio.stop('leave_warning');
         this.isPlaying = false;
+        this.hasTriggered = false; // 重置觸發狀態
     },
  
     resetSystem: function() {
         this.stopSoundOnly();
         this.releasePenalty();
         if (this.checkTimer) clearTimeout(this.checkTimer);
-        this.hasTriggered = false;
     }
 };
  
