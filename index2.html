@@ -7504,21 +7504,28 @@ const SansiAudio = {
     },
 
     // 關鍵函數：使用者點擊啟動時必須呼叫，開啟「音訊管道」
-    unlock: function() {
-        if (!this.context) this.init();
-        if (this.context.state === 'suspended') this.context.resume();
+  // === 修改 SansiAudio 內的 unlock 函式 ===
+unlock: function() {
+    if (!this.context) this.init();
+    
+    // 如果狀態是 suspended，強制恢復
+    if (this.context.state === 'suspended') {
+        this.context.resume().then(() => {
+            console.log("🔊 [Audio] iOS 音訊軌道已成功恢復運行");
+        });
+    }
 
-        // 建立一個持續循環的無聲緩衝區
-        if (!this.silentNode) {
-            const buffer = this.context.createBuffer(1, 1, 22050);
-            this.silentNode = this.context.createBufferSource();
-            this.silentNode.buffer = buffer;
-            this.silentNode.loop = true;
-            this.silentNode.connect(this.context.destination);
-            this.silentNode.start(0);
-            console.log("🔊 [Audio] 管道已永久解鎖 (Silent Loop Started)");
-        }
-    },
+    // 建立或重新建立持久無聲節點（防止被系統回收）
+    if (!this.silentNode) {
+        const buffer = this.context.createBuffer(1, 1, 22050);
+        this.silentNode = this.context.createBufferSource();
+        this.silentNode.buffer = buffer;
+        this.silentNode.loop = true;
+        this.silentNode.connect(this.context.destination);
+        this.silentNode.start(0);
+        console.log("🔊 [Audio] 靜默循環節點已掛載");
+    }
+},
 
     // 播放警報 (因為管道已解鎖，現在隨時呼叫都會響)
     play: function(name, loop = false) {
@@ -23212,54 +23219,51 @@ const LeaveWarningSystem = {
         });
     },
 
-    handleVisibilityChange: function() {
-        if (typeof focusMonitorState === 'undefined' || !focusMonitorState.isActive) {
-            this.resetSystem();
-            return;
-        }
+  // === 修改 LeaveWarningSystem 內的 handleVisibilityChange 函式 ===
+handleVisibilityChange: function() {
+    if (typeof focusMonitorState === 'undefined' || !focusMonitorState.isActive) {
+        this.resetSystem();
+        return;
+    }
+    
+    const detailView = document.getElementById('featuredDetailView');
+    if (!detailView || detailView.style.display === 'none') {
+        this.resetSystem();
+        return;
+    }
+
+    if (document.hidden) {
+        // ... (保持原本的 [離開時] 邏輯不變)
+        console.log("📍 [Leave] 偵測到離開");
+        this.leaveTimestamp = Date.now(); 
+        if (this.checkTimer) clearTimeout(this.checkTimer);
+        this.checkTimer = setTimeout(() => {
+            this.triggerAlarmSound(); 
+        }, 5000);
+    } else {
+        // --- 【關鍵修正：返回時】 ---
+        console.log("📍 [Back] 使用者已返回，喚醒音訊管道");
         
-        // 只有在閱讀詳情頁面才啟動
-        const detailView = document.getElementById('featuredDetailView');
-        if (!detailView || detailView.style.display === 'none') {
-            this.resetSystem();
-            return;
+        // ★ 重點：重新呼叫 SansiAudio.unlock() 來喚醒 iOS 的 AudioContext
+        if (typeof SansiAudio !== 'undefined') {
+            SansiAudio.unlock();
         }
 
-        if (document.hidden) {
-            // --- 【離開時】 ---
-            console.log("📍 [Leave] 偵測到離開");
-            this.leaveTimestamp = Date.now(); 
-
-            // 安卓與電腦版邏輯：啟動背景 5 秒計時器
-            // 藉由正在播放的無聲管道，安卓有機會在背景準時響起
-            if (this.checkTimer) clearTimeout(this.checkTimer);
-            this.checkTimer = setTimeout(() => {
-                this.triggerAlarmSound(); // 5秒後在背景(或準備)響起
-            }, 5000);
-
-        } else {
-            // --- 【返回時】 ---
-            console.log("📍 [Back] 使用者已返回");
-            
-            const now = Date.now();
-            const timeAway = now - this.leaveTimestamp;
-            
-            // iOS 關鍵邏輯：如果在背景時計時器被凍結了，回來後立刻計算時間差
-            // 如果離開超過 5 秒，且剛才在背景還沒響過，就補發警報
-            if (this.leaveTimestamp > 0 && timeAway > 5000) {
-                if (!this.hasTriggered) {
-                    console.log(`⚠️ [iOS/Penalty] 補發離開警報 (離開 ${timeAway}ms)`);
-                    this.triggerAlarmSound();
-                }
-                // 無論是背景響過還是補發，只要超過5秒就執行鎖定懲罰
-                this.enforcePenalty();
-            } else {
-                // 離開不足 5 秒，平安無事
-                this.stopSoundOnly();
+        const now = Date.now();
+        const timeAway = now - this.leaveTimestamp;
+        
+        if (this.leaveTimestamp > 0 && timeAway > 5000) {
+            if (!this.hasTriggered) {
+                console.log(`⚠️ [iOS/Penalty] 補發離開警報`);
+                this.triggerAlarmSound();
             }
-            this.leaveTimestamp = 0; 
+            this.enforcePenalty();
+        } else {
+            this.stopSoundOnly();
         }
-    },
+        this.leaveTimestamp = 0; 
+    }
+},
 
     // 觸發警報 (聲音 + 統一震動)
     triggerAlarmSound: function() {
