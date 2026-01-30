@@ -23195,6 +23195,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // =======================================================
 // === [修復版] 離開警報系統 (恢復 5 秒緩衝邏輯) ===
 // =======================================================
+// =======================================================
+// === [修復版] 離開警報系統 (5秒背景同步震動版) ===
+// =======================================================
 const LeaveWarningSystem = {
     checkTimer: null,
     lockInterval: null,
@@ -23202,6 +23205,7 @@ const LeaveWarningSystem = {
     isLocked: false,
     leaveTimestamp: 0, 
 
+    // 與閉眼警告一致的震動模式
     vibratePattern: [400, 200, 400, 200, 400],
 
     init: function() {
@@ -23211,7 +23215,6 @@ const LeaveWarningSystem = {
     },
 
     handleVisibilityChange: function() {
-        // 只有在防睡監察啟動，且在文萃詳情頁時才生效
         if (typeof focusMonitorState === 'undefined' || !focusMonitorState.isActive) {
             this.resetSystem();
             return;
@@ -23224,38 +23227,47 @@ const LeaveWarningSystem = {
         }
 
         if (document.hidden) {
-            // --- 【離開頁面】 ---
-            console.log("📍 [Leave] 已離開頁面，5 秒緩衝計時開始...");
+            // --- 【離開當下】 ---
+            console.log("📍 [Leave] 5秒背景監控開始...");
             this.leaveTimestamp = Date.now(); 
+            this.hasTriggered = false;
 
-            // 設定 5 秒後觸發警報
+            // ★ 關鍵技巧：立即啟動「靜音」音訊以維持背景進程活躍
+            // 第三個參數 0 代表靜音，這讓瀏覽器不會立刻殺掉計時器
+            if (typeof SansiAudio !== 'undefined') {
+                SansiAudio.play('leave_warning', true, 0); 
+            }
+
+            // 設定 5 秒計時器
             if (this.checkTimer) clearTimeout(this.checkTimer);
             this.checkTimer = setTimeout(() => {
-                console.log("🚨 [Timer] 5 秒緩衝結束，使用者未返回，啟動警報");
+                // 5 秒到了，如果還在背景，執行「響鈴+震動」
                 this.triggerAlarm(); 
-            }, 5000); // 這裡設定 5000 毫秒 (5秒)
+            }, 5000);
 
         } else {
-            // --- 【返回頁面】 ---
+            // --- 【返回前景】 ---
             console.log("📍 [Back] 使用者返回");
             
             const now = Date.now();
             const timeAway = now - this.leaveTimestamp;
             
-            // 立即清除緩衝計時器
+            // 停掉背景計時器
             if (this.checkTimer) {
                 clearTimeout(this.checkTimer);
                 this.checkTimer = null;
             }
 
-            // 判斷是否超過 5 秒
+            // 如果離開超過 5 秒
             if (this.leaveTimestamp > 0 && timeAway > 5000) {
-                // 超過 5 秒才回來，執行鎖定處罰
-                console.log("⚠️ [Penalty] 離開超過 5 秒，執行鎖定");
+                // 如果在背景沒震動成功（受限於部分系統），回到頁面時補償震動
+                if (!this.hasTriggered) {
+                    this.triggerAlarm();
+                }
+                // 進入懲罰鎖定畫面
                 this.enforcePenalty();
             } else {
-                // 5 秒內回來，平安無事，停止聲音
-                console.log("✅ [Safe] 5 秒內返回，警報重置");
+                // 安全返回：停止靜音保活音訊
                 this.stopSoundOnly();
             }
             
@@ -23263,17 +23275,19 @@ const LeaveWarningSystem = {
         }
     },
 
-    // 觸發警報（聲音與震動）
+    // ★ 執行警報（聲音恢復 + 震動） ★
     triggerAlarm: function() {
         if (this.hasTriggered) return; 
         this.hasTriggered = true;
         
-        // 播放警告音
+        console.log("🚨 [Alarm] 執行 5 秒逾時警報（含震動）");
+
+        // 1. 將保活音訊調回正常音量 (1.0)
         if (typeof SansiAudio !== 'undefined') {
-            SansiAudio.play('leave_warning', true);
+            SansiAudio.play('leave_warning', true, 1.0);
         }
         
-        // 執行震動
+        // 2. 執行震動 (嘗試在背景觸發)
         if (navigator.vibrate) {
             navigator.vibrate(this.vibratePattern);
         }
@@ -23301,6 +23315,11 @@ const LeaveWarningSystem = {
             timeLeft--;
             countSpan.innerText = timeLeft;
             
+            // 懲罰期間每 2 秒追加一次震動，增加體感壓力
+            if (timeLeft % 2 === 0 && navigator.vibrate) {
+                navigator.vibrate(this.vibratePattern);
+            }
+
             if (timeLeft <= 0) {
                 this.releasePenalty();
             }
@@ -23322,7 +23341,6 @@ const LeaveWarningSystem = {
         
         this.stopSoundOnly();
         
-        // 重置主防睡監測時間點
         if (typeof focusMonitorState !== 'undefined') {
             focusMonitorState.lastActivityTime = Date.now();
         }
@@ -23345,7 +23363,6 @@ const LeaveWarningSystem = {
         this.hasTriggered = false;
     }
 };
-
 // 啟動監聽
 document.addEventListener('DOMContentLoaded', () => {
     LeaveWarningSystem.init();
