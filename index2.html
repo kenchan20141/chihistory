@@ -23202,10 +23202,9 @@ document.addEventListener('DOMContentLoaded', function() {
 const LeaveWarningSystem = {
     checkTimer: null,
     lockInterval: null,
-    isPlaying: false,
-    hasTriggered: false,
     isLocked: false,
     leaveTimestamp: 0, 
+    wasHiddenWhileLocked: false, // 標記是否在鎖定期間逃走
 
     vibratePattern: [400, 200, 400, 200, 400],
 
@@ -23228,43 +23227,56 @@ const LeaveWarningSystem = {
         }
 
         if (document.hidden) {
-            // --- 【離開時】 ---
-            console.log("📍 [Leave] 偵測到離開");
-            this.leaveTimestamp = Date.now(); 
-            
-            // 重置觸發狀態，允許回來時重新判定
-            this.hasTriggered = false; 
+            // --- 【離開頁面時】 ---
+            this.leaveTimestamp = Date.now();
+            console.log("📍 [Leave] 離開頁面");
 
-            if (this.checkTimer) clearTimeout(this.checkTimer);
-            this.checkTimer = setTimeout(() => {
-                this.triggerAlarmSound(); 
-            }, 5000);
-
+            if (this.isLocked) {
+                // 如果已經在鎖定中，只要離開一秒都算違規
+                this.wasHiddenWhileLocked = true;
+                // 離開時停止當前計時器，回來再重算
+                if (this.lockInterval) clearInterval(this.lockInterval);
+            } else {
+                // 尚未鎖定，啟動 5 秒寬限計時
+                if (this.checkTimer) clearTimeout(this.checkTimer);
+                this.checkTimer = setTimeout(() => {
+                    this.triggerAlarmSound(); 
+                }, 5000);
+            }
         } else {
-            // --- 【返回時】 ---
-            console.log("📍 [Back] 使用者已返回");
+            // --- 【回到頁面時】 ---
+            console.log("📍 [Back] 回到頁面");
             
-            // 喚醒音訊管道（修復 iOS 問題）
+            // ★ 關鍵：解鎖 iOS 音訊管道
             if (typeof SansiAudio !== 'undefined') {
                 SansiAudio.unlock();
             }
 
-            const now = Date.now();
-            const timeAway = now - this.leaveTimestamp;
-            
-            // 如果離開超過 5 秒
-            if (this.leaveTimestamp > 0 && timeAway > 5000) {
-                console.log(`⚠️ [Penalty] 偵測到違規離開 ${timeAway}ms，重新執行懲罰`);
-                
-                // 1. 強制重置音效與震動（重新來過）
-                this.stopSoundOnly();
-                this.triggerAlarmSound();
-                
-                // 2. 重新開始 10 秒計時
-                this.enforcePenalty();
+            if (this.isLocked) {
+                // 情況 A：在鎖定期間逃走後回來
+                if (this.wasHiddenWhileLocked) {
+                    console.log("🚨 [Violation] 鎖定中再次離開，重新開始 10 秒懲罰");
+                    this.wasHiddenWhileLocked = false;
+                    
+                    // 重新來過：重置聲音與計時
+                    this.stopSoundOnly();
+                    this.triggerAlarmSound();
+                    this.enforcePenalty(); 
+                } else {
+                    // 只是正常的頁面刷新或誤觸，繼續倒數
+                    this.enforcePenalty(); 
+                }
             } else {
-                // 如果沒有違規且不在鎖定中，才停止聲音
-                if (!this.isLocked) {
+                // 情況 B：尚未鎖定時的回來判定
+                const now = Date.now();
+                const timeAway = now - this.leaveTimestamp;
+                
+                if (this.leaveTimestamp > 0 && timeAway > 5000) {
+                    console.log("🚨 [Violation] 離開超過 5 秒，觸發鎖定");
+                    this.triggerAlarmSound();
+                    this.enforcePenalty();
+                } else {
+                    // 5 秒內回來，取消警報
                     this.stopSoundOnly();
                 }
             }
@@ -23273,22 +23285,17 @@ const LeaveWarningSystem = {
     },
 
     triggerAlarmSound: function() {
-        // 不再檢查 hasTriggered，確保每次呼叫都能重新啟動
-        console.log("🚨 [Alarm] 警告音與震動重新開始");
-        
+        console.log("🔊 播放警告音與震動");
         if (typeof SansiAudio !== 'undefined') {
-            SansiAudio.stop('leave_warning'); // 先停
-            SansiAudio.play('leave_warning', true); // 再播
+            SansiAudio.stop('leave_warning'); // 先強制停止舊的
+            SansiAudio.play('leave_warning', true); // 循環播放
         }
-        
         if (navigator.vibrate) {
             navigator.vibrate(this.vibratePattern);
         }
-        this.hasTriggered = true;
     },
 
     enforcePenalty: function() {
-        // ★ 關鍵改動：不再因為 isLocked 為真就返回，而是強制重置計時
         const overlay = document.getElementById('penaltyLockOverlay');
         const countSpan = document.getElementById('penaltyCountdown');
         if (!overlay || !countSpan) return;
@@ -23296,23 +23303,25 @@ const LeaveWarningSystem = {
         overlay.style.display = 'flex';
         this.isLocked = true;
         
-        // 重新從 10 秒開始
+        // ★ 強制重置為 10 秒
         let timeLeft = 10;
         countSpan.innerText = timeLeft;
         
-        // 清除舊的計時器（如果存在），防止多個計時器併行
         if (this.lockInterval) clearInterval(this.lockInterval);
         
         this.lockInterval = setInterval(() => {
             timeLeft--;
+            if (timeLeft < 0) timeLeft = 0; // 防止出現負數
             countSpan.innerText = timeLeft;
             
-            // 鎖定期間每兩秒補一次震動，防止 iOS 自動停止震動
+            // 鎖定期間每 2 秒補一次震動，確保威懾力
             if (timeLeft % 2 === 0 && navigator.vibrate) {
                 navigator.vibrate(this.vibratePattern);
             }
 
-            if (timeLeft <= 0) this.releasePenalty();
+            if (timeLeft <= 0) {
+                this.releasePenalty();
+            }
         }, 1000);
     },
 
@@ -23322,11 +23331,12 @@ const LeaveWarningSystem = {
         
         if (this.lockInterval) { clearInterval(this.lockInterval); this.lockInterval = null; }
         
-        this.hasTriggered = false;
         this.isLocked = false;
+        this.wasHiddenWhileLocked = false;
         if (navigator.vibrate) navigator.vibrate(0);
         this.stopSoundOnly();
         
+        // 重置防睡監察活動時間
         if (typeof focusMonitorState !== 'undefined') {
             focusMonitorState.lastActivityTime = Date.now();
         }
@@ -23343,7 +23353,7 @@ const LeaveWarningSystem = {
         this.stopSoundOnly();
         this.releasePenalty();
         this.leaveTimestamp = 0;
-        this.hasTriggered = false;
+        this.wasHiddenWhileLocked = false;
     }
 };
 
