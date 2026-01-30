@@ -20692,7 +20692,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 2. 獲取身份
-  function getIdentity() {
+   // 1. 獲取標準化身份 (確保路徑絕對正確)
+function getIdentity() {
     const rawProfile = localStorage.getItem('studentProfile');
     let s = null;
     try { if(rawProfile) s = JSON.parse(rawProfile); } catch (e) {}
@@ -20795,6 +20796,7 @@ async function logVisitOnce() {
     }
 }
 
+// 4. 上傳 1 分鐘 (分流版)
 // 3. 上傳 1 分鐘 (Upload Duration) - 容錯版
 function uploadOneMinute() {
     if (typeof firebase === 'undefined' || !database) return;
@@ -20828,9 +20830,14 @@ function uploadOneMinute() {
     }
 
     // 執行寫入 (不等待結果，背景執行)
-    database.ref().update(updates).catch(e => {
-        console.error("❌ [Stats] 時長上傳失敗 (權限或網絡問題):", e);
-    });
+    database.ref().update(updates)
+        .then(() => {
+            // ★★★ 加回這行，方便您測試時確認 ★★★
+            console.log("✅ [Stats] 時長上傳成功 (+60s)");
+        })
+        .catch(e => {
+            console.error("❌ [Stats] 時長上傳失敗 (權限或網絡問題):", e);
+        });
 }
     // 5. 計時器啟動 (還原你的邏輯)
     function startTimer() {
