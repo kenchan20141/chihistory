@@ -7504,27 +7504,22 @@ const SansiAudio = {
     },
 
     // 關鍵函數：使用者點擊啟動時必須呼叫，開啟「音訊管道」
-   unlock: function() {
+    unlock: function() {
         if (!this.context) this.init();
         if (this.context.state === 'suspended') this.context.resume();
 
+        // 建立一個持續循環的無聲緩衝區
         if (!this.silentNode) {
-            // 建立一個有極微弱內容的 Buffer，比全 0 的 Buffer 更能維持 Android 背景活性
-            const buffer = this.context.createBuffer(1, 44100, 44100);
-            const data = buffer.getChannelData(0);
-            // 加入極微弱的亂數（人耳聽不到，但系統會判定有音訊流量）
-            for (let i = 0; i < 44100; i++) {
-                data[i] = (Math.random() * 2 - 1) * 0.0001; 
-            }
-
+            const buffer = this.context.createBuffer(1, 1, 22050);
             this.silentNode = this.context.createBufferSource();
             this.silentNode.buffer = buffer;
             this.silentNode.loop = true;
             this.silentNode.connect(this.context.destination);
             this.silentNode.start(0);
-            console.log("🔊 [Audio] 媒體管道已升級至高品質靜默模式，已活化 Android 背景進程");
+            console.log("🔊 [Audio] 管道已永久解鎖 (Silent Loop Started)");
         }
     },
+
     // 播放警報 (因為管道已解鎖，現在隨時呼叫都會響)
     play: function(name, loop = false) {
         if (!this.context || !this.buffers[name]) return;
@@ -23201,43 +23196,19 @@ document.addEventListener('DOMContentLoaded', function() {
 // === [終極整合版] 離開警報系統 (Android 背景觸發 + iOS 回來清算) ===
 // =======================================================
 // =======================================================
-// === [Android 背景強化版] 離開警報系統 (Web Worker + 靜音活化) ===
+// === [背景觸發版] 離開警報系統 (Android 背景震動 + iOS 返回清算) ===
 // =======================================================
 const LeaveWarningSystem = {
-    worker: null,
+    checkTimer: null,
     lockInterval: null,
     hasTriggered: false,
     isLocked: false,
     leaveTimestamp: 0, 
+
+    // 指定的震動模式：[震動, 停止, 震動, 停止, 震動]
     vibratePattern: [400, 200, 400, 200, 400],
 
     init: function() {
-        // --- 核心：建立內嵌式 Web Worker 解決背景計時被凍結的問題 ---
-        const workerCode = `
-            let timer = null;
-            self.onmessage = function(e) {
-                if (e.data === 'start') {
-                    if (timer) clearTimeout(timer);
-                    timer = setTimeout(() => {
-                        self.postMessage('trigger');
-                    }, 5000); // 準時 5 秒
-                } else if (e.data === 'stop') {
-                    if (timer) clearTimeout(timer);
-                    timer = null;
-                }
-            };
-        `;
-        const blob = new Blob([workerCode], { type: 'application/javascript' });
-        this.worker = new Worker(URL.createObjectURL(blob));
-
-        // 監聽 Worker 的觸發訊號
-        this.worker.onmessage = (e) => {
-            if (e.data === 'trigger' && !this.hasTriggered) {
-                console.log("🚨 [Worker] 背景時間到，執行震動與音效");
-                this.triggerAlarmSound();
-            }
-        };
-
         document.addEventListener('visibilitychange', () => {
             this.handleVisibilityChange();
         });
@@ -23248,7 +23219,7 @@ const LeaveWarningSystem = {
             this.resetSystem();
             return;
         }
-
+        
         const detailView = document.getElementById('featuredDetailView');
         if (!detailView || detailView.style.display === 'none') {
             this.resetSystem();
@@ -23256,71 +23227,89 @@ const LeaveWarningSystem = {
         }
 
         if (document.hidden) {
-            // === 【離開時】 ===
-            this.leaveTimestamp = Date.now();
-            console.log("📍 [Leave] 通知 Worker 開始背景 5 秒計時");
-            
-            // 關鍵：Worker 的計時在 Android 背景比主執行緒穩定的多
-            this.worker.postMessage('start');
+            // --- 【離開當下】 ---
+            console.log("📍 [Leave] 已進入背景，啟動 5 秒倒數...");
+            this.leaveTimestamp = Date.now(); 
+
+            // 在背景啟動計時器
+            if (this.checkTimer) clearTimeout(this.checkTimer);
+            this.checkTimer = setTimeout(() => {
+                // 此區塊在 Android 通常能準時執行
+                // 在 iOS 則可能被暫停，直到使用者「拉下通知欄」或「重新點開網頁」才執行
+                console.log("🚨 [Background] 離開達 5 秒，嘗試觸發震動與音效");
+                this.triggerAlarmSound(); 
+            }, 5000);
 
         } else {
-            // === 【返回時】 ===
-            console.log("📍 [Back] 返回網頁");
-            this.worker.postMessage('stop');
+            // --- 【返回網頁】 ---
+            console.log("📍 [Back] 使用者已返回前景");
             
             const now = Date.now();
             const timeAway = now - this.leaveTimestamp;
+            
+            // 清除背景計時器
+            if (this.checkTimer) {
+                clearTimeout(this.checkTimer);
+                this.checkTimer = null;
+            }
 
+            // 補償邏輯：
             // 如果離開超過 5 秒
             if (this.leaveTimestamp > 0 && timeAway > 5000) {
-                // 如果 Worker 在背景沒成功震動（例如被系統鎖死），一回來立刻補發
+                // 情況 A：如果剛才在背景因為系統限制沒響過，現在立刻補響
                 if (!this.hasTriggered) {
+                    console.log("⚠️ [Compensate] 背景執行受阻，現在補發警報");
                     this.triggerAlarmSound();
                 }
-                // 無論如何，回來後若違規就進入 10 秒鎖定
+                // 情況 B：無論背景響過沒，只要超過 5 秒，一回來就鎖定
                 this.enforcePenalty();
             } else {
-                // 5 秒內回來
+                // 情況 C：5 秒內回來，當作沒事
                 this.stopSoundOnly();
             }
-            this.leaveTimestamp = 0;
+            
+            this.leaveTimestamp = 0; 
         }
     },
 
+    // 核心觸發函數：音效 + 震動
     triggerAlarmSound: function() {
-        if (this.hasTriggered) return;
+        if (this.hasTriggered) return; 
         this.hasTriggered = true;
+        
+        console.log("🔊 啟動警報音效與強力震動");
 
-        // 1. 播放聲音 (Android 有無聲管道支持，背景通常能響)
+        // 1. 播放警告音 (利用 SansiAudio 持久管道)
         if (typeof SansiAudio !== 'undefined') {
             SansiAudio.play('leave_warning', true);
         }
-
-        // 2. 執行震動 (Android 背景執行核心)
+        
+        // 2. 執行震動 (Android 通常允許在背景執行短暫的震動)
         if (navigator.vibrate) {
-            console.log("📳 執行 400ms 閉眼等級震動");
             navigator.vibrate(this.vibratePattern);
         }
     },
 
+    // 執行 10 秒懲罰鎖定
     enforcePenalty: function() {
         if (this.isLocked) return;
+
         const overlay = document.getElementById('penaltyLockOverlay');
         const countSpan = document.getElementById('penaltyCountdown');
-        if (!overlay) return;
-
+        if (!overlay || !countSpan) return;
+        
         overlay.style.display = 'flex';
         this.isLocked = true;
-
+        
         let timeLeft = 10;
         countSpan.innerText = timeLeft;
-
+        
         if (this.lockInterval) clearInterval(this.lockInterval);
         this.lockInterval = setInterval(() => {
             timeLeft--;
             countSpan.innerText = timeLeft;
             
-            // 鎖定期間追加震動 (維持警告一致性)
+            // 懲罰期間每 2 秒追加一次強力震動，直到解鎖
             if (timeLeft % 2 === 0 && navigator.vibrate) {
                 navigator.vibrate(this.vibratePattern);
             }
@@ -23332,17 +23321,26 @@ const LeaveWarningSystem = {
     releasePenalty: function() {
         const overlay = document.getElementById('penaltyLockOverlay');
         if (overlay) overlay.style.display = 'none';
+        
         if (this.lockInterval) { clearInterval(this.lockInterval); this.lockInterval = null; }
+        
         this.hasTriggered = false;
         this.isLocked = false;
         if (navigator.vibrate) navigator.vibrate(0);
+        
         this.stopSoundOnly();
-        if (typeof focusMonitorState !== 'undefined') focusMonitorState.lastActivityTime = Date.now();
+        
+        // 重置主防睡計時器
+        if (typeof focusMonitorState !== 'undefined') {
+            focusMonitorState.lastActivityTime = Date.now();
+        }
     },
 
     stopSoundOnly: function() {
-        if (typeof SansiAudio !== 'undefined') SansiAudio.stop('leave_warning');
-        this.worker.postMessage('stop');
+        if (typeof SansiAudio !== 'undefined') {
+            SansiAudio.stop('leave_warning');
+        }
+        if (this.checkTimer) { clearTimeout(this.checkTimer); this.checkTimer = null; }
     },
 
     resetSystem: function() {
@@ -23353,7 +23351,7 @@ const LeaveWarningSystem = {
     }
 };
 
-// 啟動
+// 啟動監聽系統
 document.addEventListener('DOMContentLoaded', () => {
     LeaveWarningSystem.init();
 });
