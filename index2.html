@@ -23224,47 +23224,50 @@ const LeaveWarningSystem = {
         }
 
         if (document.hidden) {
-            // --- 【離開當下】 ---
-            console.log("📍 [Leave] 進入背景，啟動 Persistence 模式...");
+            // --- 【離開當下：啟動 5 秒緩衝計時】 ---
+            console.log("📍 [Leave] 進入背景，5 秒倒數開始...");
             this.leaveTimestamp = Date.now(); 
 
-            // ★ 安卓核心修訂：進入背景立刻播放警告音，但音量為 0
-            // 這樣能讓瀏覽器認為網頁正在進行「音訊作業」，從而不會在背景暫停 JS 計時器
+            // ★ 核心技巧：立即在背景啟動「靜音播放」，騙取系統不掛起 JS
             if (typeof SansiAudio !== 'undefined') {
-                SansiAudio.play('leave_warning', true, 0); // 靜音循環播放
+                // 第三個參數 0 代表初始音量為 0
+                SansiAudio.play('leave_warning', true, 0); 
             }
 
-            // 在背景啟動 5 秒計時
+            // 設定 5 秒後的處罰動作
             if (this.checkTimer) clearTimeout(this.checkTimer);
             this.checkTimer = setTimeout(() => {
-                console.log("🚨 [Background] 5 秒已到，背景觸發震動與警報");
+                // 只有當計時器跑完，且使用者還沒回來時，才執行響鈴和震動
+                console.log("🚨 [Timer] 5 秒已到，正式觸發背景警報");
                 this.triggerAlarmSound(); 
             }, 5000);
 
         } else {
-            // --- 【返回網頁】 ---
+            // --- 【返回網頁：執行清算】 ---
             console.log("📍 [Back] 使用者返回前景");
             
             const now = Date.now();
             const timeAway = now - this.leaveTimestamp;
             
-            // 清除背景計時器
+            // 只要一回來，立刻停止 5 秒計時器（防止 5 秒剛好在那一刻響起）
             if (this.checkTimer) {
                 clearTimeout(this.checkTimer);
                 this.checkTimer = null;
             }
 
-            // 補償/清算邏輯 (保持原本讓您滿意的 iOS 設定)
+            // 判斷是否違規
             if (this.leaveTimestamp > 0 && timeAway > 5000) {
-                // 如果在背景沒成功觸發震動（如 iOS），現在補發
+                // 超過 5 秒才回來
                 if (!this.hasTriggered) {
-                    console.log("⚠️ [Compensate] 返回清算：觸發補償警報");
+                    // 如果在背景沒成功震動（例如 iOS 凍結了計時器），現在補發
+                    console.log("⚠️ [Compensate] 超時返回：補發警報");
                     this.triggerAlarmSound();
                 }
-                // 只要超過 5 秒，一回來強制執行 10 秒鎖定
+                // 執行 10 秒懲罰鎖定
                 this.enforcePenalty();
             } else {
-                // 5 秒內回來，無罪釋放
+                // 5 秒內迅速回來：無罪釋放，關閉剛才為了保活而開的靜音音訊
+                console.log("✅ [Safe] 5 秒內返回，重置系統");
                 this.stopSoundOnly();
             }
             
@@ -23272,27 +23275,26 @@ const LeaveWarningSystem = {
         }
     },
 
-    // 核心觸發函數：音效復原 + 震動
+    // 正式觸發警報：音效恢復 + 震動
     triggerAlarmSound: function() {
         if (this.hasTriggered) return; 
         this.hasTriggered = true;
         
-        // 1. 恢復警告音量 (或重新播放)
+        // 1. 將音量調回正常 (1.0)
         if (typeof SansiAudio !== 'undefined') {
-            // 先設定音量到 1.0 (針對剛才的靜音播放)
             SansiAudio.setVolume('leave_warning', 1.0);
-            // 確保有聲音 (若剛才靜音播失敗，這裡強制重播)
+            // 防呆：確保音訊真的在跑
             SansiAudio.play('leave_warning', true, 1.0);
         }
         
-        // 2. 執行強力震動 (安卓在有音訊活動時，背景震動成功率極高)
+        // 2. 執行強力震動 (與閉眼警告一致)
         if (navigator.vibrate) {
             navigator.vibrate(this.vibratePattern);
-            console.log("📳 背景震動執行中...");
+            console.log("📳 [Vibrate] 背景震動已執行");
         }
     },
 
-    // 執行 10 秒懲罰鎖定
+    // 10 秒懲罰鎖定邏輯
     enforcePenalty: function() {
         if (this.isLocked) return;
 
@@ -23311,7 +23313,7 @@ const LeaveWarningSystem = {
             timeLeft--;
             countSpan.innerText = timeLeft;
             
-            // 懲罰期間：每兩秒追加一次與「閉眼警告」一致的震動，強化懲罰感
+            // 懲罰期間：每兩秒追加一次震動回饋，強化懲罰感
             if (timeLeft % 2 === 0 && navigator.vibrate) {
                 navigator.vibrate(this.vibratePattern);
             }
@@ -23332,7 +23334,7 @@ const LeaveWarningSystem = {
         
         this.stopSoundOnly();
         
-        // 重置防睡計時
+        // 歸還自由後，重置主防睡監測的時間點，避免連鎖反應
         if (typeof focusMonitorState !== 'undefined') {
             focusMonitorState.lastActivityTime = Date.now();
         }
@@ -23353,7 +23355,7 @@ const LeaveWarningSystem = {
     }
 };
 
-// 初始化
+// 啟動監聽
 document.addEventListener('DOMContentLoaded', () => {
     LeaveWarningSystem.init();
 });
