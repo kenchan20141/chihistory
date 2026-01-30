@@ -23196,17 +23196,11 @@ const LeaveWarningSystem = {
 
     vibratePattern: [400, 200, 400, 200, 400],
 
-   // 尋找 LeaveWarningSystem.init 並修改如下：
-init: function() {
-    document.addEventListener('visibilitychange', () => {
-        this.handleVisibilityChange();
-    });
-
-    // 新增：進入文章時主動詢問通知權限（背景震動必備）
-    if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission();
-    }
-},
+    init: function() {
+        document.addEventListener('visibilitychange', () => {
+            this.handleVisibilityChange();
+        });
+    },
 
     handleVisibilityChange: function() {
         if (typeof focusMonitorState === 'undefined' || !focusMonitorState.isActive) {
@@ -23278,34 +23272,16 @@ init: function() {
         }
     },
 
-   // 尋找 LeaveWarningSystem.triggerAlarmSound 並修改如下：
-triggerAlarmSound: function() {
-    console.log("🔊 播放警告音並觸發背景震動");
-    
-    if (typeof SansiAudio !== 'undefined') {
-        SansiAudio.stop('leave_warning');
-        SansiAudio.play('leave_warning', true);
-    }
-
-    // --- 安卓背景震動核心解決方案 ---
-    if ("Notification" in window && Notification.permission === "granted") {
-        // 利用 ServiceWorker 發送帶有震動頻率的通知
-        navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification("警告：檢測到離開頁面！", {
-                body: "請立即回到神思，否則將觸發鎖定懲罰。",
-                icon: "神思圖標.png", // 確保路徑正確
-                vibrate: [400, 200, 400, 200, 400], // 震動頻率
-                tag: "leave-warning", // 標籤，防止重複彈出多個通知
-                renotify: true
-            });
-        });
-    }
-
-    // 原有的普通震動（作為回到頁面後的備援）
-    if (navigator.vibrate) {
-        navigator.vibrate(this.vibratePattern);
-    }
-},
+    triggerAlarmSound: function() {
+        console.log("🔊 播放警告音與震動");
+        if (typeof SansiAudio !== 'undefined') {
+            SansiAudio.stop('leave_warning'); // 先強制停止舊的
+            SansiAudio.play('leave_warning', true); // 循環播放
+        }
+        if (navigator.vibrate) {
+            navigator.vibrate(this.vibratePattern);
+        }
+    },
 
     enforcePenalty: function() {
         const overlay = document.getElementById('penaltyLockOverlay');
@@ -23337,31 +23313,22 @@ triggerAlarmSound: function() {
         }, 1000);
     },
 
-  // 在 LeaveWarningSystem.releasePenalty 內加入關閉通知的邏輯
-releasePenalty: function() {
-    const overlay = document.getElementById('penaltyLockOverlay');
-    if (overlay) overlay.style.display = 'none';
-    
-    if (this.lockInterval) { clearInterval(this.lockInterval); this.lockInterval = null; }
-    
-    this.isLocked = false;
-    this.wasHiddenWhileLocked = false;
-    if (navigator.vibrate) navigator.vibrate(0);
-    this.stopSoundOnly();
-
-    // 新增：清除背景通知
-    if ("Notification" in window && Notification.permission === "granted") {
-        navigator.serviceWorker.ready.then(registration => {
-            registration.getNotifications({ tag: "leave-warning" }).then(notifications => {
-                notifications.forEach(notification => notification.close());
-            });
-        });
-    }
-    
-    if (typeof focusMonitorState !== 'undefined') {
-        focusMonitorState.lastActivityTime = Date.now();
-    }
-},
+    releasePenalty: function() {
+        const overlay = document.getElementById('penaltyLockOverlay');
+        if (overlay) overlay.style.display = 'none';
+        
+        if (this.lockInterval) { clearInterval(this.lockInterval); this.lockInterval = null; }
+        
+        this.isLocked = false;
+        this.wasHiddenWhileLocked = false;
+        if (navigator.vibrate) navigator.vibrate(0);
+        this.stopSoundOnly();
+        
+        // 重置防睡監察活動時間
+        if (typeof focusMonitorState !== 'undefined') {
+            focusMonitorState.lastActivityTime = Date.now();
+        }
+    },
 
     stopSoundOnly: function() {
         if (typeof SansiAudio !== 'undefined') {
