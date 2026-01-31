@@ -226,54 +226,67 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   
   // 搜尋相似範文的函式
 // === RAG 搜尋核心函數 (修正版) ===
+// === RAG 搜尋核心函數 (強力偵錯版) ===
 async function searchSimilarEssays(studentText) {
-    console.log("🔍 [RAG] 正在搜尋相似範文...");
-    
+    console.log("%c🔍 [RAG 啟動] 準備開始搜尋...", "color: yellow; font-weight: bold;");
+    console.log("📄 學生輸入長度:", studentText.length);
+
     try {
-        // 1. 動態載入 Transformers (確保 env 設定正確，避免 404)
-        const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0');
+        // 1. 檢查 Supabase 連線變數
+        if (typeof supabaseClient === 'undefined') {
+            console.error("❌ 嚴重錯誤：找不到 'supabaseClient' 變數！");
+            console.log("💡 提示：請檢查 HTML 上方是否定義了 const supabaseClient = supabase.createClient(...)");
+            return "";
+        }
+
+        // 2. 載入 Transformers
+        console.log("⚙️ 正在載入 AI 模型庫...");
+        // 加入 .min.js 確保路徑正確
+        const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js');
         
-        // 2. 強制設定從 CDN 下載模型
+        console.log("✅ 庫載入成功，設定環境...");
         env.allowLocalModels = false;
         env.useBrowserCache = true;
 
-        // 3. 建立特徵提取器
-        // (瀏覽器會快取模型，第二次執行會很快)
+        // 3. 建立模型
+        console.log("🧠 正在初始化 Feature Extractor...");
         const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
 
-        // 4. 將學生文章轉為向量 (只取前 500 字以節省運算)
+        // 4. 生成向量
+        console.log("🔢 正在生成向量...");
         const output = await extractor(studentText.substring(0, 500), { pooling: 'mean', normalize: true });
         const vector = Array.from(output.data);
+        console.log("✅ 向量生成完畢，維度:", vector.length);
 
-        // 5. 向 Supabase 查詢最相似的文章 (呼叫我們剛寫好的 SQL 函數)
+        // 5. 查詢資料庫
+        console.log("📡 正在向 Supabase 查詢...");
         const { data, error } = await supabaseClient.rpc('match_documents', {
             query_embedding: vector,
-            match_threshold: 0.3, // 相似度門檻 (可自行微調，建議 0.3 - 0.5)
-            match_count: 1        // 我們只需要 1 篇最像的 5** 範文
+            match_threshold: 0.3, 
+            match_count: 1
         });
 
         if (error) {
-            console.error("Supabase RPC Error:", error);
+            console.error("❌ Supabase RPC 錯誤:", error);
             return "";
         }
 
         if (data && data.length > 0) {
             const match = data[0];
-            console.log(`🎯 [RAG] 命中範文: 《${match.metadata.title}》 (相似度: ${(match.similarity * 100).toFixed(1)}%)`);
+            console.log(`🎯 [RAG 命中] 標題: 《${match.metadata.title}》, 相似度: ${match.similarity}`);
             
-            // 回傳格式化後的文本，準備餵給 AI
             return `
 【參考 5** 級數範文 (${match.metadata.title})】
 ${match.content}
 `;
         } else {
-            console.log("🤷‍♂️ [RAG] 未找到足夠相似的範文");
+            console.warn("🤷‍♂️ [RAG 結果] 沒有找到相似度 > 0.3 的文章");
             return "";
         }
 
     } catch (err) {
-        console.error("RAG 執行錯誤:", err);
-        return ""; // 發生錯誤時回傳空字串，不影響主流程
+        console.error("💥 RAG 執行期間發生崩潰:", err);
+        return ""; 
     }
 }
 
@@ -13792,6 +13805,7 @@ await saveToHistory("敘事抒情", "解題指引", inputTopic, `題目：${inpu
 // === 敘事抒情提交函式 (大綱模式只存題目)
 // ==========================================
 async function submitWriting() {
+    console.log("🖱️ [系統] 提交按鈕被點擊了！"); // <--- 加入這行
     const submitBtn = document.getElementById('submitWritingBtn');
     submitBtn.disabled = true;
     hideAllSaveHtmlButtons();
@@ -13892,7 +13906,9 @@ async function submitWriting() {
         } 
         // === 模式三：片段描寫 ===
       // === 模式三：片段描寫 ===
-        else { 
+       else { 
+            console.log("📝 [系統] 進入敘事抒情全文模式，準備呼叫 RAG..."); // <--- 加入這行
+
             content = document.getElementById("writingContent").value.trim();
             if (!content) { alert("請先輸入寫作內容"); submitBtn.disabled = false; return; }
             
