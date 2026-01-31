@@ -56,8 +56,16 @@ form-action 'self';
 <link rel="apple-touch-icon" sizes="120x120" href="神思圖標.png">
 
 
-<!-- LZ-String 壓縮庫 -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<!-- Supabase 客戶端 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Transformers.js (用於在瀏覽器產生向量，無需 API 費用) -->
+<script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0';
+    // 將 pipeline 掛載到 window 以便全域使用
+    window.pipeline = pipeline;
+</script>
+
 	
 <!-- 引入 Chart.js 以繪製雷達圖 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -81,18 +89,33 @@ form-action 'self';
 	<script>
 
 
-/**
- * 安全解壓縮函數
- * 嘗試解壓，如果失敗（或是舊的未壓縮數據），則返回原始字串。
- */
-function safeDecompress(content) {
-    if (!content) return "";
-    // 嘗試使用 UTF16 解壓 (Firebase 儲存的最佳格式)
-    const decompressed = LZString.decompressFromUTF16(content);
-    // 如果解壓結果為 null，代表它不是壓縮字串（舊數據），直接回傳原內容
-    return decompressed !== null ? decompressed : content;
+// === Supabase 設定 ===
+// 請在 Supabase 後台 Settings -> API 找到這兩個值
+const SUPABASE_URL = 'https://vgoisaswgjpdwsikvipx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnb2lzYXN3Z2pwZHdzaWt2aXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4Mzg0ODMsImV4cCI6MjA4NTQxNDQ4M30._sMGcMMApSyzdCaXzAlF9hCc8mkgxz_28IbTrXpFnyA'; // 注意是 anon key，不是 service_role
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 定義全域變數存放 Embedding 模型
+let embeddingExtractor = null;
+
+// 初始化向量模型 (這會下載約 20MB 模型，瀏覽器會快取)
+async function initEmbeddingModel() {
+    if (!embeddingExtractor) {
+        console.log("📥 正在載入向量模型...");
+        // 使用 'Xenova/all-MiniLM-L6-v2'，它非常小巧且效果好
+        embeddingExtractor = await window.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        console.log("✅ 向量模型載入完成");
+    }
 }
 
+// 輔助函式：將文字轉為向量
+async function getEmbedding(text) {
+    await initEmbeddingModel();
+    // 執行轉換
+    const output = await embeddingExtractor(text, { pooling: 'mean', normalize: true });
+    // 轉為普通陣列
+    return Array.from(output.data);
+}
 		
 // ==========================================
 // === 全域變數宣告 (請加在 script 最上方) ===
@@ -16972,6 +16995,9 @@ function captureContainerHTML(containerId) {
 
 
 	
+// ==========================================
+// === 修訂版：儲存紀錄 (保留聊天介面結構) ===
+// ==========================================
 async function saveToHistory(category, subFunction, title, userContent, aiContent, scoreData = null) {
     try {
         // 1. 清理 HTML
@@ -16994,15 +17020,13 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             aiContent = tempDiv.innerHTML;
         }
  
-        // ★★★ [核心修改] 壓縮 AI 內容 ★★★
-        // 使用 compressToUTF16 以便存入 Firebase 字串欄位
-        const compressedAiContent = aiContent ? LZString.compressToUTF16(aiContent) : "";
-
         const db = await openHistoryDB();
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const ts = new Date().getTime();
         
+        // ★★★ 關鍵修復：這裡直接更新全域變數 ★★★
+        // 確保剛生成的內容 ID 被系統記住，讓追問功能可以找到這筆資料
         lastGeneratedTimestamp = ts;
  
         const record = {
@@ -17010,7 +17034,7 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             subFunction: subFunction,
             title: title || "無標題",
             userContent: userContent,
-            aiContent: compressedAiContent, // 儲存壓縮後的數據
+            aiContent: aiContent,
             scoreData: scoreData,
             timestamp: ts,
             dateStr: new Date().toLocaleString('zh-HK', { hour12: false }),
@@ -17029,7 +17053,7 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             req.onerror = reject;
         });
         record.id = generatedId;
-        console.log(`本地紀錄已建立 (ID: ${generatedId}) [已壓縮]`);
+        console.log(`本地紀錄已建立 (ID: ${generatedId})`);
         
         // 執行輕量上傳
         const s = JSON.parse(localStorage.getItem('studentProfile'));
@@ -17753,6 +17777,7 @@ function renderFilteredRecords(records) {
 
 
 // === 新增：下載歷史紀錄為 PDF ===
+// === [100% 完美復刻 + 強制置中修復版] 下載歷史紀錄為 HTML ===
 async function downloadHistoryHTML(id) {
     const btn = document.getElementById(`download-btn-${id}`);
     if (!btn) return;
@@ -17776,7 +17801,7 @@ async function downloadHistoryHTML(id) {
             const record = event.target.result;
             if (!record) { alert("找不到紀錄"); resetBtn(); return; }
 
-            // 1. 建立影子容器
+            // 1. 建立影子容器 (設定為 900px，這是電腦版的標準寬度)
             const shadowContainer = document.createElement('div');
             shadowContainer.style.cssText = `
                 position: absolute; left: -9999px; top: 0; 
@@ -17788,6 +17813,7 @@ async function downloadHistoryHTML(id) {
             document.body.appendChild(shadowContainer);
 
             // 2. === 重建 HTML 結構 ===
+            
             let themeIndex = 1;
             if (record.category && typeof HISTORY_STRUCTURE !== 'undefined') {
                 const subIndex = HISTORY_STRUCTURE[record.category]?.indexOf(record.subFunction);
@@ -17812,7 +17838,6 @@ async function downloadHistoryHTML(id) {
             `;
 
             if (record.userContent) {
-                // (省略 userContent 解析，保持不變)
                 const rawText = record.userContent;
                 const lines = rawText.split('\n');
                 let parsedHTML = `<div class="history-parsed-container ${themeClass}">`;
@@ -17846,15 +17871,13 @@ async function downloadHistoryHTML(id) {
             }
 
             if (record.aiContent) {
-                // ★★★ [核心修改] 解壓縮 ★★★
-                const decompressedAiContent = safeDecompress(record.aiContent);
-                contentHTML += `<div class="ai-output-area">${decompressedAiContent}</div>`;
+                contentHTML += `<div class="ai-output-area">${record.aiContent}</div>`;
             }
 
             contentHTML += `</div>`; 
             shadowContainer.innerHTML = contentHTML;
 
-            // 3. === 清理與凍結 (保持不變) ===
+            // 3. === 清理與凍結 ===
             shadowContainer.querySelectorAll('.canvas-chat-container, .canvas-input-area, button, .action-buttons-container, .history-save-btn, input[type="text"], textarea').forEach(el => {
                 if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
                     const span = document.createElement('div');
@@ -17871,7 +17894,7 @@ async function downloadHistoryHTML(id) {
                 bar.setAttribute('style', `width: ${w} !important; background-color: #007bff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;`);
             });
 
-            // 4. === 處理圖表 (保持不變) ===
+            // 4. === 處理圖表 ===
             if (record.scoreData && record.scoreData.radar) {
                 let canvasEl = shadowContainer.querySelector('canvas');
                 if (!canvasEl) {
@@ -17937,13 +17960,13 @@ async function downloadHistoryHTML(id) {
                 }
             }
 
-            // 5. === 提取全站 CSS (保持不變) ===
+            // 5. === 提取全站 CSS ===
             let cssRules = "";
             Array.from(document.querySelectorAll('style')).forEach(style => { cssRules += style.innerHTML + "\n"; });
             let externalLinks = "";
             Array.from(document.querySelectorAll('link[rel="stylesheet"]')).forEach(link => { externalLinks += link.outerHTML + "\n"; });
 
-            // 6. === 組合最終 HTML (保持不變) ===
+            // 6. === 組合最終 HTML (強制覆寫 Body 樣式) ===
             const finalHtmlSource = `
 <!DOCTYPE html>
 <html lang="zh-HK">
@@ -17954,20 +17977,90 @@ async function downloadHistoryHTML(id) {
     ${externalLinks}
     <style>
         ${cssRules}
-        body { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 40px 0 !important; display: flex !important; flex-direction: column !important; align-items: center !important; background-color: #f2f4f7 !important; background-image: none !important; min-height: 100vh !important; overflow-y: auto !important; }
-        .export-wrapper { width: 900px !important; max-width: 95% !important; background-color: #ffffff !important; box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important; border-radius: 12px !important; box-sizing: border-box !important; overflow: hidden !important; position: relative !important; margin: 0 !important; }
-        .grading-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 20px !important; width: 100% !important; }
-        .grading-scores, .grading-radar { width: 100% !important; box-sizing: border-box !important; margin: 0 !important; }
-        @media (max-width: 768px) { body { padding: 0 !important; background-color: #fff !important; display: block !important; } .export-wrapper { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; box-shadow: none !important; } .grading-grid { grid-template-columns: 1fr !important; } }
+        
+        /* === 關鍵修正：強制覆寫原有網站 CSS 對 Body 的限制 === */
+        
+        body { 
+            /* 1. 強制重置 Body 寬度與背景，覆蓋原網站的 max-width: 800px */
+            max-width: 100% !important; 
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 40px 0 !important;
+            
+            /* 2. 使用 Flexbox 確保內容卡片絕對置中 */
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important; /* 水平置中 */
+            
+            background-color: #f2f4f7 !important;
+            background-image: none !important;
+            min-height: 100vh !important;
+            overflow-y: auto !important;
+        }
+
+        /* 內容容器：這張「紙」 */
+        .export-wrapper {
+            /* 3. 設定固定寬度 900px (電腦版)，配合 Body 的 Flex 置中 */
+            width: 900px !important;
+            
+            /* 4. 響應式保護：在小螢幕上縮放 */
+            max-width: 95% !important; 
+            
+            background-color: #ffffff !important;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important;
+            border-radius: 12px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            position: relative !important;
+            margin: 0 !important; /* Margin 0，因為 Body 已經負責置中了 */
+        }
+
+        /* 修復 Grid 排版 (評分表 + 雷達圖) */
+        .grading-grid { 
+            display: grid !important; 
+            grid-template-columns: 1fr 1fr !important; 
+            gap: 20px !important; 
+            width: 100% !important;
+        }
+        .grading-scores, .grading-radar {
+            width: 100% !important;
+            box-sizing: border-box !important;
+            margin: 0 !important;
+        }
+
+        /* 手機版樣式 */
+        @media (max-width: 768px) {
+            body {
+                padding: 0 !important; 
+                background-color: #fff !important;
+                display: block !important; /* 手機版改回 Block，讓內容自然流動 */
+            }
+            .export-wrapper {
+                width: 100% !important;
+                max-width: 100% !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+            }
+            .grading-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
         button { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="export-wrapper">${shadowContainer.innerHTML}</div>
-    <div style="text-align: center; color: #aaa; font-size: 12px; margin-top: 30px; font-family: sans-serif; width: 100%;">Generated by 神思 SANSI AI System</div>
+    <div class="export-wrapper">
+        ${shadowContainer.innerHTML}
+    </div>
+    
+    <div style="text-align: center; color: #aaa; font-size: 12px; margin-top: 30px; font-family: sans-serif; width: 100%;">
+        Generated by 神思 SANSI AI System
+    </div>
 </body>
 </html>`;
 
+            // 7. 清理與下載
             document.body.removeChild(shadowContainer);
 
             const blob = new Blob([finalHtmlSource], { type: 'text/html;charset=utf-8' });
@@ -18115,6 +18208,8 @@ async function viewHistoryDetail(id) {
         request.onsuccess = function(event) {
             const record = event.target.result;
             if (record) {
+                // ★★★ 關鍵修復：鎖定當前紀錄的時間戳 ★★★
+                // 這樣稍後如果在視窗內進行 AI 追問，系統才知道要更新哪一筆紀錄
                 lastGeneratedTimestamp = record.timestamp;
  
                 // 1. 計算主題色
@@ -18127,7 +18222,6 @@ async function viewHistoryDetail(id) {
                 }
                 const themeClass = `history-theme-context-${themeIndex}`;
                 const colorVar = `var(--m-color-${themeIndex})`;
-                
                 // 2. 設定標題
                 document.getElementById('historyModalTitle').innerHTML =
                     `<i class="fas fa-book-open" style="color:${colorVar}"></i>
@@ -18139,15 +18233,19 @@ async function viewHistoryDetail(id) {
                 if (dateElement) dateElement.style.display = "none";
                 
                 let contentHTML = '';
-                // 3. 處理使用者輸入內容 (省略重複代碼，此部分未變)
+                // 3. 處理使用者輸入內容
                 if (record.category !== "學習報告" && record.userContent) {
                     const rawText = record.userContent;
                     const lines = rawText.split('\n');
+                    
+                    // 判斷是否為議論指引，如果是，加入專屬 class
                     let specificLayoutClass = "";
                     if (record.category === "議論" && record.subFunction === "指引") {
                         specificLayoutClass = "argument-guide-layout";
                     }
+                    
                     let parsedHTML = `<div class="history-parsed-container ${themeClass} ${specificLayoutClass}">`;
+                    
                     let currentLabel = '輸入內容';
                     let currentContent = [];
                     const labelRegex = /^(.{2,10}?)[：:](.*)$/;
@@ -18165,11 +18263,13 @@ async function viewHistoryDetail(id) {
                             if (line.trim() !== "") currentContent.push(line);
                         }
                     });
+ 
                     if (currentContent.length > 0 || lines.length === 0) {
                          const finalContent = currentContent.length > 0 ? currentContent.join('\n') : rawText;
                          parsedHTML += `<div class="history-item-block"><div class="history-item-label">${currentLabel}</div><div class="history-item-content">${finalContent}</div></div>`;
                     }
                     parsedHTML += '</div>';
+                    
                     contentHTML += `
                         <div id="edit-user-content-${record.id}"
                              ondblclick="enableHistoryEdit(this)"
@@ -18178,21 +18278,19 @@ async function viewHistoryDetail(id) {
                             ${parsedHTML}
                         </div>`;
                 }
-
-                // 4. ★★★ [核心修改] 處理 AI 生成內容 (解壓縮) ★★★
+                // 4. 處理 AI 生成內容
                 if (record.aiContent) {
-                    const decompressedAiContent = safeDecompress(record.aiContent);
                     contentHTML += `
                         <div id="edit-ai-content-${record.id}"
                              ondblclick="enableHistoryEdit(this)"
                              title="雙擊即可修訂內容"
                              class="ai-output-area"
                              style="margin-top: 15px;">
-                            ${decompressedAiContent}
+                            ${record.aiContent}
                         </div>`;
                 }
                 
-                // 5. 顯示繳交按鈕 (保持不變)
+                // 5. 顯示繳交按鈕 (學習報告除外)
                 const s = JSON.parse(localStorage.getItem('studentProfile'));
                 if (s && record.category !== "學習報告") {
                     contentHTML += `
@@ -18216,7 +18314,7 @@ async function viewHistoryDetail(id) {
                 const modalContent = document.getElementById('historyModalContent');
                 modalContent.innerHTML = contentHTML;
                 document.getElementById('historyModal').style.display = 'flex';
-                // 8. 重繪圖表邏輯 (保持不變)
+                // 8. 重繪圖表邏輯 (含學習報告)
                 setTimeout(() => {
                     if (record.category !== "學習報告" && record.scoreData && record.scoreData.radar) {
                         const canvasEl = modalContent.querySelector('.radar-chart-container canvas') || modalContent.querySelector('canvas');
@@ -18359,6 +18457,7 @@ async function saveHistoryEdits(id) {
     const aiContentEl = document.getElementById(`edit-ai-content-${id}`);
     const saveBtn = document.getElementById(`history-save-btn-${id}`);
     
+    // 備份原始按鈕內容以便還原
     const originalIcon = saveBtn ? saveBtn.innerHTML : '<i class="fas fa-save"></i>';
     
     if (saveBtn) {
@@ -18376,17 +18475,14 @@ async function saveHistoryEdits(id) {
         getRequest.onsuccess = function(event) {
             const record = event.target.result;
             if (record) {
+                // 1. 記錄舊的時間戳
                 const oldTimestamp = record.timestamp;
                 
                 // 2. 更新內容
                 if (userContentEl) record.userContent = userContentEl.innerText;
+                if (aiContentEl) record.aiContent = aiContentEl.innerHTML;
                 
-                // ★★★ [核心修改] 壓縮 AI 內容 ★★★
-                if (aiContentEl) {
-                    record.aiContent = LZString.compressToUTF16(aiContentEl.innerHTML);
-                }
-                
-                // 3. 更新時間戳
+                // 3. 更新時間戳 (視為新版)
                 const newTimestamp = new Date().getTime();
                 record.timestamp = newTimestamp;
                 record.dateStr = new Date().toLocaleString('zh-HK', { hour12: false });
@@ -18395,10 +18491,11 @@ async function saveHistoryEdits(id) {
                 record.isSynced = false;
                 record.hasBeenSynced = false;
                 
+                // 5. 寫入本地資料庫
                 const putRequest = store.put(record);
                 
                 putRequest.onsuccess = async function() {
-                    console.log("本地紀錄已修訂 [已壓縮]，準備同步...");
+                    console.log("本地紀錄已修訂，準備同步...");
                     const s = JSON.parse(localStorage.getItem('studentProfile'));
                     
                     if (s) {
@@ -18410,13 +18507,18 @@ async function saveHistoryEdits(id) {
                         }
                     }
                     
+                    // 背景執行同步，不阻擋 UI
                     smartSyncHistory(); 
                     
+                    // 6. 尋找新 ID 並刷新介面
                     const newId = await findIdByTimestamp(newTimestamp);
                     if (newId) {
                         lastGeneratedTimestamp = newTimestamp;
+                        
+                        // ★★★ 關鍵：重新載入詳情，這會重建 DOM，從而移除轉圈的按鈕 ★★★
                         await viewHistoryDetail(newId);
                         
+                        // 刷新列表 (如果在背景開啟)
                         if (typeof currentSubFunctionFilter !== 'undefined' &&
                             document.getElementById('historyLevel3').style.display !== 'none') {
                             const themeIndex = typeof currentThemeIndex !== 'undefined' ? currentThemeIndex : 1;
@@ -18590,19 +18692,20 @@ async function updateHistoryChat() {
     // 複製 HTML 進行清理
     const clone = sourceElement.cloneNode(true);
  
-    // --- [修復重點 A]：只移除「舊版」或「暫時性」的輸入框 ---
+    // --- [修復重點 A]：只移除「舊版」或「暫時性」的輸入框，保留 .canvas-input-area ---
     const tempInputAreas = clone.querySelectorAll('#writingGuideChatInputContainer, #writingChatInputContainer, #argumentChatInputContainer, #chatInputContainer');
     tempInputAreas.forEach(el => el.remove());
     
-    // --- [修復重點 B]：針對畫布聊天室的輸入框，只清空數值 ---
+    // --- [修復重點 B]：針對畫布聊天室的輸入框，只清空數值，不移除元素 ---
     const canvasInputs = clone.querySelectorAll('.canvas-input-area textarea');
     canvasInputs.forEach(el => {
-        el.value = '';      
-        el.innerHTML = '';  
-        el.removeAttribute('disabled'); 
+        el.value = '';      // 清空輸入值
+        el.innerHTML = '';  // 清空 HTML 內容
+        el.removeAttribute('disabled'); // 確保下次打開可輸入
     });
  
-    // --- [修復重點 C]：移除其他功能按鈕，但保留發送鍵 ---
+    // --- [修復重點 C]：移除其他功能按鈕，但「保留」發送鍵 (.canvas-send-btn) ---
+    // 這裡使用 :not() 選擇器來排除發送按鈕和懸浮儲存按鈕
     const buttons = clone.querySelectorAll('button:not(.canvas-send-btn):not(.morandi-save-float-btn), .btn-icon-action, .history-save-btn');
     buttons.forEach(el => el.remove());
  
@@ -18610,7 +18713,7 @@ async function updateHistoryChat() {
     const sendBtns = clone.querySelectorAll('.canvas-send-btn');
     sendBtns.forEach(btn => btn.disabled = false);
  
-    // 處理 Canvas 圖表
+    // 處理 Canvas 圖表 (保持不變)
     const clonedCanvases = clone.querySelectorAll('canvas');
     clonedCanvases.forEach((canvas) => {
         canvas.style.width = '100%';
@@ -18619,10 +18722,7 @@ async function updateHistoryChat() {
         canvas.removeAttribute('id');
     });
  
-    const newAiContentRaw = clone.innerHTML;
-
-    // ★★★ [核心修改] 壓縮內容 ★★★
-    const newAiContentCompressed = LZString.compressToUTF16(newAiContentRaw);
+    const newAiContent = clone.innerHTML;
  
     try {
         const db = await openHistoryDB();
@@ -18635,18 +18735,20 @@ async function updateHistoryChat() {
         request.onsuccess = function(event) {
             const data = event.target.result;
             if (data) {
-                // A. 更新內容 (寫入壓縮後的 HTML)
-                data.aiContent = newAiContentCompressed;
+                // A. 更新內容 (寫入包含新氣泡的 HTML)
+                data.aiContent = newAiContent;
                 
                 // B. 設定同步狀態
-                data.isSynced = false;       
-                data.hasBeenSynced = true;   
+                data.isSynced = false;       // 標記為本地較新
+                data.hasBeenSynced = true;   // 防止被誤刪
  
                 const updateRequest = store.put(data);
                 
                 updateRequest.onsuccess = function() {
-                    console.log("聊天紀錄已更新 [已壓縮] (準備上傳)");
+                    console.log("聊天紀錄已更新 (準備上傳)");
                     
+                    // 立即觸發靜默同步，將最新的對話推送到雲端
+                    // 注意：此處調用 smartSyncHistory 而非 syncHistoryToFirebase
                     if (typeof smartSyncHistory === 'function') {
                         smartSyncHistory();
                     }
