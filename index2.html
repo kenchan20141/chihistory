@@ -226,7 +226,8 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   
   // 搜尋相似範文的函式
 // === RAG 搜尋核心函數 (支援類型過濾版) ===
-// === RAG 搜尋核心函數 (升級版：抓取 3 篇 + 格式化 + 詳細Log) ===
+// targetType: 'narrative' (敘事) 或 'argument' (議論)
+// === RAG 搜尋核心函數 (升級版：抓取 3 篇 + 格式化) ===
 async function searchSimilarEssays(studentText, targetType) {
     console.log(`%c🔍 [RAG] 正在搜尋相似範文 (類型: ${targetType})...`, "color: yellow");
     
@@ -244,11 +245,11 @@ async function searchSimilarEssays(studentText, targetType) {
         const output = await extractor(studentText.substring(0, 500), { pooling: 'mean', normalize: true });
         const vector = Array.from(output.data);
 
-        // 3. 呼叫 Supabase (抓取 3 篇)
+        // 3. 呼叫 Supabase (改為抓取 3 篇)
         const { data, error } = await supabaseClient.rpc('match_documents', {
             query_embedding: vector,
             match_threshold: 0.3, // 相似度門檻
-            match_count: 3,       
+            match_count: 3,       // ★★★ 修改：改為 3 篇 ★★★
             filter_type: targetType
         });
 
@@ -258,19 +259,9 @@ async function searchSimilarEssays(studentText, targetType) {
         }
 
         if (data && data.length > 0) {
-            // ★★★ 新增：詳細 Log 輸出 ★★★
-            console.group("%c🎯 [RAG] 命中範文詳情", "color: #2A9689; font-weight: bold; font-size: 14px;");
-            data.forEach((match, idx) => {
-                const title = match.metadata ? match.metadata.title : "無標題";
-                const sim = (match.similarity * 100).toFixed(2) + "%";
-                console.log(`%c[${idx + 1}] ${title}`, "font-weight:bold;", `(相似度: ${sim})`);
-                // 如果你想看內容片段，可以取消註解下一行
-                // console.log(match.content.substring(0, 50) + "...");
-            });
-            console.groupEnd();
-            // ★★★ 新增結束 ★★★
-
-            // 4. 格式化輸出
+            console.log(`🎯 [RAG] 命中 ${data.length} 篇範文`);
+            
+            // 4. 格式化輸出，將多篇範文組合成一個字串
             let ragContent = "=== ⚡ 系統檢索：5** 高分範文庫參考資料 ⚡ ===\n";
             ragContent += "(注意：以下內容僅供評分標準參考，並非學生所寫，請勿對此進行評改)\n\n";
 
@@ -16144,13 +16135,6 @@ ${basePrompt}
  * @param {string} fullTextContent - 用戶提交的完整文章內容
  */
 async function displayFullCommentWithGrading(containerId, originalApiResponse, llama3ApiResponse, uniqueIdPrefix, fullTextContent) {
-    // ★★★ 初始化 OpenCC 轉換器 (強制轉為繁體香港標準) ★★★
-    // 確保頁面有引入 opencc-js，否則回退到不轉換
-    let converter = null;
-    if (typeof OpenCC !== 'undefined') {
-        converter = OpenCC.Converter({ from: 'cn', to: 'hk' });
-    }
-
     // 1. 先找出閱卷員的名字
     let reviewerName = "陳SIR"; 
     let reviewerSelect;
@@ -16241,7 +16225,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
                 let finalQwenScores = applyV8Rules(originalScores);
                 finalQwenScores = applyWordCountRule(finalQwenScores, fullTextContent);
                 let finalLlama3Scores = applyWordCountRule(llama3Scores, fullTextContent);
-                finalLlama3Scores = applyContentStructureRule(finalLlama3Scores); 
+                finalLlama3Scores = applyContentStructureRule(finalLlama3Scores); // 假設此函式已定義
 
                 const totalQwen = (finalQwenScores.content * 4) + (finalQwenScores.expression * 3) + (finalQwenScores.structure * 2) + 5 + 1;
                 const totalLlama3 = (finalLlama3Scores.content * 4) + (finalLlama3Scores.expression * 3) + (finalLlama3Scores.structure * 2) + 5 + 1;
@@ -16296,7 +16280,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         }
     }
 
-    // --- AI 點評語氣重寫 ---
+    // --- AI 點評語氣重寫 (Prompt 結構鎖定) ---
     const originalCritiqueText = critiqueMatch ? critiqueMatch[1].trim() : "未生成點評";
     let finalCritiqueText = originalCritiqueText;
     let critiqueRewriteInstruction = "";
@@ -16318,69 +16302,47 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         emojiInstruction = "語氣要專業嚴肅，絕對不要使用 Emoji。";
     }
 
-     // ★★★ 在 Prompt 中加強繁體中文的要求 ★★★
      const rewritePrompt = `請重寫以下點評內容。
     原文：${originalCritiqueText}
 
     【嚴格重寫要求】
-    1. **語言**：必須使用繁體中文（香港習慣），將所有簡體字（如"紧密围绕"、"体现"）轉換為繁體。
-    2. **結構鎖定**：必須嚴格維持原本的列點數量（保持原來的2-3個重點）。絕對禁止將內容拆解成瑣碎的短句。
-    3. **篇幅鎖定**：每點的分析篇幅必須與原本相若。
-    4. **評級調整**：${critiqueRewriteInstruction}
-    5. **語氣風格**：${emojiInstruction}
+    1. **結構鎖定**：必須嚴格維持原本的列點數量（保持原來的2-3個重點）。**絕對禁止**將內容拆解成瑣碎的短句，或增加額外的點數。
+    2. **篇幅鎖定**：每點的分析篇幅必須與原本相若，不可縮寫成一句話。
+    3. **評級調整**：${critiqueRewriteInstruction}
+    4. **語氣風格**：${emojiInstruction}
     `;
 
     try {
+        // ★★★ 【核心修復】戰術性冷卻：強制等待 3000 毫秒 (3秒) ★★★
+        // 這能讓 API 有時間「喘口氣」，避免觸發 429 (Too Many Requests)
         console.log("正在等待 API 冷卻...");
-        await new Promise(resolve => setTimeout(resolve, 5000)); // 戰術性冷卻
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         // 嘗試重寫點評
         finalCritiqueText = await callReadingAPI(rewritePrompt, 0.5); 
     } catch (e) {
+        // 失敗則使用原文
         console.warn("語氣重寫失敗 (可能是 API 忙碌)，將使用原文:", e);
         finalCritiqueText = originalCritiqueText;
     }
 
-    // --- 組合 HTML (在此處執行 OpenCC 強制轉換) ---
-    
+    // --- 組合 HTML (關鍵修訂：傳入分數) ---
     if (scoresForDisplay) {
+        // ★★★ 關鍵修改：將計算好的 scores 和 grade 傳入，確保 HTML 生成時就有正確數據 ★★★
         finalHTML += createGradingSystemHTML(uniqueIdPrefix, scoresForDisplay, finalGradeForDisplay);
     } else {
         finalHTML += "<p>評等資料不完整。</p>";
     }
     
-    // ★★★ 核心修改：使用 OpenCC 轉換點評內容 ★★★
     if (finalCritiqueText) {
-        let convertedCritique = finalCritiqueText;
-        if (converter) {
-            try {
-                convertedCritique = converter(finalCritiqueText); // 強制轉繁體
-                console.log("✅ [OpenCC] 點評內容已轉為繁體");
-            } catch(e) { console.error("OpenCC 轉換失敗", e); }
-        }
-        finalHTML += createBulletedListHTML("點評", convertedCritique);
+        finalHTML += createBulletedListHTML("點評", finalCritiqueText);
     }
-
-    // ★★★ 核心修改：使用 OpenCC 轉換建議內容 ★★★
     if (suggestionsMatch && suggestionsMatch[1]) {
-        let suggestionsText = suggestionsMatch[1].trim();
-        if (converter) {
-            try {
-                suggestionsText = converter(suggestionsText); // 強制轉繁體
-                console.log("✅ [OpenCC] 建議內容已轉為繁體");
-            } catch(e) { console.error("OpenCC 轉換失敗", e); }
-        }
-        finalHTML += createBulletedListHTML("建議", suggestionsText);
+        finalHTML += createBulletedListHTML("建議", suggestionsMatch[1].trim());
     }
     
-    // ★★★ 核心修改：使用 OpenCC 轉換改寫內容 ★★★
     if (rewriteMatch && rewriteMatch[1]) {
-        let rewriteContent = rewriteMatch[1].trim().replace(/\*/g, '');
-        if (converter) {
-            try {
-                rewriteContent = converter(rewriteContent);
-            } catch(e) {}
-        }
+        const rewriteContent = rewriteMatch[1].trim().replace(/\*/g, '');
         finalHTML += `<div class="rewrite-explanation-container">
             <div class="rewrite-explanation-card">
                 <h3>改寫範例</h3>
@@ -16396,9 +16358,11 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     // 注入 HTML
     resultContainer.innerHTML = finalHTML;
 
-    // 初始化雷達圖
+    // 初始化雷達圖 (雖然 HTML 已經有數據，但 Canvas 仍需 JS 繪製)
     if (scoresForDisplay) {
         setTimeout(() => {
+            // 注意：這裡仍然呼叫 initializeGradingSystem 是為了繪製雷達圖
+            // 以及確保隱藏的 input 被正確賦值 (如果 createGradingSystemHTML 漏掉的話)
             initializeGradingSystem(uniqueIdPrefix, scoresForDisplay, finalGradeForDisplay);
         }, 50);
     }
@@ -16406,17 +16370,22 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     // 儲存到歷史紀錄
     const topic = (uniqueIdPrefix === 'narrative') ? localStorage.getItem("currentTopic") : localStorage.getItem("argumentCurrentTopic");
     
+    // 使用 captureContainerHTML 確保儲存時雷達圖不消失 (記得要用不轉圖片的修復版)
+    // 使用 captureContainerHTML 確保儲存時雷達圖不消失
     const htmlContent = captureContainerHTML('resultCanvasBody'); 
     
      await saveToHistory(
+        // ★★★ 這一行必須保留，不能改！它會自動判斷是敘事還是議論 ★★★
         uniqueIdPrefix === 'narrative' ? "敘事抒情" : "議論", 
+        
         "文章點評", 
         topic || "無題目", 
         `題目：${topic}\n\n文章：${fullTextContent}`, 
-        htmlContent, 
+        htmlContent, // 這裡傳入完整的 HTML (含聊天室) 即可
         scoresForDisplay 
     );
 }
+
 
 // =======================================================
 // === 評等系統邏輯結束 ===
