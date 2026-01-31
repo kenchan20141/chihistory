@@ -193,30 +193,50 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
 // 請在 Supabase 後台 Settings -> API 找到這兩個值
 const SUPABASE_URL = 'https://vgoisaswgjpdwsikvipx.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnb2lzYXN3Z2pwZHdzaWt2aXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4Mzg0ODMsImV4cCI6MjA4NTQxNDQ4M30._sMGcMMApSyzdCaXzAlF9hCc8mkgxz_28IbTrXpFnyA'; // 注意是 anon key，不是 service_role
-// ✅ 這是正確的寫法 (改名為 supabaseClient)
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // ★ 改名為 supabaseClient 以免衝突
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 定義全域變數存放 Embedding 模型
-let embeddingExtractor = null;
+  // 初始化向量模型
+  let embeddingExtractor = null;
+  async function initEmbeddingModel() {
+      if (!embeddingExtractor) {
+          console.log("📥 [RAG] 正在載入向量模型...");
+          // 下載輕量級模型
+          embeddingExtractor = await window.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+          console.log("✅ [RAG] 向量模型就緒");
+      }
+  }
 
-// 初始化向量模型 (這會下載約 20MB 模型，瀏覽器會快取)
-async function initEmbeddingModel() {
-    if (!embeddingExtractor) {
-        console.log("📥 正在載入向量模型...");
-        // 使用 'Xenova/all-MiniLM-L6-v2'，它非常小巧且效果好
-        embeddingExtractor = await window.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-        console.log("✅ 向量模型載入完成");
-    }
-}
-
-// 輔助函式：將文字轉為向量
-async function getEmbedding(text) {
-    await initEmbeddingModel();
-    // 執行轉換
-    const output = await embeddingExtractor(text, { pooling: 'mean', normalize: true });
-    // 轉為普通陣列
-    return Array.from(output.data);
-}
+  // 將文字轉為向量的函式
+  async function getEmbedding(text) {
+      await initEmbeddingModel();
+      const output = await embeddingExtractor(text, { pooling: 'mean', normalize: true });
+      return Array.from(output.data);
+  }
+  
+  // 搜尋相似範文的函式
+  async function searchSimilarEssays(studentText) {
+      try {
+          const vector = await getEmbedding(studentText.substring(0, 500)); // 只取前500字做比對
+          
+          const { data, error } = await supabaseClient.rpc('match_documents', {
+              query_embedding: vector,
+              match_threshold: 0.5, // 相似度門檻
+              match_count: 1        // 只要找最像的那一篇
+          });
+          
+          if (error) throw error;
+          
+          if (data && data.length > 0) {
+              console.log("🎯 [RAG] 命中範文:", data[0].metadata.title);
+              return `【參考 5** 範文片段 (${data[0].metadata.title})】\n${data[0].content.substring(0, 1000)}...`;
+          }
+          return "";
+      } catch (err) {
+          console.error("RAG Error:", err);
+          return "";
+      }
+  }
 
 	</script>
 
