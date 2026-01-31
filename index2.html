@@ -225,28 +225,57 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   }
   
   // 搜尋相似範文的函式
-  async function searchSimilarEssays(studentText) {
-      try {
-          const vector = await getEmbedding(studentText.substring(0, 500)); // 只取前500字做比對
-          
-          const { data, error } = await supabaseClient.rpc('match_documents', {
-              query_embedding: vector,
-              match_threshold: 0.5, // 相似度門檻
-              match_count: 1        // 只要找最像的那一篇
-          });
-          
-          if (error) throw error;
-          
-          if (data && data.length > 0) {
-              console.log("🎯 [RAG] 命中範文:", data[0].metadata.title);
-              return `【參考 5** 範文片段 (${data[0].metadata.title})】\n${data[0].content.substring(0, 1000)}...`;
-          }
-          return "";
-      } catch (err) {
-          console.error("RAG Error:", err);
-          return "";
-      }
-  }
+// === RAG 搜尋核心函數 (修正版) ===
+async function searchSimilarEssays(studentText) {
+    console.log("🔍 [RAG] 正在搜尋相似範文...");
+    
+    try {
+        // 1. 動態載入 Transformers (確保 env 設定正確，避免 404)
+        const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0');
+        
+        // 2. 強制設定從 CDN 下載模型
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+
+        // 3. 建立特徵提取器
+        // (瀏覽器會快取模型，第二次執行會很快)
+        const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+
+        // 4. 將學生文章轉為向量 (只取前 500 字以節省運算)
+        const output = await extractor(studentText.substring(0, 500), { pooling: 'mean', normalize: true });
+        const vector = Array.from(output.data);
+
+        // 5. 向 Supabase 查詢最相似的文章 (呼叫我們剛寫好的 SQL 函數)
+        const { data, error } = await supabaseClient.rpc('match_documents', {
+            query_embedding: vector,
+            match_threshold: 0.3, // 相似度門檻 (可自行微調，建議 0.3 - 0.5)
+            match_count: 1        // 我們只需要 1 篇最像的 5** 範文
+        });
+
+        if (error) {
+            console.error("Supabase RPC Error:", error);
+            return "";
+        }
+
+        if (data && data.length > 0) {
+            const match = data[0];
+            console.log(`🎯 [RAG] 命中範文: 《${match.metadata.title}》 (相似度: ${(match.similarity * 100).toFixed(1)}%)`);
+            
+            // 回傳格式化後的文本，準備餵給 AI
+            return `
+【參考 5** 級數範文 (${match.metadata.title})】
+${match.content}
+`;
+        } else {
+            console.log("🤷‍♂️ [RAG] 未找到足夠相似的範文");
+            return "";
+        }
+
+    } catch (err) {
+        console.error("RAG 執行錯誤:", err);
+        return ""; // 發生錯誤時回傳空字串，不影響主流程
+    }
+}
 
 	</script>
 
@@ -12681,7 +12710,15 @@ async function submitArgumentWriting() {
         const selectedScopes = Array.from(document.querySelectorAll('input[name="argumentReviewScope"]:checked')).map(cb => cb.value);
         const isFullReview = selectedScopes.includes("全部") || selectedScopes.length === 0;
 
-        showLoading(`${currentReviewerName} 正在細閱文章...`);
+        showLoading(`${currentReviewerName} 正在比對 5** 範文並細閱文章...`); // 更新提示
+
+        // ★★★ 新增 RAG 邏輯 ★★★
+        const ragReference = await searchSimilarEssays(content);
+        let contentWithRAG = content;
+        if (ragReference) {
+            contentWithRAG += `\n\n=== 系統檢索參考資料 (僅供評分參考，非學生所寫) ===\n${ragReference}`;
+        }
+        // ★★★ 結束 RAG 邏輯 ★★★
 
         // ★ 建構 Payload 傳給後端
         const payload = {
@@ -12690,13 +12727,12 @@ async function submitArgumentWriting() {
                 subType: "writing", 
                 isFullReview: isFullReview,
                 topic: topic,
-                content: content,
+                content: contentWithRAG, // ★ 改用包含 RAG 的內容
                 reviewer: document.getElementById('argumentReviewer').value,
                 tone: tone,
                 selectedScopes: selectedScopes
             }
         };
-
         // 議論文通常使用 Reading API (DeepSeek) 處理複雜邏輯
         const response = await callReadingAPI(payload, 0); 
         
@@ -13855,6 +13891,7 @@ async function submitWriting() {
 
         } 
         // === 模式三：片段描寫 ===
+      // === 模式三：片段描寫 ===
         else { 
             content = document.getElementById("writingContent").value.trim();
             if (!content) { alert("請先輸入寫作內容"); submitBtn.disabled = false; return; }
@@ -13862,7 +13899,19 @@ async function submitWriting() {
             const selectedScopes = Array.from(document.querySelectorAll('input[name="reviewScope"]:checked')).map(cb => cb.value);
             const isFullReview = selectedScopes.includes("全部") || selectedScopes.length === 0;
 
-            showLoading(`${currentReviewerName} 正在點評...`); 
+            showLoading(`${currentReviewerName} 正在翻閱參考範文並進行點評...`); // 更新 Loading 文字
+
+            // ★★★ 新增 RAG 邏輯 ★★★
+            // 1. 執行搜尋
+            const ragReference = await searchSimilarEssays(content);
+            
+            // 2. 將範文附加到傳送給後端的內容中
+            // 後端的 AI 會看到學生的文章，後面跟著這篇參考範文
+            let contentWithRAG = content;
+            if (ragReference) {
+                contentWithRAG += `\n\n=== 系統檢索參考資料 (僅供評分參考，非學生所寫) ===\n${ragReference}`;
+            }
+            // ★★★ 結束 RAG 邏輯 ★★★
 
             const payload = {
                 action: "grade_narrative",
@@ -13872,7 +13921,7 @@ async function submitWriting() {
                     topic: topic,
                     focus: localStorage.getItem("currentFocus"), 
                     plot: localStorage.getItem("currentPlot"),   
-                    content: content,
+                    content: contentWithRAG, // ★ 改用包含 RAG 的內容
                     reviewer: document.getElementById('writingReviewer').value,
                     tone: tone,
                     selectedScopes: selectedScopes
