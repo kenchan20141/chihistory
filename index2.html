@@ -227,26 +227,30 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   // 搜尋相似範文的函式
 // === RAG 搜尋核心函數 (支援類型過濾版) ===
 // targetType: 'narrative' (敘事) 或 'argument' (議論)
+// === RAG 搜尋核心函數 (升級版：抓取 3 篇 + 格式化) ===
 async function searchSimilarEssays(studentText, targetType) {
-    console.log(`%c🔍 [RAG] 正在搜尋相似範文 (類型限制: ${targetType || '無'})...`, "color: yellow");
+    console.log(`%c🔍 [RAG] 正在搜尋相似範文 (類型: ${targetType})...`, "color: yellow");
     
     try {
         if (typeof supabaseClient === 'undefined') return "";
 
+        // 1. 確保模型已載入
         const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0');
         env.allowLocalModels = false;
         env.useBrowserCache = true;
 
         const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        
+        // 2. 計算向量
         const output = await extractor(studentText.substring(0, 500), { pooling: 'mean', normalize: true });
         const vector = Array.from(output.data);
 
-        // ★★★ 呼叫新的 SQL 函數，傳入 filter_type ★★★
+        // 3. 呼叫 Supabase (改為抓取 3 篇)
         const { data, error } = await supabaseClient.rpc('match_documents', {
             query_embedding: vector,
-            match_threshold: 0.3, 
-            match_count: 1,
-            filter_type: targetType // 這裡傳入 'narrative' 或 'argument'
+            match_threshold: 0.3, // 相似度門檻
+            match_count: 3,       // ★★★ 修改：改為 3 篇 ★★★
+            filter_type: targetType
         });
 
         if (error) {
@@ -255,14 +259,21 @@ async function searchSimilarEssays(studentText, targetType) {
         }
 
         if (data && data.length > 0) {
-            const match = data[0];
-            console.log(`🎯 [RAG] 命中: 《${match.metadata.title}》 [${match.metadata.type}]`);
-            return `
-【參考 5** 級數範文 (${match.metadata.title})】
-${match.content}
-`;
+            console.log(`🎯 [RAG] 命中 ${data.length} 篇範文`);
+            
+            // 4. 格式化輸出，將多篇範文組合成一個字串
+            let ragContent = "=== ⚡ 系統檢索：5** 高分範文庫參考資料 ⚡ ===\n";
+            ragContent += "(注意：以下內容僅供評分標準參考，並非學生所寫，請勿對此進行評改)\n\n";
+
+            data.forEach((match, index) => {
+                ragContent += `【參考範文 ${index + 1}】：${match.metadata.title || '無題'}\n`;
+                ragContent += `${match.content}\n`;
+                ragContent += `--------------------------------------------------\n`;
+            });
+            
+            return ragContent;
         } else {
-            console.warn(`🤷‍♂️ [RAG] 在「${targetType}」類別中找不到相似文章`);
+            console.warn(`🤷‍♂️ [RAG] 找不到相似文章`);
             return "";
         }
 
@@ -12707,32 +12718,31 @@ async function submitArgumentWriting() {
 
         showLoading(`${currentReviewerName} 正在比對 5** 範文並細閱文章...`); // 更新提示
 
-        // ★★★ 新增 RAG 邏輯 ★★★
+        // ★★★ RAG 邏輯 (已更新) ★★★
         const ragReference = await searchSimilarEssays(content, 'argument');
-        let contentWithRAG = content;
-        if (ragReference) {
-            contentWithRAG += `\n\n=== 系統檢索參考資料 (僅供評分參考，非學生所寫) ===\n${ragReference}`;
-        }
-        // ★★★ 結束 RAG 邏輯 ★★★
 
-        // ★ 建構 Payload 傳給後端
-        // ★ 建構 Payload 傳給後端
+        // ★★★ 關鍵修改：Prompt 結構重組 (強制繁體 + 區隔參考資料) ★★★
+        const finalPromptContent = `
+【系統強制指令 (System Instruction)】
+1. **必須使用繁體中文 (Traditional Chinese)**：無論參考資料是簡體或繁體，你的所有輸出都必須是繁體中文。
+2. **專業術語**：請使用香港高中中文科議論文術語（如：論點、論據、論證、語例、設例等）。
+3. **區分參考與正文**：下方的【參考資料】僅供參考，請只對【待評核學生文章】進行評分。
+4. **格式嚴格**：嚴格遵守 JSON/XML 輸出格式，不要輸出其他文字。
+
+${ragReference ? ragReference : "(本次未檢索到參考範文)"}
+
+=== 📝 待評核學生文章 (Target Student Essay) ===
+${content}
+`;
+
+        // ★ 建構 Payload
         const payload = {
             action: "grade_argument",
             data: {
                 subType: "writing", 
                 isFullReview: isFullReview,
                 topic: topic,
-                
-                // ★★★ 修改這裡：加入強制繁體指令 (議論文專用) ★★★
-                content: `
-【系統強制指令】
-1. 你的所有輸出（包括點評、建議、改寫）必須嚴格使用「繁體中文（Traditional Chinese）」。
-2. 即使下方的【參考資料】是簡體，你也必須將其轉化為繁體中文來進行回應。
-3. 用語請使用香港高中中文科的專業術語（例如：論點、論據、論證、語例、設例等）。
-
-${contentWithRAG}`, // 這裡放入原本包含 RAG 的內容
-
+                content: finalPromptContent, // 傳送組合好的 Prompt
                 reviewer: document.getElementById('argumentReviewer').value,
                 tone: tone,
                 selectedScopes: selectedScopes
@@ -13897,9 +13907,8 @@ async function submitWriting() {
 
         } 
         // === 模式三：片段描寫 ===
-      // === 模式三：片段描寫 ===
-       else { 
-            console.log("📝 [系統] 進入敘事抒情全文模式，準備呼叫 RAG..."); // <--- 加入這行
+      else { 
+            console.log("📝 [系統] 進入敘事抒情全文模式，準備呼叫 RAG...");
 
             content = document.getElementById("writingContent").value.trim();
             if (!content) { alert("請先輸入寫作內容"); submitBtn.disabled = false; return; }
@@ -13907,44 +13916,43 @@ async function submitWriting() {
             const selectedScopes = Array.from(document.querySelectorAll('input[name="reviewScope"]:checked')).map(cb => cb.value);
             const isFullReview = selectedScopes.includes("全部") || selectedScopes.length === 0;
 
-            showLoading(`${currentReviewerName} 正在翻閱參考範文並進行點評...`); // 更新 Loading 文字
+            showLoading(`${currentReviewerName} 正在翻閱參考範文並進行點評...`);
 
-            // ★★★ 新增 RAG 邏輯 ★★★
-            // 1. 執行搜尋
+            // ★★★ RAG 邏輯 (已更新) ★★★
             const ragReference = await searchSimilarEssays(content, 'narrative');
             
-            // 2. 將範文附加到傳送給後端的內容中
-            // 後端的 AI 會看到學生的文章，後面跟著這篇參考範文
-            let contentWithRAG = content;
-            if (ragReference) {
-                contentWithRAG += `\n\n=== 系統檢索參考資料 (僅供評分參考，非學生所寫) ===\n${ragReference}`;
-            }
-            // ★★★ 結束 RAG 邏輯 ★★★
+            // ★★★ 關鍵修改：Prompt 結構重組 (強制繁體 + 區隔參考資料) ★★★
+            // 我們不把 ragReference 混在學生文章裡，而是放在一個明確的「參考資料區」
+            // 並加上強制的系統指令 System Instruction
+            
+            const finalPromptContent = `
+【系統強制指令 (System Instruction)】
+1. **必須使用繁體中文 (Traditional Chinese)**：無論參考資料是簡體或繁體，你的所有輸出（點評、建議、改寫）都必須轉換為繁體中文（香港習慣）。
+2. **區分角色**：下方的【參考資料】是用來幫助你建立評分標準的「範文」，下方的【待評核學生文章】才是你需要評改的對象。千萬不要評改參考資料。
+3. **格式嚴格**：嚴格遵守原本設定的 XML/JSON 輸出格式，不要輸出額外的「改寫說明」或閒聊文字。
 
-           // ★ 建構 Payload 傳給後端
-        const payload = {
-            action: "grade_narrative",
-            data: {
-                subType: "片段描寫",
-                isFullReview: isFullReview,
-                topic: topic,
-                focus: localStorage.getItem("currentFocus"), 
-                plot: localStorage.getItem("currentPlot"),   
-                
-                // ★★★ 修改這裡：加入強制繁體指令 ★★★
-                content: `
-【系統強制指令】
-1. 你的所有輸出（包括點評、建議、改寫）必須嚴格使用「繁體中文（Traditional Chinese）」。
-2. 即使下方的【參考資料】是簡體，你也必須將其轉化為繁體中文來進行回應。
-3. 用語請使用香港高中中文科的專業術語。
+${ragReference ? ragReference : "(本次未檢索到參考範文)"}
 
-${contentWithRAG}`, // 這裡放入原本包含 RAG 的內容
-                
-                reviewer: document.getElementById('writingReviewer').value,
-                tone: tone,
-                selectedScopes: selectedScopes
-            }
-        };
+=== 📝 待評核學生文章 (Target Student Essay) ===
+(請針對以下文章進行評分與點評)
+${content}
+`;
+
+            // ★ 建構 Payload
+            const payload = {
+                action: "grade_narrative",
+                data: {
+                    subType: "片段描寫",
+                    isFullReview: isFullReview,
+                    topic: topic,
+                    focus: localStorage.getItem("currentFocus"), 
+                    plot: localStorage.getItem("currentPlot"),   
+                    content: finalPromptContent, // 傳送組合好的 Prompt
+                    reviewer: document.getElementById('writingReviewer').value,
+                    tone: tone,
+                    selectedScopes: selectedScopes
+                }
+            };
 
             if (isFullReview) {
                 const [originalApiResponse, llama3ApiResponse] = await Promise.all([
