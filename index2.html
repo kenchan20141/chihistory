@@ -56,15 +56,7 @@ form-action 'self';
 <link rel="apple-touch-icon" sizes="120x120" href="神思圖標.png">
 
 
-<!-- Supabase 客戶端 -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Transformers.js (用於在瀏覽器產生向量，無需 API 費用) -->
-<script type="module">
-    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0';
-    // 將 pipeline 掛載到 window 以便全域使用
-    window.pipeline = pipeline;
-</script>
 
 	
 <!-- 引入 Chart.js 以繪製雷達圖 -->
@@ -86,36 +78,14 @@ form-action 'self';
 <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
 
 
+
+
+
+
 	<script>
 
 
-// === Supabase 設定 ===
-// 請在 Supabase 後台 Settings -> API 找到這兩個值
-const SUPABASE_URL = 'https://vgoisaswgjpdwsikvipx.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnb2lzYXN3Z2pwZHdzaWt2aXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4Mzg0ODMsImV4cCI6MjA4NTQxNDQ4M30._sMGcMMApSyzdCaXzAlF9hCc8mkgxz_28IbTrXpFnyA'; // 注意是 anon key，不是 service_role
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 定義全域變數存放 Embedding 模型
-let embeddingExtractor = null;
-
-// 初始化向量模型 (這會下載約 20MB 模型，瀏覽器會快取)
-async function initEmbeddingModel() {
-    if (!embeddingExtractor) {
-        console.log("📥 正在載入向量模型...");
-        // 使用 'Xenova/all-MiniLM-L6-v2'，它非常小巧且效果好
-        embeddingExtractor = await window.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-        console.log("✅ 向量模型載入完成");
-    }
-}
-
-// 輔助函式：將文字轉為向量
-async function getEmbedding(text) {
-    await initEmbeddingModel();
-    // 執行轉換
-    const output = await embeddingExtractor(text, { pooling: 'mean', normalize: true });
-    // 轉為普通陣列
-    return Array.from(output.data);
-}
 		
 // ==========================================
 // === 全域變數宣告 (請加在 script 最上方) ===
@@ -201,6 +171,54 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     auth = firebase.auth();
 }
 </script>
+
+
+
+	<script>
+
+
+	<!-- Supabase 客戶端 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Transformers.js (用於在瀏覽器產生向量，無需 API 費用) -->
+<script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0';
+    // 將 pipeline 掛載到 window 以便全域使用
+    window.pipeline = pipeline;
+</script>
+
+
+		
+// === Supabase 設定 ===
+// 請在 Supabase 後台 Settings -> API 找到這兩個值
+const SUPABASE_URL = 'https://vgoisaswgjpdwsikvipx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnb2lzYXN3Z2pwZHdzaWt2aXB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4Mzg0ODMsImV4cCI6MjA4NTQxNDQ4M30._sMGcMMApSyzdCaXzAlF9hCc8mkgxz_28IbTrXpFnyA'; // 注意是 anon key，不是 service_role
+// ✅ 這是正確的寫法 (改名為 supabaseClient)
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 定義全域變數存放 Embedding 模型
+let embeddingExtractor = null;
+
+// 初始化向量模型 (這會下載約 20MB 模型，瀏覽器會快取)
+async function initEmbeddingModel() {
+    if (!embeddingExtractor) {
+        console.log("📥 正在載入向量模型...");
+        // 使用 'Xenova/all-MiniLM-L6-v2'，它非常小巧且效果好
+        embeddingExtractor = await window.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        console.log("✅ 向量模型載入完成");
+    }
+}
+
+// 輔助函式：將文字轉為向量
+async function getEmbedding(text) {
+    await initEmbeddingModel();
+    // 執行轉換
+    const output = await embeddingExtractor(text, { pooling: 'mean', normalize: true });
+    // 轉為普通陣列
+    return Array.from(output.data);
+}
+
+	</script>
 
 
 <!-- === 新增：頁面右緣卡扣按鈕 === -->
