@@ -56,6 +56,9 @@ form-action 'self';
 <link rel="apple-touch-icon" sizes="120x120" href="神思圖標.png">
 
 
+<!-- LZ-String 壓縮庫 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+	
 <!-- 引入 Chart.js 以繪製雷達圖 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -78,6 +81,19 @@ form-action 'self';
 	<script>
 
 
+/**
+ * 安全解壓縮函數
+ * 嘗試解壓，如果失敗（或是舊的未壓縮數據），則返回原始字串。
+ */
+function safeDecompress(content) {
+    if (!content) return "";
+    // 嘗試使用 UTF16 解壓 (Firebase 儲存的最佳格式)
+    const decompressed = LZString.decompressFromUTF16(content);
+    // 如果解壓結果為 null，代表它不是壓縮字串（舊數據），直接回傳原內容
+    return decompressed !== null ? decompressed : content;
+}
+
+		
 // ==========================================
 // === 全域變數宣告 (請加在 script 最上方) ===
 // ==========================================
@@ -16956,9 +16972,6 @@ function captureContainerHTML(containerId) {
 
 
 	
-// ==========================================
-// === 修訂版：儲存紀錄 (保留聊天介面結構) ===
-// ==========================================
 async function saveToHistory(category, subFunction, title, userContent, aiContent, scoreData = null) {
     try {
         // 1. 清理 HTML
@@ -16981,13 +16994,15 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             aiContent = tempDiv.innerHTML;
         }
  
+        // ★★★ [核心修改] 壓縮 AI 內容 ★★★
+        // 使用 compressToUTF16 以便存入 Firebase 字串欄位
+        const compressedAiContent = aiContent ? LZString.compressToUTF16(aiContent) : "";
+
         const db = await openHistoryDB();
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const ts = new Date().getTime();
         
-        // ★★★ 關鍵修復：這裡直接更新全域變數 ★★★
-        // 確保剛生成的內容 ID 被系統記住，讓追問功能可以找到這筆資料
         lastGeneratedTimestamp = ts;
  
         const record = {
@@ -16995,7 +17010,7 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             subFunction: subFunction,
             title: title || "無標題",
             userContent: userContent,
-            aiContent: aiContent,
+            aiContent: compressedAiContent, // 儲存壓縮後的數據
             scoreData: scoreData,
             timestamp: ts,
             dateStr: new Date().toLocaleString('zh-HK', { hour12: false }),
@@ -17014,7 +17029,7 @@ async function saveToHistory(category, subFunction, title, userContent, aiConten
             req.onerror = reject;
         });
         record.id = generatedId;
-        console.log(`本地紀錄已建立 (ID: ${generatedId})`);
+        console.log(`本地紀錄已建立 (ID: ${generatedId}) [已壓縮]`);
         
         // 執行輕量上傳
         const s = JSON.parse(localStorage.getItem('studentProfile'));
@@ -18169,8 +18184,6 @@ async function viewHistoryDetail(id) {
         request.onsuccess = function(event) {
             const record = event.target.result;
             if (record) {
-                // ★★★ 關鍵修復：鎖定當前紀錄的時間戳 ★★★
-                // 這樣稍後如果在視窗內進行 AI 追問，系統才知道要更新哪一筆紀錄
                 lastGeneratedTimestamp = record.timestamp;
  
                 // 1. 計算主題色
@@ -18183,6 +18196,7 @@ async function viewHistoryDetail(id) {
                 }
                 const themeClass = `history-theme-context-${themeIndex}`;
                 const colorVar = `var(--m-color-${themeIndex})`;
+                
                 // 2. 設定標題
                 document.getElementById('historyModalTitle').innerHTML =
                     `<i class="fas fa-book-open" style="color:${colorVar}"></i>
@@ -18194,19 +18208,15 @@ async function viewHistoryDetail(id) {
                 if (dateElement) dateElement.style.display = "none";
                 
                 let contentHTML = '';
-                // 3. 處理使用者輸入內容
+                // 3. 處理使用者輸入內容 (省略重複代碼，此部分未變)
                 if (record.category !== "學習報告" && record.userContent) {
                     const rawText = record.userContent;
                     const lines = rawText.split('\n');
-                    
-                    // 判斷是否為議論指引，如果是，加入專屬 class
                     let specificLayoutClass = "";
                     if (record.category === "議論" && record.subFunction === "指引") {
                         specificLayoutClass = "argument-guide-layout";
                     }
-                    
                     let parsedHTML = `<div class="history-parsed-container ${themeClass} ${specificLayoutClass}">`;
-                    
                     let currentLabel = '輸入內容';
                     let currentContent = [];
                     const labelRegex = /^(.{2,10}?)[：:](.*)$/;
@@ -18224,13 +18234,11 @@ async function viewHistoryDetail(id) {
                             if (line.trim() !== "") currentContent.push(line);
                         }
                     });
- 
                     if (currentContent.length > 0 || lines.length === 0) {
                          const finalContent = currentContent.length > 0 ? currentContent.join('\n') : rawText;
                          parsedHTML += `<div class="history-item-block"><div class="history-item-label">${currentLabel}</div><div class="history-item-content">${finalContent}</div></div>`;
                     }
                     parsedHTML += '</div>';
-                    
                     contentHTML += `
                         <div id="edit-user-content-${record.id}"
                              ondblclick="enableHistoryEdit(this)"
@@ -18239,19 +18247,21 @@ async function viewHistoryDetail(id) {
                             ${parsedHTML}
                         </div>`;
                 }
-                // 4. 處理 AI 生成內容
+
+                // 4. ★★★ [核心修改] 處理 AI 生成內容 (解壓縮) ★★★
                 if (record.aiContent) {
+                    const decompressedAiContent = safeDecompress(record.aiContent);
                     contentHTML += `
                         <div id="edit-ai-content-${record.id}"
                              ondblclick="enableHistoryEdit(this)"
                              title="雙擊即可修訂內容"
                              class="ai-output-area"
                              style="margin-top: 15px;">
-                            ${record.aiContent}
+                            ${decompressedAiContent}
                         </div>`;
                 }
                 
-                // 5. 顯示繳交按鈕 (學習報告除外)
+                // 5. 顯示繳交按鈕 (保持不變)
                 const s = JSON.parse(localStorage.getItem('studentProfile'));
                 if (s && record.category !== "學習報告") {
                     contentHTML += `
@@ -18275,7 +18285,7 @@ async function viewHistoryDetail(id) {
                 const modalContent = document.getElementById('historyModalContent');
                 modalContent.innerHTML = contentHTML;
                 document.getElementById('historyModal').style.display = 'flex';
-                // 8. 重繪圖表邏輯 (含學習報告)
+                // 8. 重繪圖表邏輯 (保持不變)
                 setTimeout(() => {
                     if (record.category !== "學習報告" && record.scoreData && record.scoreData.radar) {
                         const canvasEl = modalContent.querySelector('.radar-chart-container canvas') || modalContent.querySelector('canvas');
@@ -18418,7 +18428,6 @@ async function saveHistoryEdits(id) {
     const aiContentEl = document.getElementById(`edit-ai-content-${id}`);
     const saveBtn = document.getElementById(`history-save-btn-${id}`);
     
-    // 備份原始按鈕內容以便還原
     const originalIcon = saveBtn ? saveBtn.innerHTML : '<i class="fas fa-save"></i>';
     
     if (saveBtn) {
@@ -18436,14 +18445,17 @@ async function saveHistoryEdits(id) {
         getRequest.onsuccess = function(event) {
             const record = event.target.result;
             if (record) {
-                // 1. 記錄舊的時間戳
                 const oldTimestamp = record.timestamp;
                 
                 // 2. 更新內容
                 if (userContentEl) record.userContent = userContentEl.innerText;
-                if (aiContentEl) record.aiContent = aiContentEl.innerHTML;
                 
-                // 3. 更新時間戳 (視為新版)
+                // ★★★ [核心修改] 壓縮 AI 內容 ★★★
+                if (aiContentEl) {
+                    record.aiContent = LZString.compressToUTF16(aiContentEl.innerHTML);
+                }
+                
+                // 3. 更新時間戳
                 const newTimestamp = new Date().getTime();
                 record.timestamp = newTimestamp;
                 record.dateStr = new Date().toLocaleString('zh-HK', { hour12: false });
@@ -18452,11 +18464,10 @@ async function saveHistoryEdits(id) {
                 record.isSynced = false;
                 record.hasBeenSynced = false;
                 
-                // 5. 寫入本地資料庫
                 const putRequest = store.put(record);
                 
                 putRequest.onsuccess = async function() {
-                    console.log("本地紀錄已修訂，準備同步...");
+                    console.log("本地紀錄已修訂 [已壓縮]，準備同步...");
                     const s = JSON.parse(localStorage.getItem('studentProfile'));
                     
                     if (s) {
@@ -18468,18 +18479,13 @@ async function saveHistoryEdits(id) {
                         }
                     }
                     
-                    // 背景執行同步，不阻擋 UI
                     smartSyncHistory(); 
                     
-                    // 6. 尋找新 ID 並刷新介面
                     const newId = await findIdByTimestamp(newTimestamp);
                     if (newId) {
                         lastGeneratedTimestamp = newTimestamp;
-                        
-                        // ★★★ 關鍵：重新載入詳情，這會重建 DOM，從而移除轉圈的按鈕 ★★★
                         await viewHistoryDetail(newId);
                         
-                        // 刷新列表 (如果在背景開啟)
                         if (typeof currentSubFunctionFilter !== 'undefined' &&
                             document.getElementById('historyLevel3').style.display !== 'none') {
                             const themeIndex = typeof currentThemeIndex !== 'undefined' ? currentThemeIndex : 1;
@@ -18653,20 +18659,19 @@ async function updateHistoryChat() {
     // 複製 HTML 進行清理
     const clone = sourceElement.cloneNode(true);
  
-    // --- [修復重點 A]：只移除「舊版」或「暫時性」的輸入框，保留 .canvas-input-area ---
+    // --- [修復重點 A]：只移除「舊版」或「暫時性」的輸入框 ---
     const tempInputAreas = clone.querySelectorAll('#writingGuideChatInputContainer, #writingChatInputContainer, #argumentChatInputContainer, #chatInputContainer');
     tempInputAreas.forEach(el => el.remove());
     
-    // --- [修復重點 B]：針對畫布聊天室的輸入框，只清空數值，不移除元素 ---
+    // --- [修復重點 B]：針對畫布聊天室的輸入框，只清空數值 ---
     const canvasInputs = clone.querySelectorAll('.canvas-input-area textarea');
     canvasInputs.forEach(el => {
-        el.value = '';      // 清空輸入值
-        el.innerHTML = '';  // 清空 HTML 內容
-        el.removeAttribute('disabled'); // 確保下次打開可輸入
+        el.value = '';      
+        el.innerHTML = '';  
+        el.removeAttribute('disabled'); 
     });
  
-    // --- [修復重點 C]：移除其他功能按鈕，但「保留」發送鍵 (.canvas-send-btn) ---
-    // 這裡使用 :not() 選擇器來排除發送按鈕和懸浮儲存按鈕
+    // --- [修復重點 C]：移除其他功能按鈕，但保留發送鍵 ---
     const buttons = clone.querySelectorAll('button:not(.canvas-send-btn):not(.morandi-save-float-btn), .btn-icon-action, .history-save-btn');
     buttons.forEach(el => el.remove());
  
@@ -18674,7 +18679,7 @@ async function updateHistoryChat() {
     const sendBtns = clone.querySelectorAll('.canvas-send-btn');
     sendBtns.forEach(btn => btn.disabled = false);
  
-    // 處理 Canvas 圖表 (保持不變)
+    // 處理 Canvas 圖表
     const clonedCanvases = clone.querySelectorAll('canvas');
     clonedCanvases.forEach((canvas) => {
         canvas.style.width = '100%';
@@ -18683,7 +18688,10 @@ async function updateHistoryChat() {
         canvas.removeAttribute('id');
     });
  
-    const newAiContent = clone.innerHTML;
+    const newAiContentRaw = clone.innerHTML;
+
+    // ★★★ [核心修改] 壓縮內容 ★★★
+    const newAiContentCompressed = LZString.compressToUTF16(newAiContentRaw);
  
     try {
         const db = await openHistoryDB();
@@ -18696,20 +18704,18 @@ async function updateHistoryChat() {
         request.onsuccess = function(event) {
             const data = event.target.result;
             if (data) {
-                // A. 更新內容 (寫入包含新氣泡的 HTML)
-                data.aiContent = newAiContent;
+                // A. 更新內容 (寫入壓縮後的 HTML)
+                data.aiContent = newAiContentCompressed;
                 
                 // B. 設定同步狀態
-                data.isSynced = false;       // 標記為本地較新
-                data.hasBeenSynced = true;   // 防止被誤刪
+                data.isSynced = false;       
+                data.hasBeenSynced = true;   
  
                 const updateRequest = store.put(data);
                 
                 updateRequest.onsuccess = function() {
-                    console.log("聊天紀錄已更新 (準備上傳)");
+                    console.log("聊天紀錄已更新 [已壓縮] (準備上傳)");
                     
-                    // 立即觸發靜默同步，將最新的對話推送到雲端
-                    // 注意：此處調用 smartSyncHistory 而非 syncHistoryToFirebase
                     if (typeof smartSyncHistory === 'function') {
                         smartSyncHistory();
                     }
