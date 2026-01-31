@@ -13949,7 +13949,7 @@ async function submitWriting() {
             const selectedScopes = Array.from(document.querySelectorAll('input[name="reviewScope"]:checked')).map(cb => cb.value);
             const isFullReview = selectedScopes.includes("全部") || selectedScopes.length === 0;
 
-            showLoading(`${currentReviewerName} 正進行點評...`);
+            showLoading(`${currentReviewerName} 正在點評...`);
 
             // ★★★ RAG 邏輯 (已更新) ★★★
             const ragReference = await searchSimilarEssays(content, 'narrative');
