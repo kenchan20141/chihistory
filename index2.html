@@ -225,67 +225,49 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   }
   
   // 搜尋相似範文的函式
-// === RAG 搜尋核心函數 (修正版) ===
-// === RAG 搜尋核心函數 (強力偵錯版) ===
-async function searchSimilarEssays(studentText) {
-    console.log("%c🔍 [RAG 啟動] 準備開始搜尋...", "color: yellow; font-weight: bold;");
-    console.log("📄 學生輸入長度:", studentText.length);
-
+// === RAG 搜尋核心函數 (支援類型過濾版) ===
+// targetType: 'narrative' (敘事) 或 'argument' (議論)
+async function searchSimilarEssays(studentText, targetType) {
+    console.log(`%c🔍 [RAG] 正在搜尋相似範文 (類型限制: ${targetType || '無'})...`, "color: yellow");
+    
     try {
-        // 1. 檢查 Supabase 連線變數
-        if (typeof supabaseClient === 'undefined') {
-            console.error("❌ 嚴重錯誤：找不到 'supabaseClient' 變數！");
-            console.log("💡 提示：請檢查 HTML 上方是否定義了 const supabaseClient = supabase.createClient(...)");
-            return "";
-        }
+        if (typeof supabaseClient === 'undefined') return "";
 
-        // 2. 載入 Transformers
-        console.log("⚙️ 正在載入 AI 模型庫...");
-        // 加入 .min.js 確保路徑正確
-        const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0/dist/transformers.min.js');
-        
-        console.log("✅ 庫載入成功，設定環境...");
+        const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0');
         env.allowLocalModels = false;
         env.useBrowserCache = true;
 
-        // 3. 建立模型
-        console.log("🧠 正在初始化 Feature Extractor...");
         const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-
-        // 4. 生成向量
-        console.log("🔢 正在生成向量...");
         const output = await extractor(studentText.substring(0, 500), { pooling: 'mean', normalize: true });
         const vector = Array.from(output.data);
-        console.log("✅ 向量生成完畢，維度:", vector.length);
 
-        // 5. 查詢資料庫
-        console.log("📡 正在向 Supabase 查詢...");
+        // ★★★ 呼叫新的 SQL 函數，傳入 filter_type ★★★
         const { data, error } = await supabaseClient.rpc('match_documents', {
             query_embedding: vector,
             match_threshold: 0.3, 
-            match_count: 1
+            match_count: 1,
+            filter_type: targetType // 這裡傳入 'narrative' 或 'argument'
         });
 
         if (error) {
-            console.error("❌ Supabase RPC 錯誤:", error);
+            console.error("Supabase RPC Error:", error);
             return "";
         }
 
         if (data && data.length > 0) {
             const match = data[0];
-            console.log(`🎯 [RAG 命中] 標題: 《${match.metadata.title}》, 相似度: ${match.similarity}`);
-            
+            console.log(`🎯 [RAG] 命中: 《${match.metadata.title}》 [${match.metadata.type}]`);
             return `
 【參考 5** 級數範文 (${match.metadata.title})】
 ${match.content}
 `;
         } else {
-            console.warn("🤷‍♂️ [RAG 結果] 沒有找到相似度 > 0.3 的文章");
+            console.warn(`🤷‍♂️ [RAG] 在「${targetType}」類別中找不到相似文章`);
             return "";
         }
 
     } catch (err) {
-        console.error("💥 RAG 執行期間發生崩潰:", err);
+        console.error("RAG Error:", err);
         return ""; 
     }
 }
@@ -12726,7 +12708,7 @@ async function submitArgumentWriting() {
         showLoading(`${currentReviewerName} 正在比對 5** 範文並細閱文章...`); // 更新提示
 
         // ★★★ 新增 RAG 邏輯 ★★★
-        const ragReference = await searchSimilarEssays(content);
+        const ragReference = await searchSimilarEssays(content, 'argument');
         let contentWithRAG = content;
         if (ragReference) {
             contentWithRAG += `\n\n=== 系統檢索參考資料 (僅供評分參考，非學生所寫) ===\n${ragReference}`;
@@ -13929,7 +13911,7 @@ async function submitWriting() {
 
             // ★★★ 新增 RAG 邏輯 ★★★
             // 1. 執行搜尋
-            const ragReference = await searchSimilarEssays(content);
+            const ragReference = await searchSimilarEssays(content, 'narrative');
             
             // 2. 將範文附加到傳送給後端的內容中
             // 後端的 AI 會看到學生的文章，後面跟著這篇參考範文
