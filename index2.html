@@ -17753,7 +17753,6 @@ function renderFilteredRecords(records) {
 
 
 // === 新增：下載歷史紀錄為 PDF ===
-// === [100% 完美復刻 + 強制置中修復版] 下載歷史紀錄為 HTML ===
 async function downloadHistoryHTML(id) {
     const btn = document.getElementById(`download-btn-${id}`);
     if (!btn) return;
@@ -17777,7 +17776,7 @@ async function downloadHistoryHTML(id) {
             const record = event.target.result;
             if (!record) { alert("找不到紀錄"); resetBtn(); return; }
 
-            // 1. 建立影子容器 (設定為 900px，這是電腦版的標準寬度)
+            // 1. 建立影子容器
             const shadowContainer = document.createElement('div');
             shadowContainer.style.cssText = `
                 position: absolute; left: -9999px; top: 0; 
@@ -17789,7 +17788,6 @@ async function downloadHistoryHTML(id) {
             document.body.appendChild(shadowContainer);
 
             // 2. === 重建 HTML 結構 ===
-            
             let themeIndex = 1;
             if (record.category && typeof HISTORY_STRUCTURE !== 'undefined') {
                 const subIndex = HISTORY_STRUCTURE[record.category]?.indexOf(record.subFunction);
@@ -17814,6 +17812,7 @@ async function downloadHistoryHTML(id) {
             `;
 
             if (record.userContent) {
+                // (省略 userContent 解析，保持不變)
                 const rawText = record.userContent;
                 const lines = rawText.split('\n');
                 let parsedHTML = `<div class="history-parsed-container ${themeClass}">`;
@@ -17847,13 +17846,15 @@ async function downloadHistoryHTML(id) {
             }
 
             if (record.aiContent) {
-                contentHTML += `<div class="ai-output-area">${record.aiContent}</div>`;
+                // ★★★ [核心修改] 解壓縮 ★★★
+                const decompressedAiContent = safeDecompress(record.aiContent);
+                contentHTML += `<div class="ai-output-area">${decompressedAiContent}</div>`;
             }
 
             contentHTML += `</div>`; 
             shadowContainer.innerHTML = contentHTML;
 
-            // 3. === 清理與凍結 ===
+            // 3. === 清理與凍結 (保持不變) ===
             shadowContainer.querySelectorAll('.canvas-chat-container, .canvas-input-area, button, .action-buttons-container, .history-save-btn, input[type="text"], textarea').forEach(el => {
                 if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
                     const span = document.createElement('div');
@@ -17870,7 +17871,7 @@ async function downloadHistoryHTML(id) {
                 bar.setAttribute('style', `width: ${w} !important; background-color: #007bff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;`);
             });
 
-            // 4. === 處理圖表 ===
+            // 4. === 處理圖表 (保持不變) ===
             if (record.scoreData && record.scoreData.radar) {
                 let canvasEl = shadowContainer.querySelector('canvas');
                 if (!canvasEl) {
@@ -17936,13 +17937,13 @@ async function downloadHistoryHTML(id) {
                 }
             }
 
-            // 5. === 提取全站 CSS ===
+            // 5. === 提取全站 CSS (保持不變) ===
             let cssRules = "";
             Array.from(document.querySelectorAll('style')).forEach(style => { cssRules += style.innerHTML + "\n"; });
             let externalLinks = "";
             Array.from(document.querySelectorAll('link[rel="stylesheet"]')).forEach(link => { externalLinks += link.outerHTML + "\n"; });
 
-            // 6. === 組合最終 HTML (強制覆寫 Body 樣式) ===
+            // 6. === 組合最終 HTML (保持不變) ===
             const finalHtmlSource = `
 <!DOCTYPE html>
 <html lang="zh-HK">
@@ -17953,90 +17954,20 @@ async function downloadHistoryHTML(id) {
     ${externalLinks}
     <style>
         ${cssRules}
-        
-        /* === 關鍵修正：強制覆寫原有網站 CSS 對 Body 的限制 === */
-        
-        body { 
-            /* 1. 強制重置 Body 寬度與背景，覆蓋原網站的 max-width: 800px */
-            max-width: 100% !important; 
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 40px 0 !important;
-            
-            /* 2. 使用 Flexbox 確保內容卡片絕對置中 */
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important; /* 水平置中 */
-            
-            background-color: #f2f4f7 !important;
-            background-image: none !important;
-            min-height: 100vh !important;
-            overflow-y: auto !important;
-        }
-
-        /* 內容容器：這張「紙」 */
-        .export-wrapper {
-            /* 3. 設定固定寬度 900px (電腦版)，配合 Body 的 Flex 置中 */
-            width: 900px !important;
-            
-            /* 4. 響應式保護：在小螢幕上縮放 */
-            max-width: 95% !important; 
-            
-            background-color: #ffffff !important;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important;
-            border-radius: 12px !important;
-            box-sizing: border-box !important;
-            overflow: hidden !important;
-            position: relative !important;
-            margin: 0 !important; /* Margin 0，因為 Body 已經負責置中了 */
-        }
-
-        /* 修復 Grid 排版 (評分表 + 雷達圖) */
-        .grading-grid { 
-            display: grid !important; 
-            grid-template-columns: 1fr 1fr !important; 
-            gap: 20px !important; 
-            width: 100% !important;
-        }
-        .grading-scores, .grading-radar {
-            width: 100% !important;
-            box-sizing: border-box !important;
-            margin: 0 !important;
-        }
-
-        /* 手機版樣式 */
-        @media (max-width: 768px) {
-            body {
-                padding: 0 !important; 
-                background-color: #fff !important;
-                display: block !important; /* 手機版改回 Block，讓內容自然流動 */
-            }
-            .export-wrapper {
-                width: 100% !important;
-                max-width: 100% !important;
-                border-radius: 0 !important;
-                box-shadow: none !important;
-            }
-            .grading-grid {
-                grid-template-columns: 1fr !important;
-            }
-        }
-
+        body { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 40px 0 !important; display: flex !important; flex-direction: column !important; align-items: center !important; background-color: #f2f4f7 !important; background-image: none !important; min-height: 100vh !important; overflow-y: auto !important; }
+        .export-wrapper { width: 900px !important; max-width: 95% !important; background-color: #ffffff !important; box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important; border-radius: 12px !important; box-sizing: border-box !important; overflow: hidden !important; position: relative !important; margin: 0 !important; }
+        .grading-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 20px !important; width: 100% !important; }
+        .grading-scores, .grading-radar { width: 100% !important; box-sizing: border-box !important; margin: 0 !important; }
+        @media (max-width: 768px) { body { padding: 0 !important; background-color: #fff !important; display: block !important; } .export-wrapper { width: 100% !important; max-width: 100% !important; border-radius: 0 !important; box-shadow: none !important; } .grading-grid { grid-template-columns: 1fr !important; } }
         button { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="export-wrapper">
-        ${shadowContainer.innerHTML}
-    </div>
-    
-    <div style="text-align: center; color: #aaa; font-size: 12px; margin-top: 30px; font-family: sans-serif; width: 100%;">
-        Generated by 神思 SANSI AI System
-    </div>
+    <div class="export-wrapper">${shadowContainer.innerHTML}</div>
+    <div style="text-align: center; color: #aaa; font-size: 12px; margin-top: 30px; font-family: sans-serif; width: 100%;">Generated by 神思 SANSI AI System</div>
 </body>
 </html>`;
 
-            // 7. 清理與下載
             document.body.removeChild(shadowContainer);
 
             const blob = new Blob([finalHtmlSource], { type: 'text/html;charset=utf-8' });
