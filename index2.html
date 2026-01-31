@@ -16143,9 +16143,6 @@ ${basePrompt}
  * @param {string} uniqueIdPrefix - 用於區分不同評分系統的唯一前綴
  * @param {string} fullTextContent - 用戶提交的完整文章內容
  */
- * 【最終修訂版】顯示完整的點評、評分系統，並根據最終等級和所選閱卷員調整內容
- * 此版本包含 OpenCC 強制繁體轉換，解決簡體字問題
- */
 async function displayFullCommentWithGrading(containerId, originalApiResponse, llama3ApiResponse, uniqueIdPrefix, fullTextContent) {
     // ★★★ 初始化 OpenCC 轉換器 (強制轉為繁體香港標準) ★★★
     // 確保頁面有引入 opencc-js，否則回退到不轉換
