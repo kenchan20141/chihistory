@@ -12734,13 +12734,23 @@ async function submitArgumentWriting() {
         // ★★★ 結束 RAG 邏輯 ★★★
 
         // ★ 建構 Payload 傳給後端
+        // ★ 建構 Payload 傳給後端
         const payload = {
             action: "grade_argument",
             data: {
                 subType: "writing", 
                 isFullReview: isFullReview,
                 topic: topic,
-                content: contentWithRAG, // ★ 改用包含 RAG 的內容
+                
+                // ★★★ 修改這裡：加入強制繁體指令 (議論文專用) ★★★
+                content: `
+【系統強制指令】
+1. 你的所有輸出（包括點評、建議、改寫）必須嚴格使用「繁體中文（Traditional Chinese）」。
+2. 即使下方的【參考資料】是簡體，你也必須將其轉化為繁體中文來進行回應。
+3. 用語請使用香港高中中文科的專業術語（例如：論點、論據、論證、語例、設例等）。
+
+${contentWithRAG}`, // 這裡放入原本包含 RAG 的內容
+
                 reviewer: document.getElementById('argumentReviewer').value,
                 tone: tone,
                 selectedScopes: selectedScopes
@@ -13929,20 +13939,30 @@ async function submitWriting() {
             }
             // ★★★ 結束 RAG 邏輯 ★★★
 
-            const payload = {
-                action: "grade_narrative",
-                data: {
-                    subType: "片段描寫",
-                    isFullReview: isFullReview,
-                    topic: topic,
-                    focus: localStorage.getItem("currentFocus"), 
-                    plot: localStorage.getItem("currentPlot"),   
-                    content: contentWithRAG, // ★ 改用包含 RAG 的內容
-                    reviewer: document.getElementById('writingReviewer').value,
-                    tone: tone,
-                    selectedScopes: selectedScopes
-                }
-            };
+           // ★ 建構 Payload 傳給後端
+        const payload = {
+            action: "grade_narrative",
+            data: {
+                subType: "片段描寫",
+                isFullReview: isFullReview,
+                topic: topic,
+                focus: localStorage.getItem("currentFocus"), 
+                plot: localStorage.getItem("currentPlot"),   
+                
+                // ★★★ 修改這裡：加入強制繁體指令 ★★★
+                content: `
+【系統強制指令】
+1. 你的所有輸出（包括點評、建議、改寫）必須嚴格使用「繁體中文（Traditional Chinese）」。
+2. 即使下方的【參考資料】是簡體，你也必須將其轉化為繁體中文來進行回應。
+3. 用語請使用香港高中中文科的專業術語。
+
+${contentWithRAG}`, // 這裡放入原本包含 RAG 的內容
+                
+                reviewer: document.getElementById('writingReviewer').value,
+                tone: tone,
+                selectedScopes: selectedScopes
+            }
+        };
 
             if (isFullReview) {
                 const [originalApiResponse, llama3ApiResponse] = await Promise.all([
