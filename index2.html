@@ -76,35 +76,7 @@ form-action 'self';
 <!-- 3. Pixi Live2D Plugin (Cubism 4 專用版 - 這是關鍵) -->
 <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
 
-<!-- 1. 引入 Mermaid.js 核心庫 -->
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 
-<!-- 2. 初始化 Mermaid 配置 (修正版) -->
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        if (typeof mermaid !== 'undefined') {
-            mermaid.initialize({
-                startOnLoad: false,
-                theme: 'base',
-                themeVariables: {
-                    primaryColor: '#fdfcf8',
-                    primaryTextColor: '#5d4037',
-                    primaryBorderColor: '#8fa398',
-                    lineColor: '#b6a6ca',
-                    secondaryColor: '#f4f8f6',
-                    tertiaryColor: '#fff'
-                },
-                flowchart: {
-                    curve: 'basis',
-                    padding: 20,
-                    // ★★★ 關鍵修正：禁止自動縮放，保持原始大小 ★★★
-                    useMaxWidth: false, 
-                    htmlLabels: true
-                }
-            });
-        }
-    });
-</script>
 
 
 
@@ -7648,25 +7620,6 @@ body.cat-dragging { cursor: grabbing !important; }
     50% { opacity: 0.5; }
     100% { opacity: 1; }
 }
-
-
-	/* === Mermaid 圖表捲動容器 === */
-.mermaid-scroll-wrapper {
-    width: 100%;
-    overflow-x: auto; /* 關鍵：內容過寬時顯示橫向捲軸 */
-    overflow-y: hidden;
-    background: #fff;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.05); /* 內陰影提示可捲動 */
-    text-align: center; /* 讓圖表在容器內置中 */
-}
-
-/* 確保 SVG 本身不會被強制壓縮 */
-.mermaid svg {
-    max-width: none !important;
-    height: auto;
-}
 	
 	
 </style>
@@ -9477,6 +9430,236 @@ const STUDENT_ADDITION_B64 = "a2VuY2hhbjIwMTMxQGdtYWlsLmNvbQ==";
 // kenchan20151@gmail.com (特許用家)
 const SPECIAL_USER_B64 = "a2VuY2hhbjIwMTUxQGdtYWlsLmNvbQ==";
 
+
+
+// ==========================================
+// === [新增] 神思・摘星卡生成系統 (Canvas) ===
+// ==========================================
+
+/**
+ * 生成並顯示佳句分享卡
+ * @param {string} sentence - AI 挑選的金句
+ * @param {string} title - 文章題目
+ * @param {string} grade - 等級 (e.g. "5**")
+ */
+function generateShareCard(sentence, title, grade) {
+    // 1. 準備 Canvas
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 設定卡片尺寸 (豎版明信片比例)
+    const width = 600;
+    const height = 900;
+    canvas.width = width;
+    canvas.height = height;
+
+    // 2. 繪製背景 (莫蘭迪米白紙張質感)
+    ctx.fillStyle = '#fdfcf8';
+    ctx.fillRect(0, 0, width, height);
+    
+    // 加入紙張噪點/紋理效果 (讓它看起來像紙)
+    for (let i = 0; i < 5000; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.1)';
+        ctx.fillRect(Math.random() * width, Math.random() * height, 2, 2);
+    }
+
+    // 3. 繪製邊框 (雙線風格)
+    ctx.strokeStyle = '#8fa398'; // 莫蘭迪綠
+    ctx.lineWidth = 3;
+    ctx.strokeRect(20, 20, width - 40, height - 40);
+    
+    ctx.strokeStyle = '#d69a92'; // 莫蘭迪紅 (內框)
+    ctx.lineWidth = 1;
+    ctx.strokeRect(30, 30, width - 60, height - 60);
+
+    // 4. 繪製頂部裝飾
+    ctx.font = '24px "Noto Serif TC", serif';
+    ctx.fillStyle = '#b6a6ca'; // 香芋紫
+    ctx.textAlign = 'center';
+    ctx.fillText("✦ 神 思 文 萃 ✦", width / 2, 80);
+
+    // 5. 繪製金句 (核心內容 - 直排或橫排)
+    // 這裡使用橫排，字體放大，自動換行
+    ctx.font = 'bold 42px "Noto Serif TC", serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    
+    // 自動換行邏輯
+    const maxTextWidth = width - 120;
+    const words = sentence.split('');
+    let line = '';
+    let y = height / 2 - 60; // 從中間偏上開始
+    const lineHeight = 60;
+
+    // 如果句子太短，加上引號增加儀式感
+    if (!sentence.includes("「")) sentence = `「${sentence}」`;
+
+    // 簡單的換行算法
+    let lines = [];
+    let currentLine = "";
+    for(let n = 0; n < sentence.length; n++) {
+        let testLine = currentLine + sentence[n];
+        let metrics = ctx.measureText(testLine);
+        let testWidth = metrics.width;
+        if (testWidth > maxTextWidth && n > 0) {
+            lines.push(currentLine);
+            currentLine = sentence[n];
+        } else {
+            currentLine = testLine;
+        }
+    }
+    lines.push(currentLine);
+
+    // 繪製每一行
+    lines.forEach((l, i) => {
+        // 加上陰影增加立體感
+        ctx.shadowColor = "rgba(0,0,0,0.1)";
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        ctx.fillText(l, width / 2, y + (i * lineHeight));
+    });
+
+    // 重置陰影
+    ctx.shadowColor = "transparent";
+
+    // 6. 繪製文章資訊 (底部)
+    const bottomY = height - 120;
+    ctx.font = '20px "Noto Serif TC", serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText(`《${title}》`, width / 2, bottomY);
+    
+    // 獲取學生姓名
+    const s = JSON.parse(localStorage.getItem('studentProfile'));
+    const authorName = s ? s.name : "佚名";
+    ctx.fillText(authorName, width / 2, bottomY + 30);
+
+    // 7. 繪製等級徽章 (左上角或右下角)
+    ctx.save();
+    ctx.translate(width - 100, 100);
+    ctx.rotate(15 * Math.PI / 180);
+    
+    // 圓形底
+    ctx.beginPath();
+    ctx.arc(0, 0, 45, 0, 2 * Math.PI);
+    ctx.fillStyle = '#d69a92';
+    ctx.fill();
+    
+    // 等級文字
+    ctx.font = 'bold 28px Arial';
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(grade, 0, 0);
+    ctx.restore();
+
+    // 8. ★ 繪製「神思」印章 (紅色方印) ★
+    drawSeal(ctx, width / 2, height - 180);
+
+    // 9. 轉為圖片並顯示
+    const dataUrl = canvas.toDataURL('image/png');
+    showShareModal(dataUrl);
+}
+
+/**
+ * 繪製仿古印章
+ */
+function drawSeal(ctx, x, y) {
+    const size = 60;
+    ctx.save();
+    ctx.translate(x, y); // 移到位置
+    
+    // 紅色方框
+    ctx.fillStyle = '#c0392b'; // 硃砂紅
+    // 稍微圓角
+    roundedRect(ctx, -size/2, -size/2, size, size, 4);
+    ctx.fill();
+    
+    // 模擬印章的不均勻感 (隨機雜點)
+    for(let i=0; i<100; i++) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(
+            -size/2 + Math.random()*size, 
+            -size/2 + Math.random()*size, 
+            2, 2
+        );
+    }
+
+    // 文字 (篆體風格，這裡用 serif 模擬)
+    ctx.font = 'bold 24px "Noto Serif TC", serif';
+    ctx.fillStyle = '#fff'; // 白文印 (紅底白字)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // 豎排 "神思"
+    ctx.fillText("神", 0, -12);
+    ctx.fillText("思", 0, 12);
+    
+    // 邊框微損效果
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-size/2 + 3, -size/2 + 3, size - 6, size - 6);
+
+    ctx.restore();
+}
+
+// 輔助：繪製圓角矩形
+function roundedRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+}
+
+/**
+ * 顯示分享卡視窗
+ */
+function showShareModal(imageUrl) {
+    // 移除舊的 (如果有的話)
+    const oldModal = document.getElementById('shareCardModal');
+    if (oldModal) oldModal.remove();
+
+    const modalHTML = `
+    <div id="shareCardModal" class="report-menu-overlay" style="display:flex; z-index:20002; align-items:center; justify-content:center;">
+        <div class="report-menu-content" style="max-width: 450px; background:transparent; box-shadow:none; border:none; text-align:center;">
+            
+            <div style="background:white; padding:10px; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); transform: scale(0.9); opacity:0; animation: popIn 0.5s forwards;">
+                <img src="${imageUrl}" style="width:100%; height:auto; display:block; border-radius:8px;">
+            </div>
+
+            <div style="margin-top:20px; display:flex; justify-content:center; gap:15px;">
+                <a href="${imageUrl}" download="神思摘星卡.png" class="btn-action" style="text-decoration:none; background-color:#d69a92;">
+                    <i class="fas fa-download"></i> 保存卡片
+                </a>
+                <button class="btn-action" style="background-color:#5e7067;" onclick="document.getElementById('shareCardModal').remove()">
+                    關閉
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes popIn {
+            to { transform: scale(1); opacity: 1; }
+        }
+    </style>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 播放音效 (成功獲得卡片)
+    if (typeof playRandomCatSound === 'function') {
+        // 這裡可以換成一個比較 "閃亮" 的音效，暫時用貓叫代替或不放
+    }
+}
+
+	
 /**
  * 檢查訪客每日使用額度
  * @returns {boolean} true=允許繼續, false=阻止
@@ -12845,17 +13028,20 @@ async function submitArgumentOutline() {
     }
 }
 
-// 2. [核心修復] 議論文大綱解析與顯示函式 (整合 Mermaid 思維脈絡圖)
+// 2. [核心修復] 議論文大綱解析與顯示函式
+// 2. [核心修復] 議論文大綱解析與顯示函式 (已移除紅綠色樣式)
 function displayArgumentOutlineComment(response, inputData) {
     console.log("[Argument Outline] Raw Response:", response);
 
     // --- A. 切割回應區塊 ---
+    // 使用正則表達式尋找分隔線，容許前後有空格
     const sections = response.split(/===\s*(.+?)\s*===/).filter(s => s.trim());
     
     let commentPart = "";
     let rewritePart = "";
     let explanationPart = "";
 
+    // 尋找對應的內容區塊
     for (let i = 0; i < sections.length; i++) {
         if (sections[i].includes("點評及建議")) commentPart = sections[i + 1] || "";
         if (sections[i].includes("改寫後的大綱")) rewritePart = sections[i + 1] || "";
@@ -12895,36 +13081,8 @@ function displayArgumentOutlineComment(response, inputData) {
         rewrites[part].evidence = match[2].trim();
     }
 
-    // ==========================================
-    // ★★★ 新增：生成思維脈絡圖 (Mermaid) ★★★
-    // ==========================================
- // ==========================================
-    // ★★★ 新增：生成思維脈絡圖 (Mermaid) - 捲動修正版 ★★★
-    // ==========================================
-    const currentTopic = localStorage.getItem("argumentCurrentTopic") || "議論文大綱";
-    const mermaidSyntax = generateMermaidCode(currentTopic, rewrites);
-    
-    // 建立圖表 HTML 容器 (使用 mermaid-scroll-wrapper)
-    const mindMapHTML = `
-        <div class="rewrite-explanation-container" style="margin-bottom: 30px;">
-            <div class="rewrite-explanation-card" style="border-left: 5px solid #b6a6ca;">
-                <h3 style="color: #6a5acd;"><i class="fas fa-project-diagram"></i> 思維脈絡圖 (AI 改寫版)</h3>
-                
-                <!-- 這裡加上了捲動容器 -->
-                <div class="mermaid-scroll-wrapper">
-                    <div class="mermaid">
-                        ${mermaidSyntax}
-                    </div>
-                </div>
-                
-                <p style="text-align: center; color: #999; font-size: 0.8rem; margin-top: 10px;">
-                    <i class="fas fa-arrows-alt-h"></i> 左右滑動以查看完整圖表
-                </p>
-            </div>
-        </div>
-    `;
-
     // --- D. 生成 HTML 表格 1 (原稿 + 點評) ---
+    // [修改點] 這裡移除了顏色樣式，並統一加上邊框樣式，確保表格整齊
     const cellStyle = "border:1px solid #ccc; padding:10px; vertical-align:top; line-height:1.6;";
     
     let commentTableHTML = `
@@ -12984,77 +13142,13 @@ function displayArgumentOutlineComment(response, inputData) {
         explanationHTML = createBulletedListHTML("改寫說明", explanationPart.trim());
     }
 
-    // --- G. 組合並顯示 (加入 mindMapHTML) ---
-    const finalHTML = mindMapHTML + commentTableHTML + rewriteTableHTML + explanationHTML + getCanvasChatHTML('argument_outline');
+    // --- G. 組合並顯示 ---
+    const finalHTML = commentTableHTML + rewriteTableHTML + explanationHTML + getCanvasChatHTML('argument_outline');
     
     openResultCanvas("議論文大綱點評");
-    const resultBody = document.getElementById("resultCanvasBody");
-    resultBody.innerHTML = finalHTML;
-
-    // ★★★ 觸發 Mermaid 渲染 ★★★
-    // 必須給一點延遲，確保 DOM 已經插入完畢
-    setTimeout(() => {
-        if (typeof mermaid !== 'undefined') {
-            mermaid.init(undefined, resultBody.querySelectorAll('.mermaid'));
-        } else {
-            console.warn("Mermaid library not loaded.");
-        }
-    }, 200);
+    document.getElementById("resultCanvasBody").innerHTML = finalHTML;
 }
 
-
-/**
- * 【修正版】將大綱資料轉換為 Mermaid 流程圖語法 (加入自動換行)
- * @param {string} topic - 題目
- * @param {object} rewrites - 解析後的改寫大綱物件
- * @returns {string} Mermaid 語法字串
- */
-function generateMermaidCode(topic, rewrites) {
-    // 輔助：每 n 個字強制換行 <br/>
-    const wrapText = (str, width = 12) => {
-        if (!str) return "無內容";
-        // 移除原有換行與引號
-        let clean = str.replace(/["'”’「」]/g, '').replace(/\n/g, '');
-        
-        // 使用正則表達式每 width 個字插入 <br/>
-        const regex = new RegExp(`.{1,${width}}`, 'g');
-        const parts = clean.match(regex);
-        return parts ? parts.join('<br/>') : clean;
-    };
-
-    const safeTopic = wrapText(topic, 10); // 題目短一點換行
-
-    // 2. 開始建構圖表
-    let graph = `graph TD\n`;
-    
-    // 定義根節點
-    graph += `    Root["📖 ${safeTopic}"]\n`;
-    graph += `    style Root fill:#8fa398,stroke:#5e7067,stroke-width:2px,color:#fff\n`;
-
-    // 3. 遍歷每一個結構段
-    let i = 0;
-    for (const [partName, content] of Object.entries(rewrites)) {
-        i++;
-        const nodeId = `Node${i}`;
-        
-        // ★★★ 關鍵：在這裡限制寬度，每 15 個字換行 ★★★
-        const pointText = wrapText(content.point, 15);
-        const evidenceText = wrapText(content.evidence, 18);
-
-        // 連線：題目 -> 結構段名稱
-        graph += `    Root --> ${nodeId}Part("${partName}")\n`;
-        graph += `    style ${nodeId}Part fill:#e0ddd7,stroke:#bcaaa4,color:#333\n`;
-
-        // 內容節點：論點與論據
-        // 使用 HTML 標籤 <b> 加粗標題，讓層次更分明
-        graph += `    ${nodeId}Part --> ${nodeId}Detail["<div style='text-align:left'><b>💡 論點：</b><br/>${pointText}<br/><br/><b>📚 論據：</b><br/>${evidenceText}</div>"]\n`;
-        graph += `    style ${nodeId}Detail fill:#fff,stroke:#d69a92,stroke-dasharray: 5 5\n`;
-    }
-
-    return graph;
-}
-
-	
 
 	
 
@@ -15957,11 +16051,11 @@ END IF
 </scoring_worksheet>
 
 <grading_json>
-[**分數分發步驟**：**這是一條絕對的、機械的指令。** 你的任務是將 <scoring_worksheet> 的計算結果填入下方。]
 {
 "content": [複製'內容分數'的'最終分數'],
 "expression": [複製'表達分數'的'最終分數'],
 "structure": [複製'結構分數'的'最終分數'],
+"best_sentence": "在此摘錄文中寫得最好、最優美或最深刻的一句句子（不超過30字）",
 "radar": {
 "立意": [複製'扣題分數'的'扣題基準分數'],
 "取材": [複製'內容分數'的'最終分數'],
@@ -16277,19 +16371,11 @@ function safeJSONParse(rawString) {
 
 	
 /**
- * 【最終修訂版】顯示完整的點評、評分系統，並根據最終等級和所選閱卷員調整內容
- * @param {string} containerId - 顯示結果的容器ID
- * @param {string} originalApiResponse - 原始模型的API回應
- * @param {string} llama3ApiResponse - 驗證模型的API回應 (可選)
- * @param {string} uniqueIdPrefix - 用於區分不同評分系統的唯一前綴
- * @param {string} fullTextContent - 用戶提交的完整文章內容
- */
-/**
- * 【最終安全版】顯示完整的點評與評分
+ * 【最終修訂版】顯示完整的點評、評分系統 (整合摘星卡功能)
  * 算分邏輯已移至後端，此函數僅負責解析並顯示結果。
  */
 async function displayFullCommentWithGrading(containerId, originalApiResponse, llama3ApiResponse, uniqueIdPrefix, fullTextContent) {
-    // 1. 找出閱卷員的名字
+    // 1. 找出閱卷員的名字與語氣
     let reviewerName = "陳SIR"; 
     let reviewerSelect;
     let currentTone = "serious"; 
@@ -16313,7 +16399,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     openResultCanvas(reviewerName + " 評核報告");
     const resultContainer = document.getElementById("resultCanvasBody");
 
-    // 3. 處理舊的雷達圖實例
+    // 3. 處理舊的雷達圖實例，防止重疊
     const instanceName = `${uniqueIdPrefix}_radarChartInstance`;
     if (window[instanceName]) {
         window[instanceName].destroy();
@@ -16325,15 +16411,15 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     let scoresForDisplay = null;
     let finalGradeForDisplay = "評級中"; 
 
-    // 使用 i 標誌來忽略大小寫匹配標籤
+    // 4. 正則表達式提取內容 (忽略大小寫)
     const critiqueMatch = originalApiResponse.match(/<critique>([\s\S]*?)<\/critique>/i);
     const suggestionsMatch = originalApiResponse.match(/<suggestions>([\s\S]*?)<\/suggestions>/i);
     const rewriteMatch = originalApiResponse.match(/<rewrite_example>([\s\S]*?)<\/rewrite_example>/i);
     const originalGradingMatch = originalApiResponse.match(/<grading_json>([\s\S]*?)<\/grading_json>/i);
     
-    // --- 分數解析邏輯 (極簡化：直接信任後端回傳的 JSON) ---
+    // --- 5. 分數解析邏輯 ---
     if (originalGradingMatch && originalGradingMatch[1]) {
-        // 使用 safeJSONParse 來處理
+        // 使用 safeJSONParse 來處理可能不乾淨的 JSON
         scoresForDisplay = safeJSONParse(originalGradingMatch[1]);
         
         if (!scoresForDisplay) {
@@ -16343,18 +16429,16 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         console.warn("找不到 <grading_json> 標籤，可能由後端被過濾或生成失敗。");
     }
     
-    // 計算最終總分與等級 (這部份仍保留在前端作顯示用，因為只是單純加總)
+    // 6. 計算最終總分與等級
     if (scoresForDisplay) {
-        // ★★★ 注意：這裡不再執行 applyV8Rules 或 applyWordCountRule ★★★
-        // 這些規則已經在後端執行完畢，scoresForDisplay 已經是調整後的數值。
-        
-        // 應用最終一致性規則 (可以保留作為前端最後一道防線，或也移至後端)
+        // 應用最終一致性規則 (前端最後把關)
         scoresForDisplay = applyFinalConsistencyRule(scoresForDisplay);
         
+        // 依照 DSE 權重計算總分
         const finalTotalScoreAfterRules = (scoresForDisplay.content * 4) + (scoresForDisplay.expression * 3) + (scoresForDisplay.structure * 2) + 5 + 1;
         finalGradeForDisplay = determineGrade(Math.min(finalTotalScoreAfterRules, 100));
         
-        // 針對字數過少的極端情況進行降級 (可選：保留在前端做即時反應，或移至後端)
+        // 針對字數過少的極端情況進行降級
         const wordCount = fullTextContent.length;
         if (wordCount < 500) {
             finalGradeForDisplay = "1";
@@ -16367,7 +16451,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         }
     }
 
-    // --- AI 點評語氣重寫 (保留) ---
+    // --- 7. AI 點評語氣重寫 (針對等級調整語氣) ---
     const originalCritiqueText = critiqueMatch ? critiqueMatch[1].trim() : "未生成點評";
     let finalCritiqueText = originalCritiqueText;
     let critiqueRewriteInstruction = "";
@@ -16379,7 +16463,8 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     
     let emojiInstruction = (currentTone === "chen") ? "務必穿插大量 Emoji 🤪✨。" : "語氣專業嚴肅，不使用 Emoji。";
 
-     const rewritePrompt = `請重寫以下點評內容。
+    // 構建重寫 Prompt
+    const rewritePrompt = `請重寫以下點評內容。
     原文：${originalCritiqueText}
     【嚴格重寫要求】
     1. **結構鎖定**：嚴格維持原本的列點數量。
@@ -16390,6 +16475,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
 
     try {
         console.log("等待 API 冷卻...");
+        // 稍微延遲以防 Rate Limit
         await new Promise(resolve => setTimeout(resolve, 3500)); 
         finalCritiqueText = await callReadingAPI(rewritePrompt, 0.5); 
     } catch (e) {
@@ -16397,7 +16483,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         finalCritiqueText = originalCritiqueText;
     }
 
-    // 強力清洗標題
+    // 強力清洗標題 (移除 AI 可能輸出的多餘標題)
     finalCritiqueText = finalCritiqueText.replace(/^#+\s*.*點評重寫.*$/gim, '');
     finalCritiqueText = finalCritiqueText.replace(/^#+\s*.*重寫.*$/gim, '');
     finalCritiqueText = finalCritiqueText.replace(/【.*?】/g, ''); 
@@ -16405,13 +16491,16 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     finalCritiqueText = finalCritiqueText.replace(/^(原文|改寫|重寫內容|重寫點評)[：:]/gim, '');
     finalCritiqueText = finalCritiqueText.trim();
 
-    // --- 組合 HTML ---
+    // --- 8. 組合 HTML ---
+    
+    // A. 評分表
     if (scoresForDisplay) {
         finalHTML += createGradingSystemHTML(uniqueIdPrefix, scoresForDisplay, finalGradeForDisplay);
     }  else {
         finalHTML += "<p>評等資料不完整。</p>";
     }
     
+    // B. 點評與建議
     if (finalCritiqueText) {
         finalHTML += createBulletedListHTML("點評", finalCritiqueText);
     }
@@ -16419,7 +16508,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         finalHTML += createBulletedListHTML("建議", suggestionsMatch[1].trim());
     }
     
-    // 改寫範例繁體化 + 引號修正
+    // C. 改寫範例 (繁體化 + 引號修正)
     if (rewriteMatch && rewriteMatch[1]) {
         let rewriteContent = rewriteMatch[1].trim().replace(/\*/g, '');
 
@@ -16442,21 +16531,63 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         </div>`;
     }
 
-    // 加入聊天室 HTML
+    // D. 加入聊天室 HTML
     const chatType = uniqueIdPrefix === 'narrative' ? 'narrative_writing' : 'argument_writing';
     finalHTML += getCanvasChatHTML(chatType);
 
-    // 注入 HTML
+    // E. 注入 HTML 到 DOM
     resultContainer.innerHTML = finalHTML;
 
-    // 初始化雷達圖
+    // --- 9. 後續處理 (雷達圖 & 摘星卡) ---
     if (scoresForDisplay) {
         setTimeout(() => {
+            // 繪製雷達圖
             initializeGradingSystem(uniqueIdPrefix, scoresForDisplay, finalGradeForDisplay);
+
+            // ==========================================
+            // ★★★ 新增：摘星卡觸發邏輯 ★★★
+            // ==========================================
+            // 1. 取得金句 (從 scoresForDisplay 中獲取)
+            const bestSentence = scoresForDisplay?.best_sentence || "";
+
+            // 2. 設定合資格等級
+            const validGrades = ["4", "5", "5*", "5**"];
+
+            // 3. 檢查是否符合資格
+            if (validGrades.includes(finalGradeForDisplay) && bestSentence.length > 5) {
+                const radarContainer = document.querySelector('.grading-radar');
+                if (radarContainer) {
+                    // 獲取題目 (如果沒有題目，用預設值)
+                    let currentTopicTitle = "無題";
+                    if (uniqueIdPrefix === 'narrative') {
+                        currentTopicTitle = localStorage.getItem("currentTopic") || "無題";
+                    } else {
+                        currentTopicTitle = localStorage.getItem("argumentCurrentTopic") || "無題";
+                    }
+
+                    // 處理句子中的單引號，避免 JS 報錯
+                    const safeSentence = bestSentence.replace(/'/g, "\\'");
+                    const safeTopic = currentTopicTitle.replace(/'/g, "\\'");
+
+                    // 插入按鈕 HTML (包含淡入動畫)
+                    const btnHtml = `
+                        <div style="margin-top: 15px; text-align: center; animation: fadeInUp 0.5s ease; opacity: 0; animation-fill-mode: forwards;">
+                            <button onclick="generateShareCard('${safeSentence}', '${safeTopic}', '${finalGradeForDisplay}')" 
+                                    style="background: linear-gradient(135deg, #d69a92, #b6a6ca); border: none; color: white; padding: 10px 20px; border-radius: 50px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(214, 154, 146, 0.4); display: inline-flex; align-items: center; gap: 8px; font-family: 'Noto Serif TC', serif;">
+                                <i class="fas fa-star"></i> 領取摘星卡
+                            </button>
+                        </div>
+                        <style>@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }</style>
+                    `;
+                    radarContainer.insertAdjacentHTML('beforeend', btnHtml);
+                }
+            }
+            // ==========================================
+            
         }, 50);
     }
 
-    // 儲存到歷史紀錄
+    // 10. 儲存到歷史紀錄
     const topic = (uniqueIdPrefix === 'narrative') ? localStorage.getItem("currentTopic") : localStorage.getItem("argumentCurrentTopic");
     const htmlContent = captureContainerHTML('resultCanvasBody'); 
     
@@ -16469,7 +16600,6 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         scoresForDisplay 
     );
 }
-
 
 // =======================================================
 // === 評等系統邏輯結束 ===
