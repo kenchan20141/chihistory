@@ -61,10 +61,7 @@ form-action 'self';
 <!-- 引入 Chart.js 以繪製雷達圖 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-	<!-- 引入 Rough.js (手繪核心庫) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/rough.js/3.1.0/rough.js"></script>
-<!-- 引入 Chart.js Rough 插件 -->
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-rough@0.2.0/dist/chartjs-plugin-rough.min.js"></script>
+	
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -15584,28 +15581,17 @@ function updateScoresAndGrade(uniqueIdPrefix, finalGrade, radarData = null) {
 
 
 /**
-* 創建或更新雷達圖
-* @param {string} uniqueIdPrefix - 功能區塊的唯一前綴
-* @param {array} data - 包含五個能力值的數組
-*/
-/**
-* 創建或更新雷達圖 (手繪紅筆風格版)
+* 創建或更新雷達圖 (紅筆批改風格 - 原生修復版)
 * @param {string} uniqueIdPrefix - 功能區塊的唯一前綴
 * @param {array} data - 包含五個能力值的數組
 */
 function createOrUpdateRadarChart(uniqueIdPrefix, data) {
     const ctx = document.getElementById(`${uniqueIdPrefix}RadarChart`).getContext('2d');
 
-    // 定義老師紅筆風格配置
-    const redPenStyle = {
-        roughness: 2,           // 粗糙度：越高越像手抖的筆觸
-        bowing: 1.5,            // 彎曲度：模擬手繪的弧度
-        fillStyle: 'hachure',   // 填充樣式：'hachure' 是斜線塗抹，像用筆塗的一樣
-        fillWeight: 1.5,        // 填充線條粗細
-        hachureAngle: 60,       // 斜線角度
-        hachureGap: 4,          // 斜線間距 (越小越密)
-        curveStepCount: 9       // 曲線平滑度
-    };
+    // 紅筆風格配置 (Teacher's Red Pen Style)
+    const redPenColor = 'rgba(217, 83, 79, 1)';       // 老師紅筆色 (實心)
+    const redPenFill = 'rgba(217, 83, 79, 0.2)';      // 淡淡的紅色填充
+    const gridColor = 'rgba(0, 0, 0, 0.05)';          // 極淡的背景網格
 
     if (window[`${uniqueIdPrefix}_radarChartInstance`]) {
         window[`${uniqueIdPrefix}_radarChartInstance`].data.datasets[0].data = data;
@@ -15613,23 +15599,20 @@ function createOrUpdateRadarChart(uniqueIdPrefix, data) {
     } else {
         window[`${uniqueIdPrefix}_radarChartInstance`] = new Chart(ctx, {
             type: 'radar',
-            // 啟用 Rough 插件
-            plugins: [ChartRough], 
             data: {
                 labels: ['立意', '取材', '扣題', '詳略', '詞彙', '文學性'],
                 datasets: [{
                     label: '能力分佈',
                     data: data,
-                    // === 修改：改為老師批改的紅色系 ===
-                    backgroundColor: 'rgba(217, 83, 79, 0.4)', // 莫蘭迪紅半透明
-                    borderColor: '#d9534f',                    // 實心紅筆色
-                    borderWidth: 2,
-                    pointBackgroundColor: '#d9534f',
+                    backgroundColor: redPenFill,
+                    borderColor: redPenColor,
+                    borderWidth: 3,       // 加粗線條，像麥克筆
+                    pointBackgroundColor: redPenColor,
                     pointBorderColor: '#fff',
                     pointHoverBackgroundColor: '#fff',
-                    pointHoverBorderColor: '#d9534f',
-                    // === 新增：手繪風格配置 ===
-                    rough: redPenStyle
+                    pointHoverBorderColor: redPenColor,
+                    pointRadius: 4,       // 節點像墨水點
+                    tension: 0.4          // ★ 關鍵：0.4 的張力讓線條變圓滑，不像電腦畫的直線
                 }]
             },
             options: {
@@ -15637,22 +15620,22 @@ function createOrUpdateRadarChart(uniqueIdPrefix, data) {
                 maintainAspectRatio: false,
                 scales: {
                     r: {
-                        angleLines: { display: true },
+                        angleLines: { display: true, color: gridColor },
+                        grid: { color: gridColor },
                         suggestedMin: 0,
                         suggestedMax: 10,
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)' // 格線稍微淡一點，突出紅筆
-                        },
                         pointLabels: {
                             font: {
                                 size: 14,
-                                family: "'Noto Serif TC', serif" // 配合手寫感字體
+                                family: "'Noto Serif TC', serif",
+                                weight: 'bold'
                             },
-                            color: '#555'
+                            color: '#5d4037' // 深咖啡色字體
                         },
                         ticks: {
                             stepSize: 2,
-                            backdropColor: 'transparent' // 移除刻度背景色
+                            backdropColor: 'transparent',
+                            display: false // 隱藏刻度數字，讓畫面更乾淨
                         }
                     }
                 },
@@ -18443,38 +18426,27 @@ async function viewHistoryDetail(id) {
     } catch (e) { console.error(e); }
 }
 	
-// 輔助函式：繪製單篇雷達圖
-// 輔助函式：繪製單篇雷達圖 (手繪紅筆風格版)
+// 輔助函式：繪製單篇雷達圖 (紅筆批改風格 - 原生修復版)
 function renderSingleRadarChart(canvasEl, radarData) {
     const dataValues = [
         radarData.立意 || 0, radarData.取材 || 0, radarData.扣題 || 0,
         radarData.詳略 || 0, radarData.詞彙 || 0, radarData.文學性 || 0
     ];
 
-    // 紅筆風格配置
-    const redPenStyle = {
-        roughness: 2.5,         // 稍微更潦草一點
-        bowing: 1,
-        fillStyle: 'zigzag',    // 這裡改用 'zigzag' (之字形) 塗抹，增加變化
-        fillWeight: 1,
-        hachureGap: 5
-    };
-
     new Chart(canvasEl.getContext('2d'), {
         type: 'radar',
-        plugins: [ChartRough],
         data: {
             labels: ['立意', '取材', '扣題', '詳略', '詞彙', '文學性'],
             datasets: [{
                 label: '能力評估',
                 data: dataValues,
-                // 紅色系
-                backgroundColor: 'rgba(217, 83, 79, 0.3)',
+                backgroundColor: 'rgba(217, 83, 79, 0.2)',
                 borderColor: '#d9534f',
-                borderWidth: 2,
+                borderWidth: 3,
                 pointBackgroundColor: '#d9534f',
                 pointBorderColor: '#fff',
-                rough: redPenStyle
+                pointRadius: 4,
+                tension: 0.4 // 圓滑線條
             }]
         },
         options: {
@@ -18482,43 +18454,37 @@ function renderSingleRadarChart(canvasEl, radarData) {
             maintainAspectRatio: false,
             scales: {
                 r: { 
-                    angleLines: { display: true }, 
+                    angleLines: { display: true, color: 'rgba(0,0,0,0.05)' }, 
+                    grid: { color: 'rgba(0,0,0,0.05)' },
                     suggestedMin: 0, 
                     suggestedMax: 10, 
                     ticks: { stepSize: 2, display: false },
-                    pointLabels: { font: { family: "'Noto Serif TC', serif" } }
+                    pointLabels: { font: { family: "'Noto Serif TC', serif", size: 12 } }
                 }
             },
             plugins: { legend: { display: false } }
         }
     });
 }
-// 輔助函式：繪製學習報告雷達圖
+// 輔助函式：繪製學習報告雷達圖 (莫蘭迪綠風格 - 原生修復版)
 function renderReportRadarChart(canvasEl, radarDataArray) {
-    // 學習報告可以稍微正式一點，或者使用莫蘭迪綠色來區分「總結」
-    // 這裡我們示範用深灰綠 (配合報告的主題色)
-    
-    const reportPenStyle = {
-        roughness: 1.5,       // 報告稍微整齊一點
-        fillStyle: 'cross-hatch', // 交叉線填充，看起來更厚重
-        fillWeight: 0.8,
-        hachureGap: 4
-    };
+    // 學習報告使用深灰綠色，看起來更正式、像印刷品
+    const reportColor = '#5e7067';
+    const reportFill = 'rgba(94, 112, 103, 0.3)';
 
     new Chart(canvasEl.getContext('2d'), {
         type: 'radar',
-        plugins: [ChartRough],
         data: {
             labels: ['立意', '取材', '扣題', '詳略', '詞彙', '文學性'],
             datasets: [{
                 label: '平均能力',
                 data: radarDataArray,
-                // 莫蘭迪深灰綠
-                backgroundColor: 'rgba(94, 112, 103, 0.3)',
-                borderColor: '#5e7067',
-                borderWidth: 2,
-                pointBackgroundColor: '#5e7067',
-                rough: reportPenStyle
+                backgroundColor: reportFill,
+                borderColor: reportColor,
+                borderWidth: 3,
+                pointBackgroundColor: reportColor,
+                pointRadius: 3,
+                tension: 0.4 // 圓滑線條
             }]
         },
         options: {
@@ -18529,7 +18495,8 @@ function renderReportRadarChart(canvasEl, radarDataArray) {
                     suggestedMin: 0, 
                     suggestedMax: 10, 
                     ticks: { display: false },
-                    grid: { color: 'rgba(0,0,0,0.05)' } // 極淡格線
+                    grid: { color: 'rgba(0,0,0,0.05)' },
+                    pointLabels: { font: { family: "'Noto Serif TC', serif" } }
                 }
             },
             plugins: { legend: { display: false } }
