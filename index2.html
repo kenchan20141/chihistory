@@ -61,8 +61,6 @@ form-action 'self';
 <!-- 引入 Chart.js 以繪製雷達圖 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-	
-
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -78,7 +76,32 @@ form-action 'self';
 <!-- 3. Pixi Live2D Plugin (Cubism 4 專用版 - 這是關鍵) -->
 <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
 
+<!-- 1. 引入 Mermaid.js 核心庫 -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 
+<!-- 2. 初始化 Mermaid 配置 (配合神思的莫蘭迪色系) -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof mermaid !== 'undefined') {
+            mermaid.initialize({
+                startOnLoad: false, // 我們會手動觸發渲染
+                theme: 'base',      // 使用基礎主題以便自訂顏色
+                themeVariables: {
+                    primaryColor: '#fdfcf8',       // 節點背景 (米白)
+                    primaryTextColor: '#5d4037',   // 文字顏色 (深褐)
+                    primaryBorderColor: '#8fa398', // 邊框顏色 (灰綠)
+                    lineColor: '#b6a6ca',          // 連線顏色 (香芋紫)
+                    secondaryColor: '#f4f8f6',
+                    tertiaryColor: '#fff'
+                },
+                flowchart: {
+                    curve: 'basis',  // 線條圓滑
+                    padding: 20
+                }
+            });
+        }
+    });
+</script>
 
 
 
@@ -12800,20 +12823,17 @@ async function submitArgumentOutline() {
     }
 }
 
-// 2. [核心修復] 議論文大綱解析與顯示函式
-// 2. [核心修復] 議論文大綱解析與顯示函式 (已移除紅綠色樣式)
+// 2. [核心修復] 議論文大綱解析與顯示函式 (整合 Mermaid 思維脈絡圖)
 function displayArgumentOutlineComment(response, inputData) {
     console.log("[Argument Outline] Raw Response:", response);
 
     // --- A. 切割回應區塊 ---
-    // 使用正則表達式尋找分隔線，容許前後有空格
     const sections = response.split(/===\s*(.+?)\s*===/).filter(s => s.trim());
     
     let commentPart = "";
     let rewritePart = "";
     let explanationPart = "";
 
-    // 尋找對應的內容區塊
     for (let i = 0; i < sections.length; i++) {
         if (sections[i].includes("點評及建議")) commentPart = sections[i + 1] || "";
         if (sections[i].includes("改寫後的大綱")) rewritePart = sections[i + 1] || "";
@@ -12853,8 +12873,28 @@ function displayArgumentOutlineComment(response, inputData) {
         rewrites[part].evidence = match[2].trim();
     }
 
+    // ==========================================
+    // ★★★ 新增：生成思維脈絡圖 (Mermaid) ★★★
+    // ==========================================
+    const currentTopic = localStorage.getItem("argumentCurrentTopic") || "議論文大綱";
+    const mermaidSyntax = generateMermaidCode(currentTopic, rewrites);
+    
+    // 建立圖表 HTML 容器
+    const mindMapHTML = `
+        <div class="rewrite-explanation-container" style="margin-bottom: 30px;">
+            <div class="rewrite-explanation-card" style="border-left: 5px solid #b6a6ca;">
+                <h3 style="color: #6a5acd;"><i class="fas fa-project-diagram"></i> 思維脈絡圖 (AI 改寫版)</h3>
+                <div class="mermaid" style="display: flex; justify-content: center; background: #fff; padding: 10px; border-radius: 8px;">
+                    ${mermaidSyntax}
+                </div>
+                <p style="text-align: center; color: #999; font-size: 0.8rem; margin-top: 10px;">
+                    *此圖表由系統根據 AI 改寫建議自動生成
+                </p>
+            </div>
+        </div>
+    `;
+
     // --- D. 生成 HTML 表格 1 (原稿 + 點評) ---
-    // [修改點] 這裡移除了顏色樣式，並統一加上邊框樣式，確保表格整齊
     const cellStyle = "border:1px solid #ccc; padding:10px; vertical-align:top; line-height:1.6;";
     
     let commentTableHTML = `
@@ -12914,13 +12954,70 @@ function displayArgumentOutlineComment(response, inputData) {
         explanationHTML = createBulletedListHTML("改寫說明", explanationPart.trim());
     }
 
-    // --- G. 組合並顯示 ---
-    const finalHTML = commentTableHTML + rewriteTableHTML + explanationHTML + getCanvasChatHTML('argument_outline');
+    // --- G. 組合並顯示 (加入 mindMapHTML) ---
+    const finalHTML = mindMapHTML + commentTableHTML + rewriteTableHTML + explanationHTML + getCanvasChatHTML('argument_outline');
     
     openResultCanvas("議論文大綱點評");
-    document.getElementById("resultCanvasBody").innerHTML = finalHTML;
+    const resultBody = document.getElementById("resultCanvasBody");
+    resultBody.innerHTML = finalHTML;
+
+    // ★★★ 觸發 Mermaid 渲染 ★★★
+    // 必須給一點延遲，確保 DOM 已經插入完畢
+    setTimeout(() => {
+        if (typeof mermaid !== 'undefined') {
+            mermaid.init(undefined, resultBody.querySelectorAll('.mermaid'));
+        } else {
+            console.warn("Mermaid library not loaded.");
+        }
+    }, 200);
 }
 
+
+/**
+ * 【新增】將大綱資料轉換為 Mermaid 流程圖語法
+ * @param {string} topic - 題目
+ * @param {object} rewrites - 解析後的改寫大綱物件
+ * @returns {string} Mermaid 語法字串
+ */
+function generateMermaidCode(topic, rewrites) {
+    // 1. 清理文字，避免 Mermaid 語法錯誤 (移除引號、換行)
+    const cleanText = (str) => {
+        if (!str) return "無內容";
+        return str.replace(/["'”’「」]/g, '').replace(/\n/g, '<br/>').substring(0, 40) + (str.length > 40 ? "..." : "");
+    };
+
+    const safeTopic = cleanText(topic);
+
+    // 2. 開始建構圖表 (由上而下 TD)
+    let graph = `graph TD\n`;
+    
+    // 定義根節點 (題目) - 使用莫蘭迪綠
+    graph += `    Root["📖 ${safeTopic}"]\n`;
+    graph += `    style Root fill:#8fa398,stroke:#5e7067,stroke-width:2px,color:#fff\n`;
+
+    // 3. 遍歷每一個結構段
+    let i = 0;
+    for (const [partName, content] of Object.entries(rewrites)) {
+        i++;
+        const nodeId = `Node${i}`;
+        const pointText = cleanText(content.point);
+        const evidenceText = cleanText(content.evidence);
+
+        // 連線：題目 -> 結構段名稱
+        graph += `    Root --> ${nodeId}Part("${partName}")\n`;
+        graph += `    style ${nodeId}Part fill:#e0ddd7,stroke:#bcaaa4,color:#333\n`;
+
+        // 內容節點：論點與論據
+        // 使用子圖 (Subgraph) 讓論點論據包在一起
+        graph += `    ${nodeId}Part --> ${nodeId}Detail["💡 論點：${pointText}<br/>📚 論據：${evidenceText}"]\n`;
+        graph += `    style ${nodeId}Detail fill:#fff,stroke:#d69a92,stroke-dasharray: 5 5\n`;
+    }
+
+    // 點擊互動 (選用，目前先不加連結)
+    return graph;
+}
+
+	
 
 	
 
@@ -15581,71 +15678,64 @@ function updateScoresAndGrade(uniqueIdPrefix, finalGrade, radarData = null) {
 
 
 /**
-* 創建或更新雷達圖 (紅筆批改風格 - 原生修復版)
+* 創建或更新雷達圖
 * @param {string} uniqueIdPrefix - 功能區塊的唯一前綴
 * @param {array} data - 包含五個能力值的數組
 */
 function createOrUpdateRadarChart(uniqueIdPrefix, data) {
-    const ctx = document.getElementById(`${uniqueIdPrefix}RadarChart`).getContext('2d');
+const ctx = document.getElementById(`${uniqueIdPrefix}RadarChart`).getContext('2d');
 
-    // 紅筆風格配置 (Teacher's Red Pen Style)
-    const redPenColor = 'rgba(217, 83, 79, 1)';       // 老師紅筆色 (實心)
-    const redPenFill = 'rgba(217, 83, 79, 0.2)';      // 淡淡的紅色填充
-    const gridColor = 'rgba(0, 0, 0, 0.05)';          // 極淡的背景網格
-
-    if (window[`${uniqueIdPrefix}_radarChartInstance`]) {
-        window[`${uniqueIdPrefix}_radarChartInstance`].data.datasets[0].data = data;
-        window[`${uniqueIdPrefix}_radarChartInstance`].update();
-    } else {
-        window[`${uniqueIdPrefix}_radarChartInstance`] = new Chart(ctx, {
-            type: 'radar',
-            data: {
-                labels: ['立意', '取材', '扣題', '詳略', '詞彙', '文學性'],
-                datasets: [{
-                    label: '能力分佈',
-                    data: data,
-                    backgroundColor: redPenFill,
-                    borderColor: redPenColor,
-                    borderWidth: 3,       // 加粗線條，像麥克筆
-                    pointBackgroundColor: redPenColor,
-                    pointBorderColor: '#fff',
-                    pointHoverBackgroundColor: '#fff',
-                    pointHoverBorderColor: redPenColor,
-                    pointRadius: 4,       // 節點像墨水點
-                    tension: 0.4          // ★ 關鍵：0.4 的張力讓線條變圓滑，不像電腦畫的直線
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    r: {
-                        angleLines: { display: true, color: gridColor },
-                        grid: { color: gridColor },
-                        suggestedMin: 0,
-                        suggestedMax: 10,
-                        pointLabels: {
-                            font: {
-                                size: 14,
-                                family: "'Noto Serif TC', serif",
-                                weight: 'bold'
-                            },
-                            color: '#5d4037' // 深咖啡色字體
-                        },
-                        ticks: {
-                            stepSize: 2,
-                            backdropColor: 'transparent',
-                            display: false // 隱藏刻度數字，讓畫面更乾淨
-                        }
-                    }
-                },
-                plugins: {
-                    legend: { display: false }
-                }
-            }
-        });
-    }
+if (window[`${uniqueIdPrefix}_radarChartInstance`]) {
+window[`${uniqueIdPrefix}_radarChartInstance`].data.datasets[0].data = data;
+window[`${uniqueIdPrefix}_radarChartInstance`].update();
+} else {
+window[`${uniqueIdPrefix}_radarChartInstance`] = new Chart(ctx, {
+type: 'radar',
+data: {
+labels: ['立意', '取材', '扣題', '詳略', '詞彙', '文學性'],
+datasets: [{
+label: '能力分佈',
+data: data,
+backgroundColor: 'rgba(54, 162, 235, 0.2)',
+borderColor: 'rgba(54, 162, 235, 1)',
+borderWidth: 2,
+pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+pointBorderColor: '#fff',
+pointHoverBackgroundColor: '#fff',
+pointHoverBorderColor: 'rgba(54, 162, 235, 1)'
+}]
+},
+options: {
+responsive: true,
+maintainAspectRatio: false,
+scales: {
+r: {
+angleLines: {
+display: true
+},
+suggestedMin: 0,
+suggestedMax: 10,
+pointLabels: {
+font: {
+size: 14,
+family: "'Noto Serif TC', serif"
 }
+},
+ticks: {
+stepSize: 2
+}
+}
+},
+plugins: {
+legend: {
+display: false
+}
+}
+}
+});
+}
+}
+
 /**
 * 構建帶有評等指令的 API Prompt (V15 - 條件式加分)
 * 此版本嚴格規定「內容」和「結構」分數必須以「扣題」分數為基礎，
@@ -18426,13 +18516,12 @@ async function viewHistoryDetail(id) {
     } catch (e) { console.error(e); }
 }
 	
-// 輔助函式：繪製單篇雷達圖 (紅筆批改風格 - 原生修復版)
+// 輔助函式：繪製單篇雷達圖
 function renderSingleRadarChart(canvasEl, radarData) {
     const dataValues = [
         radarData.立意 || 0, radarData.取材 || 0, radarData.扣題 || 0,
         radarData.詳略 || 0, radarData.詞彙 || 0, radarData.文學性 || 0
     ];
-
     new Chart(canvasEl.getContext('2d'), {
         type: 'radar',
         data: {
@@ -18440,38 +18529,27 @@ function renderSingleRadarChart(canvasEl, radarData) {
             datasets: [{
                 label: '能力評估',
                 data: dataValues,
-                backgroundColor: 'rgba(217, 83, 79, 0.2)',
-                borderColor: '#d9534f',
-                borderWidth: 3,
-                pointBackgroundColor: '#d9534f',
-                pointBorderColor: '#fff',
-                pointRadius: 4,
-                tension: 0.4 // 圓滑線條
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                pointBorderColor: '#fff'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                r: { 
-                    angleLines: { display: true, color: 'rgba(0,0,0,0.05)' }, 
-                    grid: { color: 'rgba(0,0,0,0.05)' },
-                    suggestedMin: 0, 
-                    suggestedMax: 10, 
-                    ticks: { stepSize: 2, display: false },
-                    pointLabels: { font: { family: "'Noto Serif TC', serif", size: 12 } }
-                }
+                r: { angleLines: { display: true }, suggestedMin: 0, suggestedMax: 10, ticks: { stepSize: 2, display: false } }
             },
             plugins: { legend: { display: false } }
         }
     });
 }
-// 輔助函式：繪製學習報告雷達圖 (莫蘭迪綠風格 - 原生修復版)
-function renderReportRadarChart(canvasEl, radarDataArray) {
-    // 學習報告使用深灰綠色，看起來更正式、像印刷品
-    const reportColor = '#5e7067';
-    const reportFill = 'rgba(94, 112, 103, 0.3)';
 
+// 輔助函式：繪製學習報告雷達圖
+function renderReportRadarChart(canvasEl, radarDataArray) {
+    // 學習報告的 radarData 已經是一個陣列 [立意, 取材...]
     new Chart(canvasEl.getContext('2d'), {
         type: 'radar',
         data: {
@@ -18479,25 +18557,17 @@ function renderReportRadarChart(canvasEl, radarDataArray) {
             datasets: [{
                 label: '平均能力',
                 data: radarDataArray,
-                backgroundColor: reportFill,
-                borderColor: reportColor,
-                borderWidth: 3,
-                pointBackgroundColor: reportColor,
-                pointRadius: 3,
-                tension: 0.4 // 圓滑線條
+                backgroundColor: 'rgba(94, 112, 103, 0.4)',
+                borderColor: '#5e7067',
+                borderWidth: 2,
+                pointBackgroundColor: '#5e7067'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                r: { 
-                    suggestedMin: 0, 
-                    suggestedMax: 10, 
-                    ticks: { display: false },
-                    grid: { color: 'rgba(0,0,0,0.05)' },
-                    pointLabels: { font: { family: "'Noto Serif TC', serif" } }
-                }
+                r: { suggestedMin: 0, suggestedMax: 10, ticks: { display: false } }
             },
             plugins: { legend: { display: false } }
         }
