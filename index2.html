@@ -79,24 +79,27 @@ form-action 'self';
 <!-- 1. 引入 Mermaid.js 核心庫 -->
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 
-<!-- 2. 初始化 Mermaid 配置 (配合神思的莫蘭迪色系) -->
+<!-- 2. 初始化 Mermaid 配置 (修正版) -->
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         if (typeof mermaid !== 'undefined') {
             mermaid.initialize({
-                startOnLoad: false, // 我們會手動觸發渲染
-                theme: 'base',      // 使用基礎主題以便自訂顏色
+                startOnLoad: false,
+                theme: 'base',
                 themeVariables: {
-                    primaryColor: '#fdfcf8',       // 節點背景 (米白)
-                    primaryTextColor: '#5d4037',   // 文字顏色 (深褐)
-                    primaryBorderColor: '#8fa398', // 邊框顏色 (灰綠)
-                    lineColor: '#b6a6ca',          // 連線顏色 (香芋紫)
+                    primaryColor: '#fdfcf8',
+                    primaryTextColor: '#5d4037',
+                    primaryBorderColor: '#8fa398',
+                    lineColor: '#b6a6ca',
                     secondaryColor: '#f4f8f6',
                     tertiaryColor: '#fff'
                 },
                 flowchart: {
-                    curve: 'basis',  // 線條圓滑
-                    padding: 20
+                    curve: 'basis',
+                    padding: 20,
+                    // ★★★ 關鍵修正：禁止自動縮放，保持原始大小 ★★★
+                    useMaxWidth: false, 
+                    htmlLabels: true
                 }
             });
         }
@@ -7645,6 +7648,25 @@ body.cat-dragging { cursor: grabbing !important; }
     50% { opacity: 0.5; }
     100% { opacity: 1; }
 }
+
+
+	/* === Mermaid 圖表捲動容器 === */
+.mermaid-scroll-wrapper {
+    width: 100%;
+    overflow-x: auto; /* 關鍵：內容過寬時顯示橫向捲軸 */
+    overflow-y: hidden;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.05); /* 內陰影提示可捲動 */
+    text-align: center; /* 讓圖表在容器內置中 */
+}
+
+/* 確保 SVG 本身不會被強制壓縮 */
+.mermaid svg {
+    max-width: none !important;
+    height: auto;
+}
 	
 	
 </style>
@@ -12876,19 +12898,27 @@ function displayArgumentOutlineComment(response, inputData) {
     // ==========================================
     // ★★★ 新增：生成思維脈絡圖 (Mermaid) ★★★
     // ==========================================
+ // ==========================================
+    // ★★★ 新增：生成思維脈絡圖 (Mermaid) - 捲動修正版 ★★★
+    // ==========================================
     const currentTopic = localStorage.getItem("argumentCurrentTopic") || "議論文大綱";
     const mermaidSyntax = generateMermaidCode(currentTopic, rewrites);
     
-    // 建立圖表 HTML 容器
+    // 建立圖表 HTML 容器 (使用 mermaid-scroll-wrapper)
     const mindMapHTML = `
         <div class="rewrite-explanation-container" style="margin-bottom: 30px;">
             <div class="rewrite-explanation-card" style="border-left: 5px solid #b6a6ca;">
                 <h3 style="color: #6a5acd;"><i class="fas fa-project-diagram"></i> 思維脈絡圖 (AI 改寫版)</h3>
-                <div class="mermaid" style="display: flex; justify-content: center; background: #fff; padding: 10px; border-radius: 8px;">
-                    ${mermaidSyntax}
+                
+                <!-- 這裡加上了捲動容器 -->
+                <div class="mermaid-scroll-wrapper">
+                    <div class="mermaid">
+                        ${mermaidSyntax}
+                    </div>
                 </div>
+                
                 <p style="text-align: center; color: #999; font-size: 0.8rem; margin-top: 10px;">
-                    *此圖表由系統根據 AI 改寫建議自動生成
+                    <i class="fas fa-arrows-alt-h"></i> 左右滑動以查看完整圖表
                 </p>
             </div>
         </div>
@@ -12974,24 +13004,30 @@ function displayArgumentOutlineComment(response, inputData) {
 
 
 /**
- * 【新增】將大綱資料轉換為 Mermaid 流程圖語法
+ * 【修正版】將大綱資料轉換為 Mermaid 流程圖語法 (加入自動換行)
  * @param {string} topic - 題目
  * @param {object} rewrites - 解析後的改寫大綱物件
  * @returns {string} Mermaid 語法字串
  */
 function generateMermaidCode(topic, rewrites) {
-    // 1. 清理文字，避免 Mermaid 語法錯誤 (移除引號、換行)
-    const cleanText = (str) => {
+    // 輔助：每 n 個字強制換行 <br/>
+    const wrapText = (str, width = 12) => {
         if (!str) return "無內容";
-        return str.replace(/["'”’「」]/g, '').replace(/\n/g, '<br/>').substring(0, 40) + (str.length > 40 ? "..." : "");
+        // 移除原有換行與引號
+        let clean = str.replace(/["'”’「」]/g, '').replace(/\n/g, '');
+        
+        // 使用正則表達式每 width 個字插入 <br/>
+        const regex = new RegExp(`.{1,${width}}`, 'g');
+        const parts = clean.match(regex);
+        return parts ? parts.join('<br/>') : clean;
     };
 
-    const safeTopic = cleanText(topic);
+    const safeTopic = wrapText(topic, 10); // 題目短一點換行
 
-    // 2. 開始建構圖表 (由上而下 TD)
+    // 2. 開始建構圖表
     let graph = `graph TD\n`;
     
-    // 定義根節點 (題目) - 使用莫蘭迪綠
+    // 定義根節點
     graph += `    Root["📖 ${safeTopic}"]\n`;
     graph += `    style Root fill:#8fa398,stroke:#5e7067,stroke-width:2px,color:#fff\n`;
 
@@ -13000,20 +13036,21 @@ function generateMermaidCode(topic, rewrites) {
     for (const [partName, content] of Object.entries(rewrites)) {
         i++;
         const nodeId = `Node${i}`;
-        const pointText = cleanText(content.point);
-        const evidenceText = cleanText(content.evidence);
+        
+        // ★★★ 關鍵：在這裡限制寬度，每 15 個字換行 ★★★
+        const pointText = wrapText(content.point, 15);
+        const evidenceText = wrapText(content.evidence, 18);
 
         // 連線：題目 -> 結構段名稱
         graph += `    Root --> ${nodeId}Part("${partName}")\n`;
         graph += `    style ${nodeId}Part fill:#e0ddd7,stroke:#bcaaa4,color:#333\n`;
 
         // 內容節點：論點與論據
-        // 使用子圖 (Subgraph) 讓論點論據包在一起
-        graph += `    ${nodeId}Part --> ${nodeId}Detail["💡 論點：${pointText}<br/>📚 論據：${evidenceText}"]\n`;
+        // 使用 HTML 標籤 <b> 加粗標題，讓層次更分明
+        graph += `    ${nodeId}Part --> ${nodeId}Detail["<div style='text-align:left'><b>💡 論點：</b><br/>${pointText}<br/><br/><b>📚 論據：</b><br/>${evidenceText}</div>"]\n`;
         graph += `    style ${nodeId}Detail fill:#fff,stroke:#d69a92,stroke-dasharray: 5 5\n`;
     }
 
-    // 點擊互動 (選用，目前先不加連結)
     return graph;
 }
 
