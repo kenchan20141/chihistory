@@ -16513,8 +16513,18 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
                     let currentTopicTitle = (uniqueIdPrefix === 'narrative') ? localStorage.getItem("currentTopic") : localStorage.getItem("argumentCurrentTopic");
                     currentTopicTitle = currentTopicTitle || "無題";
 
-                    const safeSentence = bestSentence.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    const safeTopic = currentTopicTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                  // === 修復後的程式碼 ===
+const safeSentence = bestSentence
+    .replace(/\\/g, '\\\\')       // 1. 先處理反斜線
+    .replace(/'/g, "\\'")         // 2. 處理單引號
+    .replace(/"/g, '&quot;')      // 3. 處理雙引號
+    .replace(/[\r\n]+/g, ' ');    // 4. 【關鍵】將換行符號替換為空格，防止語法錯誤
+
+const safeTopic = currentTopicTitle
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/[\r\n]+/g, ' ');
 
                     const btnHtml = `
                         <div style="margin-top: 15px; text-align: center; animation: fadeInUp 0.5s ease; opacity: 0; animation-fill-mode: forwards;">
