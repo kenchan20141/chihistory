@@ -56,7 +56,7 @@ form-action 'self';
 
 
 
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
 	
 <!-- 引入 Chart.js 以繪製雷達圖 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -82,6 +82,219 @@ form-action 'self';
 
 
 	<script>
+
+
+
+// ==========================================
+// === 語音導航系統 (Annyang + 智能長按) ===
+// ==========================================
+ 
+let voiceLongPressTimer = null;
+const VOICE_LONG_PRESS_DURATION = 1000; // 長按 1 秒觸發
+let isVoiceListening = false;
+let voiceStartX = 0, voiceStartY = 0;
+ 
+document.addEventListener('DOMContentLoaded', function() {
+    initVoiceControl();
+});
+ 
+function initVoiceControl() {
+    // 1. 檢查支援度
+    if (!window.annyang) {
+        console.warn("此瀏覽器不支援語音識別 (Annyang)");
+        return;
+    }
+ 
+    // 2. 定義粵語指令 (可自行擴充)
+    const commands = {
+        // --- 寫作類 ---
+        '去寫作': () => executeVoiceCommand('writingContainer', 'writingBtn'),
+        '打開寫作': () => executeVoiceCommand('writingContainer', 'writingBtn'),
+        '我要作文': () => executeVoiceCommand('writingContainer', 'writingBtn'),
+        
+        // --- 閱讀類 ---
+        '去閱讀': () => executeVoiceCommand('readingContainer', 'readingBtn'),
+        '打開閱讀': () => executeVoiceCommand('readingContainer', 'readingBtn'),
+        '做閱讀': () => executeVoiceCommand('readingContainer', 'readingBtn'),
+        
+        // --- 議論類 ---
+        '去議論': () => executeVoiceCommand('argumentContainer', 'argumentBtn'),
+        '議論': () => executeVoiceCommand('argumentContainer', 'argumentBtn'),
+        
+        // --- 拓展類 ---
+        '去拓展': () => executeVoiceCommand('expandContainer', 'expandBtn'),
+        '整合拓展': () => executeVoiceCommand('expandContainer', 'expandBtn'),
+        
+        // --- 書籍類 ---
+        '睇書': () => executeVoiceCommand('booksContainer', 'booksBtn'),
+        '書籍討論': () => executeVoiceCommand('booksContainer', 'booksBtn'),
+        
+        // --- 功能類 ---
+        '打開歷史': () => { stopVoiceListening("正在翻閱紀錄...", true); openHistoryContainer(); },
+        '歷史紀錄': () => { stopVoiceListening("正在翻閱紀錄...", true); openHistoryContainer(); },
+        
+        '打開雲端': () => { stopVoiceListening("正在連接雲端...", true); openStudentLoginModal(); },
+        '交功課': () => { stopVoiceListening("正在連接雲端...", true); openStudentLoginModal(); },
+        
+        '返主頁': () => { stopVoiceListening("正在返回...", true); returnToHome(); },
+        '返首頁': () => { stopVoiceListening("正在返回...", true); returnToHome(); },
+        
+        '關閉': () => { stopVoiceListening("再會。", false); },
+        '取消': () => { stopVoiceListening("再會。", false); }
+    };
+ 
+    // 3. 設定 Annyang
+    annyang.addCommands(commands);
+    annyang.setLanguage('zh-HK');
+ 
+    // 4. 綁定全局長按事件 (使用 window)
+    // 注意：這裡使用 passive: true (在 touchstart) 可能會導致 preventDefault 失效，
+    // 但因為我們就是要允許選字，所以這正是我們需要的。
+    window.addEventListener('mousedown', handleVoiceTouchStart);
+    window.addEventListener('touchstart', handleVoiceTouchStart, { passive: true });
+    
+    window.addEventListener('mouseup', handleVoiceTouchEnd);
+    window.addEventListener('touchend', handleVoiceTouchEnd);
+    
+    window.addEventListener('mousemove', handleVoiceMove);
+    window.addEventListener('touchmove', handleVoiceMove, { passive: true });
+}
+ 
+// === 執行指令輔助函式 ===
+function executeVoiceCommand(containerId, btnId) {
+    const btn = document.getElementById(btnId);
+    stopVoiceListening("收到，正在前往...", true);
+    
+    if (btn) {
+        setTimeout(() => {
+            showContainer(containerId, btn);
+        }, 500); 
+    }
+}
+ 
+// === 長按偵測邏輯 (修訂版) ===
+function handleVoiceTouchStart(e) {
+    // A. 如果點擊的是按鈕或輸入框，完全忽略 (避免衝突)
+    if (e.target.closest('button, input, textarea, select, .btn, .anime-card')) {
+        return;
+    }
+    
+    // B. 如果正在聆聽中，點擊任意處關閉介面
+    if (isVoiceListening) {
+        stopVoiceListening();
+        return;
+    }
+ 
+    // C. 記錄起始座標 (用於判斷是否移動/選字)
+    if (e.type === 'touchstart') {
+        voiceStartX = e.touches[0].clientX;
+        voiceStartY = e.touches[0].clientY;
+    } else {
+        voiceStartX = e.clientX;
+        voiceStartY = e.clientY;
+    }
+ 
+    // D. 清除舊計時器並啟動新計時
+    if (voiceLongPressTimer) clearTimeout(voiceLongPressTimer);
+ 
+    voiceLongPressTimer = setTimeout(() => {
+        // ★★★ 核心檢查：觸發時，檢查是否有文字被選取 ★★★
+        const selection = window.getSelection().toString();
+        
+        if (selection.length > 0) {
+            // 如果用戶選了文字，代表他想複製，不觸發語音
+            // console.log("文字選取中，不觸發語音");
+            return;
+        }
+ 
+        startVoiceListening();
+        
+        // 觸發震動回饋 (代表成功喚醒)
+        if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+        
+    }, VOICE_LONG_PRESS_DURATION);
+}
+ 
+function handleVoiceMove(e) {
+    if (!voiceLongPressTimer) return;
+ 
+    let clientX, clientY;
+    if (e.type === 'touchmove') {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    }
+ 
+    // 計算移動距離
+    const diffX = Math.abs(clientX - voiceStartX);
+    const diffY = Math.abs(clientY - voiceStartY);
+ 
+    // ★★★ 如果移動超過 10px (代表正在拖曳選字或捲動)，取消長按 ★★★
+    if (diffX > 10 || diffY > 10) {
+        clearTimeout(voiceLongPressTimer);
+        voiceLongPressTimer = null;
+    }
+}
+ 
+function handleVoiceTouchEnd(e) {
+    // 手指放開，清除計時器
+    if (voiceLongPressTimer) {
+        clearTimeout(voiceLongPressTimer);
+        voiceLongPressTimer = null;
+    }
+}
+ 
+// === UI 控制邏輯 ===
+ 
+function startVoiceListening() {
+    isVoiceListening = true;
+    
+    const overlay = document.getElementById('voiceOverlay');
+    const status = document.getElementById('voiceStatusText');
+    
+    // 顯示
+    overlay.style.display = 'flex';
+    status.innerText = "聆聽中...";
+    status.style.color = "#8d6e63"; 
+    
+    // 強制重繪
+    void overlay.offsetWidth;
+    overlay.classList.add('active');
+ 
+    // 啟動 Annyang
+    annyang.start({ autoRestart: false, continuous: false });
+}
+ 
+function stopVoiceListening(message = null, success = false) {
+    annyang.abort();
+    
+    const overlay = document.getElementById('voiceOverlay');
+    const status = document.getElementById('voiceStatusText');
+ 
+    if (message) {
+        status.innerText = message;
+        status.style.color = success ? "#2A9689" : "#5d4037"; // 成功綠，普通深咖
+        
+        setTimeout(() => {
+            closeOverlay();
+        }, 1200);
+    } else {
+        closeOverlay();
+    }
+}
+ 
+function closeOverlay() {
+    const overlay = document.getElementById('voiceOverlay');
+    overlay.classList.remove('active');
+    
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        isVoiceListening = false;
+    }, 400); 
+}
+ 
 
 
 
@@ -7620,6 +7833,114 @@ body.cat-dragging { cursor: grabbing !important; }
     50% { opacity: 0.5; }
     100% { opacity: 1; }
 }
+
+
+	/* ========================================= */
+/* === 語音導航：莫蘭迪宣紙風格 UI (修訂版) === */
+/* ========================================= */
+ 
+#voiceOverlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 2147483647; /* 最頂層 */
+    
+    /* 宣紙質感：米白底色 + 雜點紋理 */
+    background-color: rgba(247, 245, 240, 0.95);
+    background-image:
+        radial-gradient(#d4d0c7 1px, transparent 0),
+        radial-gradient(#d4d0c7 1px, transparent 0);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    
+    display: none; /* 預設隱藏 */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    backdrop-filter: blur(3px);
+    
+    /* 顯示時才阻擋點擊，隱藏時讓滑鼠穿透 */
+    pointer-events: none;
+}
+ 
+#voiceOverlay.active {
+    pointer-events: auto; /* 顯示時恢復阻擋 */
+}
+ 
+/* 核心內容卡片 - 豎排文字風格或傳統橫排 */
+.voice-paper-card {
+    position: relative;
+    padding: 50px 70px;
+    background-color: #fffefb;
+    border: 1px solid #e0ddd7; /* 莫蘭迪暖灰 */
+    box-shadow:
+        0 15px 35px rgba(93, 64, 55, 0.15), /* 深褐柔和陰影 */
+        inset 0 0 60px rgba(255, 255, 255, 0.5);
+    
+    border-radius: 2px;
+    text-align: center;
+    transform: scale(0.95) translateY(10px);
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+ 
+/* 四角裝飾 (中式邊框感) */
+.voice-paper-card::after {
+    content: '';
+    position: absolute;
+    top: 10px; bottom: 10px; left: 10px; right: 10px;
+    border: 2px solid #8fa398; /* 莫蘭迪灰綠 */
+    opacity: 0.3;
+    pointer-events: none;
+}
+ 
+.voice-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 2rem;
+    color: #5d4037; /* 莫蘭迪深褐 */
+    margin-bottom: 20px;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    text-shadow: 2px 2px 0px rgba(0,0,0,0.05);
+}
+ 
+.voice-status {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.3rem;
+    color: #8d6e63; /* 莫蘭迪淺褐 */
+    margin-bottom: 35px;
+    letter-spacing: 2px;
+}
+ 
+/* 水墨暈染聲波 */
+.voice-ink-wave {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    height: 50px;
+}
+ 
+.ink-dot {
+    width: 10px;
+    height: 10px;
+    background-color: #a692c2; /* 莫蘭迪香芋紫 */
+    border-radius: 50%;
+    animation: inkBreath 1.5s infinite ease-in-out;
+    filter: blur(1px); /* 水墨暈染感 */
+}
+ 
+.ink-dot:nth-child(2) { animation-delay: 0.2s; background-color: #7da3c0; /* 霧霾藍 */ }
+.ink-dot:nth-child(3) { animation-delay: 0.4s; background-color: #d69a92; /* 豆沙紅 */ }
+ 
+@keyframes inkBreath {
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.8); opacity: 1; filter: blur(0px); }
+}
+ 
+/* 顯示狀態 */
+#voiceOverlay.active { opacity: 1; }
+#voiceOverlay.active .voice-paper-card { transform: scale(1) translateY(0); }
 	
 	
 </style>
@@ -9430,236 +9751,6 @@ const STUDENT_ADDITION_B64 = "a2VuY2hhbjIwMTMxQGdtYWlsLmNvbQ==";
 // kenchan20151@gmail.com (特許用家)
 const SPECIAL_USER_B64 = "a2VuY2hhbjIwMTUxQGdtYWlsLmNvbQ==";
 
-
-
-// ==========================================
-// === [新增] 神思・摘星卡生成系統 (Canvas) ===
-// ==========================================
-
-/**
- * 生成並顯示佳句分享卡
- * @param {string} sentence - AI 挑選的金句
- * @param {string} title - 文章題目
- * @param {string} grade - 等級 (e.g. "5**")
- */
-function generateShareCard(sentence, title, grade) {
-    // 1. 準備 Canvas
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // 設定卡片尺寸 (豎版明信片比例)
-    const width = 600;
-    const height = 900;
-    canvas.width = width;
-    canvas.height = height;
-
-    // 2. 繪製背景 (莫蘭迪米白紙張質感)
-    ctx.fillStyle = '#fdfcf8';
-    ctx.fillRect(0, 0, width, height);
-    
-    // 加入紙張噪點/紋理效果 (讓它看起來像紙)
-    for (let i = 0; i < 5000; i++) {
-        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.1)';
-        ctx.fillRect(Math.random() * width, Math.random() * height, 2, 2);
-    }
-
-    // 3. 繪製邊框 (雙線風格)
-    ctx.strokeStyle = '#8fa398'; // 莫蘭迪綠
-    ctx.lineWidth = 3;
-    ctx.strokeRect(20, 20, width - 40, height - 40);
-    
-    ctx.strokeStyle = '#d69a92'; // 莫蘭迪紅 (內框)
-    ctx.lineWidth = 1;
-    ctx.strokeRect(30, 30, width - 60, height - 60);
-
-    // 4. 繪製頂部裝飾
-    ctx.font = '24px "Noto Serif TC", serif';
-    ctx.fillStyle = '#b6a6ca'; // 香芋紫
-    ctx.textAlign = 'center';
-    ctx.fillText("✦ 神 思 文 萃 ✦", width / 2, 80);
-
-    // 5. 繪製金句 (核心內容 - 直排或橫排)
-    // 這裡使用橫排，字體放大，自動換行
-    ctx.font = 'bold 42px "Noto Serif TC", serif';
-    ctx.fillStyle = '#333';
-    ctx.textAlign = 'center';
-    
-    // 自動換行邏輯
-    const maxTextWidth = width - 120;
-    const words = sentence.split('');
-    let line = '';
-    let y = height / 2 - 60; // 從中間偏上開始
-    const lineHeight = 60;
-
-    // 如果句子太短，加上引號增加儀式感
-    if (!sentence.includes("「")) sentence = `「${sentence}」`;
-
-    // 簡單的換行算法
-    let lines = [];
-    let currentLine = "";
-    for(let n = 0; n < sentence.length; n++) {
-        let testLine = currentLine + sentence[n];
-        let metrics = ctx.measureText(testLine);
-        let testWidth = metrics.width;
-        if (testWidth > maxTextWidth && n > 0) {
-            lines.push(currentLine);
-            currentLine = sentence[n];
-        } else {
-            currentLine = testLine;
-        }
-    }
-    lines.push(currentLine);
-
-    // 繪製每一行
-    lines.forEach((l, i) => {
-        // 加上陰影增加立體感
-        ctx.shadowColor = "rgba(0,0,0,0.1)";
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        ctx.fillText(l, width / 2, y + (i * lineHeight));
-    });
-
-    // 重置陰影
-    ctx.shadowColor = "transparent";
-
-    // 6. 繪製文章資訊 (底部)
-    const bottomY = height - 120;
-    ctx.font = '20px "Noto Serif TC", serif';
-    ctx.fillStyle = '#888';
-    ctx.fillText(`《${title}》`, width / 2, bottomY);
-    
-    // 獲取學生姓名
-    const s = JSON.parse(localStorage.getItem('studentProfile'));
-    const authorName = s ? s.name : "佚名";
-    ctx.fillText(authorName, width / 2, bottomY + 30);
-
-    // 7. 繪製等級徽章 (左上角或右下角)
-    ctx.save();
-    ctx.translate(width - 100, 100);
-    ctx.rotate(15 * Math.PI / 180);
-    
-    // 圓形底
-    ctx.beginPath();
-    ctx.arc(0, 0, 45, 0, 2 * Math.PI);
-    ctx.fillStyle = '#d69a92';
-    ctx.fill();
-    
-    // 等級文字
-    ctx.font = 'bold 28px Arial';
-    ctx.fillStyle = 'white';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(grade, 0, 0);
-    ctx.restore();
-
-    // 8. ★ 繪製「神思」印章 (紅色方印) ★
-    drawSeal(ctx, width / 2, height - 180);
-
-    // 9. 轉為圖片並顯示
-    const dataUrl = canvas.toDataURL('image/png');
-    showShareModal(dataUrl);
-}
-
-/**
- * 繪製仿古印章
- */
-function drawSeal(ctx, x, y) {
-    const size = 60;
-    ctx.save();
-    ctx.translate(x, y); // 移到位置
-    
-    // 紅色方框
-    ctx.fillStyle = '#c0392b'; // 硃砂紅
-    // 稍微圓角
-    roundedRect(ctx, -size/2, -size/2, size, size, 4);
-    ctx.fill();
-    
-    // 模擬印章的不均勻感 (隨機雜點)
-    for(let i=0; i<100; i++) {
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        ctx.fillRect(
-            -size/2 + Math.random()*size, 
-            -size/2 + Math.random()*size, 
-            2, 2
-        );
-    }
-
-    // 文字 (篆體風格，這裡用 serif 模擬)
-    ctx.font = 'bold 24px "Noto Serif TC", serif';
-    ctx.fillStyle = '#fff'; // 白文印 (紅底白字)
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // 豎排 "神思"
-    ctx.fillText("神", 0, -12);
-    ctx.fillText("思", 0, 12);
-    
-    // 邊框微損效果
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-size/2 + 3, -size/2 + 3, size - 6, size - 6);
-
-    ctx.restore();
-}
-
-// 輔助：繪製圓角矩形
-function roundedRect(ctx, x, y, width, height, radius) {
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    ctx.lineTo(x + radius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.closePath();
-}
-
-/**
- * 顯示分享卡視窗
- */
-function showShareModal(imageUrl) {
-    // 移除舊的 (如果有的話)
-    const oldModal = document.getElementById('shareCardModal');
-    if (oldModal) oldModal.remove();
-
-    const modalHTML = `
-    <div id="shareCardModal" class="report-menu-overlay" style="display:flex; z-index:20002; align-items:center; justify-content:center;">
-        <div class="report-menu-content" style="max-width: 450px; background:transparent; box-shadow:none; border:none; text-align:center;">
-            
-            <div style="background:white; padding:10px; border-radius:12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); transform: scale(0.9); opacity:0; animation: popIn 0.5s forwards;">
-                <img src="${imageUrl}" style="width:100%; height:auto; display:block; border-radius:8px;">
-            </div>
-
-            <div style="margin-top:20px; display:flex; justify-content:center; gap:15px;">
-                <a href="${imageUrl}" download="神思摘星卡.png" class="btn-action" style="text-decoration:none; background-color:#d69a92;">
-                    <i class="fas fa-download"></i> 保存卡片
-                </a>
-                <button class="btn-action" style="background-color:#5e7067;" onclick="document.getElementById('shareCardModal').remove()">
-                    關閉
-                </button>
-            </div>
-        </div>
-    </div>
-    <style>
-        @keyframes popIn {
-            to { transform: scale(1); opacity: 1; }
-        }
-    </style>
-    `;
-    
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    // 播放音效 (成功獲得卡片)
-    if (typeof playRandomCatSound === 'function') {
-        // 這裡可以換成一個比較 "閃亮" 的音效，暫時用貓叫代替或不放
-    }
-}
-
-	
 /**
  * 檢查訪客每日使用額度
  * @returns {boolean} true=允許繼續, false=阻止
@@ -12895,27 +12986,13 @@ async function submitArgumentWriting() {
         // 因為此變數已移至後端 Code.gs
 
         // ★★★ 關鍵修改：Prompt 結構重組 (移除前端注入的偏好) ★★★
-      // ★★★ [修正] 敘事抒情 Prompt：加入摘星卡 (best_sentence) 指令 ★★★
-            const finalPromptContent = `
+        const finalPromptContent = `
 【系統強制指令 (System Instruction)】
-1. **必須使用繁體中文**：所有輸出轉為香港繁體。
-2. **區分角色**：【參考資料】僅供參考，請只評改【待評核學生文章】。
-3. **格式嚴格**：必須包含 <grading_json> 標籤，並嚴格遵守以下 JSON 結構。
-4. **閱卷員風格**：請根據後端指示的風格評分。
-
-【JSON 輸出格式要求 (必須包含 best_sentence)】
-<grading_json>
-{
-  "content": (0-10分),
-  "expression": (0-10分),
-  "structure": (0-10分),
-  "best_sentence": "請在此摘錄文中寫得最好、最優美或最深刻的一句句子（不超過30字）",
-  "radar": {
-    "立意": (0-10), "取材": (0-10), "扣題": (0-10),
-    "詳略": (0-10), "詞彙": (0-10), "文學性": (0-10)
-  }
-}
-</grading_json>
+1. **必須使用繁體中文 (Traditional Chinese)**：無論參考資料是簡體或繁體，你的所有輸出都必須是繁體中文。
+2. **專業術語**：請使用香港高中中文科議論文術語（如：論點、論據、論證、語例、設例等）。
+3. **區分參考與正文**：下方的【參考資料】僅供參考，請只對【待評核學生文章】進行評分。
+4. **格式嚴格**：嚴格遵守 JSON/XML 輸出格式，不要輸出其他文字。
+5. **閱卷員風格**：請嚴格根據後端系統指示的【閱卷員特定評分取向】進行評分及撰寫點評，務必體現該閱卷員重視的特點。
 
 ${ragReference ? ragReference : "(本次未檢索到參考範文)"}
 
@@ -14137,31 +14214,18 @@ async function submitWriting() {
             // ★★★ 修正處：移除了前端獲取 narrativeReviewerPreferences 的邏輯 ★★★
             // 因為這些資料現在位於後端，我們只需要傳送 reviewer ID 即可。
 
-  // ★★★ [修正] 議論文 Prompt：加入摘星卡 (best_sentence) 指令 ★★★
-        const finalPromptContent = `
+            // ★★★ 修正處：移除了 ${specificPreference} 變數 ★★★
+            const finalPromptContent = `
 【系統強制指令 (System Instruction)】
-1. **必須使用繁體中文**。
-2. **專業術語**：使用論點、論據、論證等術語。
-3. **區分角色**：【參考資料】僅供參考，請只評改【待評核學生文章】。
-4. **格式嚴格**：必須包含 <grading_json> 標籤，並嚴格遵守以下 JSON 結構。
-
-【JSON 輸出格式要求 (必須包含 best_sentence)】
-<grading_json>
-{
-  "content": (0-10分),
-  "expression": (0-10分),
-  "structure": (0-10分),
-  "best_sentence": "請在此摘錄文中觀點最精闢、或論證最有力的一句句子（不超過30字）",
-  "radar": {
-    "立意": (0-10), "取材": (0-10), "扣題": (0-10),
-    "詳略": (0-10), "詞彙": (0-10), "文學性": (0-10)
-  }
-}
-</grading_json>
+1. **必須使用繁體中文 (Traditional Chinese)**：無論參考資料是簡體或繁體，你的所有輸出（點評、建議、改寫）都必須轉換為繁體中文（香港習慣）。
+2. **區分角色**：下方的【參考資料】是用來幫助你建立評分標準的「範文」，下方的【待評核學生文章】才是你需要評改的對象。千萬不要評改參考資料。
+3. **格式嚴格**：嚴格遵守原本設定的 XML/JSON 輸出格式，不要輸出額外的「改寫說明」或閒聊文字。
+4. **閱卷員風格**：請嚴格根據後端系統指示的【閱卷員特定評分取向】進行評分及撰寫點評，務必體現該閱卷員重視的特點。
 
 ${ragReference ? ragReference : "(本次未檢索到參考範文)"}
 
 === 📝 待評核學生文章 (Target Student Essay) ===
+(請針對以下文章進行評分與點評)
 ${content}
 `;
 
@@ -16078,11 +16142,11 @@ END IF
 </scoring_worksheet>
 
 <grading_json>
+[**分數分發步驟**：**這是一條絕對的、機械的指令。** 你的任務是將 <scoring_worksheet> 的計算結果填入下方。]
 {
 "content": [複製'內容分數'的'最終分數'],
 "expression": [複製'表達分數'的'最終分數'],
 "structure": [複製'結構分數'的'最終分數'],
-"best_sentence": "在此摘錄文中寫得最好、最優美或最深刻的一句句子（不超過30字）",
 "radar": {
 "立意": [複製'扣題分數'的'扣題基準分數'],
 "取材": [複製'內容分數'的'最終分數'],
@@ -16398,10 +16462,19 @@ function safeJSONParse(rawString) {
 
 	
 /**
- * 【最終修訂版】顯示完整的點評、評分系統 (整合摘星卡 + 補救機制)
+ * 【最終修訂版】顯示完整的點評、評分系統，並根據最終等級和所選閱卷員調整內容
+ * @param {string} containerId - 顯示結果的容器ID
+ * @param {string} originalApiResponse - 原始模型的API回應
+ * @param {string} llama3ApiResponse - 驗證模型的API回應 (可選)
+ * @param {string} uniqueIdPrefix - 用於區分不同評分系統的唯一前綴
+ * @param {string} fullTextContent - 用戶提交的完整文章內容
+ */
+/**
+ * 【最終安全版】顯示完整的點評與評分
+ * 算分邏輯已移至後端，此函數僅負責解析並顯示結果。
  */
 async function displayFullCommentWithGrading(containerId, originalApiResponse, llama3ApiResponse, uniqueIdPrefix, fullTextContent) {
-    // 1. 找出閱卷員的名字與語氣
+    // 1. 找出閱卷員的名字
     let reviewerName = "陳SIR"; 
     let reviewerSelect;
     let currentTone = "serious"; 
@@ -16437,115 +16510,151 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     let scoresForDisplay = null;
     let finalGradeForDisplay = "評級中"; 
 
+    // 使用 i 標誌來忽略大小寫匹配標籤
     const critiqueMatch = originalApiResponse.match(/<critique>([\s\S]*?)<\/critique>/i);
     const suggestionsMatch = originalApiResponse.match(/<suggestions>([\s\S]*?)<\/suggestions>/i);
     const rewriteMatch = originalApiResponse.match(/<rewrite_example>([\s\S]*?)<\/rewrite_example>/i);
     const originalGradingMatch = originalApiResponse.match(/<grading_json>([\s\S]*?)<\/grading_json>/i);
     
-    // --- 5. 分數解析 ---
+    // --- 分數解析邏輯 (極簡化：直接信任後端回傳的 JSON) ---
     if (originalGradingMatch && originalGradingMatch[1]) {
+        // 使用 safeJSONParse 來處理
         scoresForDisplay = safeJSONParse(originalGradingMatch[1]);
-        if (!scoresForDisplay) console.error("JSON Parsing Failed.");
+        
+        if (!scoresForDisplay) {
+            console.error("JSON Parsing Failed. Raw:", originalGradingMatch[1]);
+        }
+    } else {
+        console.warn("找不到 <grading_json> 標籤，可能由後端被過濾或生成失敗。");
     }
     
-    // 6. 計算等級
+    // 計算最終總分與等級 (這部份仍保留在前端作顯示用，因為只是單純加總)
     if (scoresForDisplay) {
+        // ★★★ 注意：這裡不再執行 applyV8Rules 或 applyWordCountRule ★★★
+        // 這些規則已經在後端執行完畢，scoresForDisplay 已經是調整後的數值。
+        
+        // 應用最終一致性規則 (可以保留作為前端最後一道防線，或也移至後端)
         scoresForDisplay = applyFinalConsistencyRule(scoresForDisplay);
+        
         const finalTotalScoreAfterRules = (scoresForDisplay.content * 4) + (scoresForDisplay.expression * 3) + (scoresForDisplay.structure * 2) + 5 + 1;
         finalGradeForDisplay = determineGrade(Math.min(finalTotalScoreAfterRules, 100));
         
+        // 針對字數過少的極端情況進行降級 (可選：保留在前端做即時反應，或移至後端)
         const wordCount = fullTextContent.length;
-        if (wordCount < 500) finalGradeForDisplay = "1";
-        else if (wordCount < 800 && ["5*", "5**"].includes(finalGradeForDisplay)) finalGradeForDisplay = "5";
+        if (wordCount < 500) {
+            finalGradeForDisplay = "1";
+        } else if (wordCount < 800) {
+            const gradeHierarchy = ["1", "2", "3", "4", "5", "5*", "5**"];
+            const originalGradeIndex = gradeHierarchy.indexOf(finalGradeForDisplay);
+            if (originalGradeIndex > gradeHierarchy.indexOf("3")) {
+                finalGradeForDisplay = "3";
+            }
+        }
     }
 
-    // --- 7. AI 點評語氣重寫 (略) ---
+    // --- AI 點評語氣重寫 (保留) ---
     const originalCritiqueText = critiqueMatch ? critiqueMatch[1].trim() : "未生成點評";
     let finalCritiqueText = originalCritiqueText;
+    let critiqueRewriteInstruction = "";
 
-    // (此處省略語氣重寫 API 呼叫以節省篇幅，您的原代碼保留即可)
+    if (finalGradeForDisplay === "5**") critiqueRewriteInstruction = "點評中應為讚賞。";
+    else if (finalGradeForDisplay === "5*" || finalGradeForDisplay === "5") critiqueRewriteInstruction = "點評主要以讚賞為主。";
+    else if (finalGradeForDisplay === "4") critiqueRewriteInstruction = "點評應有褒有貶。";
+    else critiqueRewriteInstruction = "點評以批評為主。";
+    
+    let emojiInstruction = (currentTone === "chen") ? "務必穿插大量 Emoji 🤪✨。" : "語氣專業嚴肅，不使用 Emoji。";
 
-    // --- 8. 組合 HTML ---
+     const rewritePrompt = `請重寫以下點評內容。
+    原文：${originalCritiqueText}
+    【嚴格重寫要求】
+    1. **結構鎖定**：嚴格維持原本的列點數量。
+    2. **篇幅鎖定**：內容長度相若。
+    3. **評級調整**：${critiqueRewriteInstruction}
+    4. **語氣風格**：${emojiInstruction}
+    `;
+
+    try {
+        console.log("等待 API 冷卻...");
+        await new Promise(resolve => setTimeout(resolve, 3500)); 
+        finalCritiqueText = await callReadingAPI(rewritePrompt, 0.5); 
+    } catch (e) {
+        console.warn("語氣重寫失敗:", e);
+        finalCritiqueText = originalCritiqueText;
+    }
+
+    // 強力清洗標題
+    finalCritiqueText = finalCritiqueText.replace(/^#+\s*.*點評重寫.*$/gim, '');
+    finalCritiqueText = finalCritiqueText.replace(/^#+\s*.*重寫.*$/gim, '');
+    finalCritiqueText = finalCritiqueText.replace(/【.*?】/g, ''); 
+    finalCritiqueText = finalCritiqueText.replace(/[（(].*嚴格遵循.*[)）]/g, '');
+    finalCritiqueText = finalCritiqueText.replace(/^(原文|改寫|重寫內容|重寫點評)[：:]/gim, '');
+    finalCritiqueText = finalCritiqueText.trim();
+
+    // --- 組合 HTML ---
     if (scoresForDisplay) {
         finalHTML += createGradingSystemHTML(uniqueIdPrefix, scoresForDisplay, finalGradeForDisplay);
-    } else {
+    }  else {
         finalHTML += "<p>評等資料不完整。</p>";
     }
     
-    if (finalCritiqueText) finalHTML += createBulletedListHTML("點評", finalCritiqueText);
-    if (suggestionsMatch && suggestionsMatch[1]) finalHTML += createBulletedListHTML("建議", suggestionsMatch[1].trim());
+    if (finalCritiqueText) {
+        finalHTML += createBulletedListHTML("點評", finalCritiqueText);
+    }
+    if (suggestionsMatch && suggestionsMatch[1]) {
+        finalHTML += createBulletedListHTML("建議", suggestionsMatch[1].trim());
+    }
     
+    // 改寫範例繁體化 + 引號修正
     if (rewriteMatch && rewriteMatch[1]) {
         let rewriteContent = rewriteMatch[1].trim().replace(/\*/g, '');
+
         if (typeof OpenCC !== 'undefined') {
-            try { const converter = OpenCC.Converter({ from: 'cn', to: 'tw' }); rewriteContent = converter(rewriteContent); } catch (e) {}
+            try {
+                const converter = OpenCC.Converter({ from: 'cn', to: 'tw' });
+                rewriteContent = converter(rewriteContent);
+            } catch (e) {
+                console.error("[OpenCC] 轉換失敗:", e);
+            }
         }
+
         rewriteContent = rewriteContent.replace(/["“](.*?)["”]/g, '「$1」');
-        finalHTML += `<div class="rewrite-explanation-container"><div class="rewrite-explanation-card"><h3>改寫範例</h3><div class="rewrite-content">${rewriteContent}</div></div></div>`;
+
+        finalHTML += `<div class="rewrite-explanation-container">
+            <div class="rewrite-explanation-card">
+                <h3>改寫範例</h3>
+                <div class="rewrite-content">${rewriteContent}</div>
+            </div>
+        </div>`;
     }
 
+    // 加入聊天室 HTML
     const chatType = uniqueIdPrefix === 'narrative' ? 'narrative_writing' : 'argument_writing';
     finalHTML += getCanvasChatHTML(chatType);
+
+    // 注入 HTML
     resultContainer.innerHTML = finalHTML;
 
-    // --- 9. 後續處理 (摘星卡核心邏輯) ---
+    // 初始化雷達圖
     if (scoresForDisplay) {
         setTimeout(() => {
             initializeGradingSystem(uniqueIdPrefix, scoresForDisplay, finalGradeForDisplay);
-
-            // ==========================================
-            // ★★★ 摘星卡觸發邏輯 (含補救措施) ★★★
-            // ==========================================
-            let bestSentence = scoresForDisplay?.best_sentence || "";
-
-            // 補救措施：如果 AI 沒給金句，但分數夠高，我們嘗試從文章中擷取第一句或顯示鼓勵語
-            if (!bestSentence || bestSentence.length < 5) {
-                 // 簡單策略：如果沒金句，就不顯示卡片，或者使用這裡的備用金句
-                 // bestSentence = "文章立意深刻，文筆流暢，值得嘉許。"; 
-            }
-
-            const validGrades = ["4", "5", "5*", "5**"];
-
-            // 只有當有金句 且 等級達標時才顯示
-            if (validGrades.includes(finalGradeForDisplay) && bestSentence.length > 5) {
-                const radarContainer = document.querySelector('.grading-radar');
-                if (radarContainer) {
-                    let currentTopicTitle = (uniqueIdPrefix === 'narrative') ? localStorage.getItem("currentTopic") : localStorage.getItem("argumentCurrentTopic");
-                    currentTopicTitle = currentTopicTitle || "無題";
-
-                  // === 修復後的程式碼 ===
-const safeSentence = bestSentence
-    .replace(/\\/g, '\\\\')       // 1. 先處理反斜線
-    .replace(/'/g, "\\'")         // 2. 處理單引號
-    .replace(/"/g, '&quot;')      // 3. 處理雙引號
-    .replace(/[\r\n]+/g, ' ');    // 4. 【關鍵】將換行符號替換為空格，防止語法錯誤
-
-const safeTopic = currentTopicTitle
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/"/g, '&quot;')
-    .replace(/[\r\n]+/g, ' ');
-
-                    const btnHtml = `
-                        <div style="margin-top: 15px; text-align: center; animation: fadeInUp 0.5s ease; opacity: 0; animation-fill-mode: forwards;">
-                            <button onclick="generateShareCard('${safeSentence}', '${safeTopic}', '${finalGradeForDisplay}')" 
-                                    style="background: linear-gradient(135deg, #d69a92, #b6a6ca); border: none; color: white; padding: 10px 20px; border-radius: 50px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(214, 154, 146, 0.4); display: inline-flex; align-items: center; gap: 8px; font-family: 'Noto Serif TC', serif;">
-                                <i class="fas fa-star"></i> 領取摘星卡
-                            </button>
-                        </div>
-                        <style>@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }</style>
-                    `;
-                    radarContainer.insertAdjacentHTML('beforeend', btnHtml);
-                }
-            }
         }, 50);
     }
 
-    // 10. 存檔 (保持不變)
+    // 儲存到歷史紀錄
     const topic = (uniqueIdPrefix === 'narrative') ? localStorage.getItem("currentTopic") : localStorage.getItem("argumentCurrentTopic");
     const htmlContent = captureContainerHTML('resultCanvasBody'); 
-    await saveToHistory(uniqueIdPrefix === 'narrative' ? "敘事抒情" : "議論", "文章點評", topic || "無題目", `題目：${topic}\n\n文章：${fullTextContent}`, htmlContent, scoresForDisplay);
+    
+     await saveToHistory(
+        uniqueIdPrefix === 'narrative' ? "敘事抒情" : "議論", 
+        "文章點評", 
+        topic || "無題目", 
+        `題目：${topic}\n\n文章：${fullTextContent}`, 
+        htmlContent,
+        scoresForDisplay 
+    );
 }
+
 
 // =======================================================
 // === 評等系統邏輯結束 ===
@@ -23885,7 +23994,25 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
  
 	
-	
+
+
+	<!-- 語音導航介面 -->
+<div id="voiceOverlay">
+    <div class="voice-paper-card">
+        <div class="voice-title">聞聲・知意</div>
+        <div class="voice-status" id="voiceStatusText">請下達指令...</div>
+        
+        <div class="voice-ink-wave">
+            <div class="ink-dot"></div>
+            <div class="ink-dot"></div>
+            <div class="ink-dot"></div>
+        </div>
+        
+        <div style="margin-top: 30px; font-size: 0.95rem; color: #aaa; font-family: 'Noto Serif TC', serif; border-top: 1px dashed #ddd; padding-top: 15px;">
+            「去寫作」、「打開歷史」、「返主頁」
+        </div>
+    </div>
+</div>
 	
 
 
