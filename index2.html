@@ -84,13 +84,12 @@ form-action 'self';
 	<script>
 
 
-
 // ==========================================
-// === 語音導航系統 (Annyang + 智能長按) ===
+// === 語音導航系統 (Annyang + 智能除錯版) ===
 // ==========================================
  
 let voiceLongPressTimer = null;
-const VOICE_LONG_PRESS_DURATION = 1000; // 長按 1 秒觸發
+const VOICE_LONG_PRESS_DURATION = 1000;
 let isVoiceListening = false;
 let voiceStartX = 0, voiceStartY = 0;
  
@@ -99,18 +98,23 @@ document.addEventListener('DOMContentLoaded', function() {
 });
  
 function initVoiceControl() {
-    // 1. 檢查支援度
     if (!window.annyang) {
         console.warn("此瀏覽器不支援語音識別 (Annyang)");
         return;
     }
  
-    // 2. 定義粵語指令 (可自行擴充)
+    // 1. 開啟除錯模式 (在 Console 顯示詳細訊息)
+    annyang.debug(true);
+ 
+    // 2. 設定語言 (粵語/繁體)
+    annyang.setLanguage('zh-HK');
+ 
+    // 3. 定義精確指令
     const commands = {
         // --- 寫作類 ---
         '去寫作': () => executeVoiceCommand('writingContainer', 'writingBtn'),
         '打開寫作': () => executeVoiceCommand('writingContainer', 'writingBtn'),
-        '我要作文': () => executeVoiceCommand('writingContainer', 'writingBtn'),
+        '寫作文': () => executeVoiceCommand('writingContainer', 'writingBtn'),
         
         // --- 閱讀類 ---
         '去閱讀': () => executeVoiceCommand('readingContainer', 'readingBtn'),
@@ -119,7 +123,7 @@ function initVoiceControl() {
         
         // --- 議論類 ---
         '去議論': () => executeVoiceCommand('argumentContainer', 'argumentBtn'),
-        '議論': () => executeVoiceCommand('argumentContainer', 'argumentBtn'),
+        '議論文': () => executeVoiceCommand('argumentContainer', 'argumentBtn'),
         
         // --- 拓展類 ---
         '去拓展': () => executeVoiceCommand('expandContainer', 'expandBtn'),
@@ -128,64 +132,83 @@ function initVoiceControl() {
         // --- 書籍類 ---
         '睇書': () => executeVoiceCommand('booksContainer', 'booksBtn'),
         '書籍討論': () => executeVoiceCommand('booksContainer', 'booksBtn'),
+        '文萃': () => executeVoiceCommand('featuredContainer', null), // 進入文萃
         
         // --- 功能類 ---
         '打開歷史': () => { stopVoiceListening("正在翻閱紀錄...", true); openHistoryContainer(); },
         '歷史紀錄': () => { stopVoiceListening("正在翻閱紀錄...", true); openHistoryContainer(); },
-        
         '打開雲端': () => { stopVoiceListening("正在連接雲端...", true); openStudentLoginModal(); },
         '交功課': () => { stopVoiceListening("正在連接雲端...", true); openStudentLoginModal(); },
-        
         '返主頁': () => { stopVoiceListening("正在返回...", true); returnToHome(); },
-        '返首頁': () => { stopVoiceListening("正在返回...", true); returnToHome(); },
-        
-        '關閉': () => { stopVoiceListening("再會。", false); },
-        '取消': () => { stopVoiceListening("再會。", false); }
+        '關閉': () => { stopVoiceListening("再會。", false); }
     };
  
-    // 3. 設定 Annyang
+    // 4. 加入指令
     annyang.addCommands(commands);
-    annyang.setLanguage('zh-HK');
  
-    // 4. 綁定全局長按事件 (使用 window)
-    // 注意：這裡使用 passive: true (在 touchstart) 可能會導致 preventDefault 失效，
-    // 但因為我們就是要允許選字，所以這正是我們需要的。
+    // 5. ★關鍵新增：監聽所有識別結果 (用於 UI 回饋)★
+    annyang.addCallback('result', function(phrases) {
+        console.log("聽到語音:", phrases);
+        // phrases 是一個陣列，包含多個可能的結果，第一個是最可信的
+        const heardText = phrases[0];
+        
+        // 更新 UI 顯示聽到的內容
+        const status = document.getElementById('voiceStatusText');
+        if (status) {
+            status.innerText = `聽到：「${heardText}」`;
+            status.style.color = "#d69a92"; // 顯示為豆沙紅，提示正在處理
+        }
+    });
+ 
+    // 6. 監聽無匹配指令
+    annyang.addCallback('resultNoMatch', function(phrases) {
+        const status = document.getElementById('voiceStatusText');
+        if (status) {
+            status.innerText = `無法識別：「${phrases[0]}」`;
+            // 1秒後自動重置提示
+            setTimeout(() => {
+                if(isVoiceListening) status.innerText = "請再試一次...";
+            }, 1500);
+        }
+    });
+ 
+    // 7. 綁定長按事件
     window.addEventListener('mousedown', handleVoiceTouchStart);
     window.addEventListener('touchstart', handleVoiceTouchStart, { passive: true });
-    
     window.addEventListener('mouseup', handleVoiceTouchEnd);
     window.addEventListener('touchend', handleVoiceTouchEnd);
-    
     window.addEventListener('mousemove', handleVoiceMove);
     window.addEventListener('touchmove', handleVoiceMove, { passive: true });
 }
  
-// === 執行指令輔助函式 ===
 function executeVoiceCommand(containerId, btnId) {
-    const btn = document.getElementById(btnId);
+    // 成功匹配指令
     stopVoiceListening("收到，正在前往...", true);
     
-    if (btn) {
-        setTimeout(() => {
-            showContainer(containerId, btn);
-        }, 500); 
-    }
+    setTimeout(() => {
+        // 如果有按鈕，模擬點擊 (觸發按鈕的特效和邏輯)
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            // 這裡假設你有 showContainer 函式
+            if (typeof showContainer === 'function') {
+                showContainer(containerId, btn);
+            } else {
+                btn.click();
+            }
+        } else if (containerId === 'featuredContainer') {
+            // 特殊處理：文萃 (如果沒有對應按鈕ID)
+            if (typeof openFeaturedArticles === 'function') {
+                openFeaturedArticles();
+            }
+        }
+    }, 600);
 }
  
-// === 長按偵測邏輯 (修訂版) ===
+// === 長按偵測邏輯 (保持不變) ===
 function handleVoiceTouchStart(e) {
-    // A. 如果點擊的是按鈕或輸入框，完全忽略 (避免衝突)
-    if (e.target.closest('button, input, textarea, select, .btn, .anime-card')) {
-        return;
-    }
-    
-    // B. 如果正在聆聽中，點擊任意處關閉介面
-    if (isVoiceListening) {
-        stopVoiceListening();
-        return;
-    }
+    if (e.target.closest('button, input, textarea, select, .btn, .anime-card')) return;
+    if (isVoiceListening) { stopVoiceListening(); return; }
  
-    // C. 記錄起始座標 (用於判斷是否移動/選字)
     if (e.type === 'touchstart') {
         voiceStartX = e.touches[0].clientX;
         voiceStartY = e.touches[0].clientY;
@@ -194,22 +217,12 @@ function handleVoiceTouchStart(e) {
         voiceStartY = e.clientY;
     }
  
-    // D. 清除舊計時器並啟動新計時
     if (voiceLongPressTimer) clearTimeout(voiceLongPressTimer);
  
     voiceLongPressTimer = setTimeout(() => {
-        // ★★★ 核心檢查：觸發時，檢查是否有文字被選取 ★★★
-        const selection = window.getSelection().toString();
-        
-        if (selection.length > 0) {
-            // 如果用戶選了文字，代表他想複製，不觸發語音
-            // console.log("文字選取中，不觸發語音");
-            return;
-        }
+        if (window.getSelection().toString().length > 0) return; // 有選字則不觸發
  
         startVoiceListening();
-        
-        // 觸發震動回饋 (代表成功喚醒)
         if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
         
     }, VOICE_LONG_PRESS_DURATION);
@@ -217,53 +230,37 @@ function handleVoiceTouchStart(e) {
  
 function handleVoiceMove(e) {
     if (!voiceLongPressTimer) return;
+    let cx, cy;
+    if (e.type === 'touchmove') { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
  
-    let clientX, clientY;
-    if (e.type === 'touchmove') {
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-    } else {
-        clientX = e.clientX;
-        clientY = e.clientY;
-    }
- 
-    // 計算移動距離
-    const diffX = Math.abs(clientX - voiceStartX);
-    const diffY = Math.abs(clientY - voiceStartY);
- 
-    // ★★★ 如果移動超過 10px (代表正在拖曳選字或捲動)，取消長按 ★★★
-    if (diffX > 10 || diffY > 10) {
+    if (Math.abs(cx - voiceStartX) > 10 || Math.abs(cy - voiceStartY) > 10) {
         clearTimeout(voiceLongPressTimer);
         voiceLongPressTimer = null;
     }
 }
  
 function handleVoiceTouchEnd(e) {
-    // 手指放開，清除計時器
     if (voiceLongPressTimer) {
         clearTimeout(voiceLongPressTimer);
         voiceLongPressTimer = null;
     }
 }
  
-// === UI 控制邏輯 ===
- 
+// === UI 控制 ===
 function startVoiceListening() {
     isVoiceListening = true;
-    
     const overlay = document.getElementById('voiceOverlay');
     const status = document.getElementById('voiceStatusText');
     
-    // 顯示
     overlay.style.display = 'flex';
     status.innerText = "聆聽中...";
-    status.style.color = "#8d6e63"; 
+    status.style.color = "#8fa398"; // 初始為灰綠色
     
-    // 強制重繪
     void overlay.offsetWidth;
     overlay.classList.add('active');
  
-    // 啟動 Annyang
+    // 啟動 (continuous: false 代表講完一句就停，適合指令)
     annyang.start({ autoRestart: false, continuous: false });
 }
  
@@ -275,7 +272,7 @@ function stopVoiceListening(message = null, success = false) {
  
     if (message) {
         status.innerText = message;
-        status.style.color = success ? "#2A9689" : "#5d4037"; // 成功綠，普通深咖
+        status.style.color = success ? "#2A9689" : "#5d4037";
         
         setTimeout(() => {
             closeOverlay();
@@ -288,13 +285,11 @@ function stopVoiceListening(message = null, success = false) {
 function closeOverlay() {
     const overlay = document.getElementById('voiceOverlay');
     overlay.classList.remove('active');
-    
     setTimeout(() => {
         overlay.style.display = 'none';
         isVoiceListening = false;
-    }, 400); 
+    }, 400);
 }
- 
 
 
 
@@ -7835,8 +7830,8 @@ body.cat-dragging { cursor: grabbing !important; }
 }
 
 
-	/* ========================================= */
-/* === 語音導航：莫蘭迪宣紙風格 UI (修訂版) === */
+/* ========================================= */
+/* === 語音導航：莫蘭迪宣紙風格 UI (純淨版) === */
 /* ========================================= */
  
 #voiceOverlay {
@@ -7844,13 +7839,10 @@ body.cat-dragging { cursor: grabbing !important; }
     top: 0; left: 0; width: 100%; height: 100%;
     z-index: 2147483647; /* 最頂層 */
     
-    /* 宣紙質感：米白底色 + 雜點紋理 */
-    background-color: rgba(247, 245, 240, 0.95);
-    background-image:
-        radial-gradient(#d4d0c7 1px, transparent 0),
-        radial-gradient(#d4d0c7 1px, transparent 0);
-    background-size: 20px 20px;
-    background-position: 0 0, 10px 10px;
+    /* 修改處：移除圓點雜訊，改為純淨的暖米色 */
+    background-color: rgba(247, 245, 240, 0.98);
+    
+    /* 這裡移除了 background-image: radial-gradient... */
     
     display: none; /* 預設隱藏 */
     flex-direction: column;
@@ -7858,42 +7850,34 @@ body.cat-dragging { cursor: grabbing !important; }
     align-items: center;
     opacity: 0;
     transition: opacity 0.4s ease;
-    backdrop-filter: blur(3px);
+    backdrop-filter: blur(5px); /* 增加一點模糊感 */
     
-    /* 顯示時才阻擋點擊，隱藏時讓滑鼠穿透 */
     pointer-events: none;
 }
  
 #voiceOverlay.active {
-    pointer-events: auto; /* 顯示時恢復阻擋 */
+    pointer-events: auto;
 }
  
-/* 核心內容卡片 - 豎排文字風格或傳統橫排 */
+/* 核心內容卡片 */
 .voice-paper-card {
     position: relative;
     padding: 50px 70px;
     background-color: #fffefb;
-    border: 1px solid #e0ddd7; /* 莫蘭迪暖灰 */
-    box-shadow:
-        0 15px 35px rgba(93, 64, 55, 0.15), /* 深褐柔和陰影 */
-        inset 0 0 60px rgba(255, 255, 255, 0.5);
     
-    border-radius: 2px;
+    /* 邊框改為極細的實線，更乾淨 */
+    border: 1px solid #dcdcdc;
+    
+    /* 陰影更柔和 */
+    box-shadow: 0 20px 50px rgba(161, 136, 127, 0.15);
+    
+    border-radius: 4px;
     text-align: center;
     transform: scale(0.95) translateY(10px);
     transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
  
-/* 四角裝飾 (中式邊框感) */
-.voice-paper-card::after {
-    content: '';
-    position: absolute;
-    top: 10px; bottom: 10px; left: 10px; right: 10px;
-    border: 2px solid #8fa398; /* 莫蘭迪灰綠 */
-    opacity: 0.3;
-    pointer-events: none;
-}
- 
+/* 標題 */
 .voice-title {
     font-family: 'Noto Serif TC', serif;
     font-size: 2rem;
@@ -7901,15 +7885,16 @@ body.cat-dragging { cursor: grabbing !important; }
     margin-bottom: 20px;
     letter-spacing: 0.2em;
     font-weight: 700;
-    text-shadow: 2px 2px 0px rgba(0,0,0,0.05);
 }
  
+/* 狀態文字 */
 .voice-status {
     font-family: 'Noto Serif TC', serif;
-    font-size: 1.3rem;
-    color: #8d6e63; /* 莫蘭迪淺褐 */
+    font-size: 1.4rem; /* 字體加大 */
+    color: #8fa398;    /* 莫蘭迪綠 */
     margin-bottom: 35px;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
+    min-height: 1.5em; /* 預留高度防止跳動 */
 }
  
 /* 水墨暈染聲波 */
@@ -7922,12 +7907,12 @@ body.cat-dragging { cursor: grabbing !important; }
 }
  
 .ink-dot {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     background-color: #a692c2; /* 莫蘭迪香芋紫 */
     border-radius: 50%;
     animation: inkBreath 1.5s infinite ease-in-out;
-    filter: blur(1px); /* 水墨暈染感 */
+    filter: blur(0.5px); /* 輕微水墨感 */
 }
  
 .ink-dot:nth-child(2) { animation-delay: 0.2s; background-color: #7da3c0; /* 霧霾藍 */ }
@@ -7935,13 +7920,12 @@ body.cat-dragging { cursor: grabbing !important; }
  
 @keyframes inkBreath {
     0%, 100% { transform: scale(1); opacity: 0.6; }
-    50% { transform: scale(1.8); opacity: 1; filter: blur(0px); }
+    50% { transform: scale(1.6); opacity: 1; }
 }
  
 /* 顯示狀態 */
 #voiceOverlay.active { opacity: 1; }
 #voiceOverlay.active .voice-paper-card { transform: scale(1) translateY(0); }
-	
 	
 </style>
 
