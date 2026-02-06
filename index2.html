@@ -85,11 +85,11 @@ form-action 'self';
 
 
 // ==========================================
-// === 語音導航系統 (Annyang + 智能除錯版) ===
+// === 語音導航系統 (模糊匹配強力版) ===
 // ==========================================
  
 let voiceLongPressTimer = null;
-const VOICE_LONG_PRESS_DURATION = 1000;
+const VOICE_LONG_PRESS_DURATION = 800; // 稍微縮短長按時間，反應更快
 let isVoiceListening = false;
 let voiceStartX = 0, voiceStartY = 0;
  
@@ -98,81 +98,32 @@ document.addEventListener('DOMContentLoaded', function() {
 });
  
 function initVoiceControl() {
+    // 1. 檢查瀏覽器支援
     if (!window.annyang) {
-        console.warn("此瀏覽器不支援語音識別 (Annyang)");
+        console.warn("此瀏覽器不支援 Web Speech API (Annyang)");
         return;
     }
  
-    // 1. 開啟除錯模式 (在 Console 顯示詳細訊息)
+    // 2. 開啟除錯模式 (F12 Console 會顯示詳細資訊)
     annyang.debug(true);
  
-    // 2. 設定語言 (粵語/繁體)
+    // 3. 設定語言 (廣東話)
     annyang.setLanguage('zh-HK');
  
-    // 3. 定義精確指令
-    const commands = {
-        // --- 寫作類 ---
-        '去寫作': () => executeVoiceCommand('writingContainer', 'writingBtn'),
-        '打開寫作': () => executeVoiceCommand('writingContainer', 'writingBtn'),
-        '寫作文': () => executeVoiceCommand('writingContainer', 'writingBtn'),
-        
-        // --- 閱讀類 ---
-        '去閱讀': () => executeVoiceCommand('readingContainer', 'readingBtn'),
-        '打開閱讀': () => executeVoiceCommand('readingContainer', 'readingBtn'),
-        '做閱讀': () => executeVoiceCommand('readingContainer', 'readingBtn'),
-        
-        // --- 議論類 ---
-        '去議論': () => executeVoiceCommand('argumentContainer', 'argumentBtn'),
-        '議論文': () => executeVoiceCommand('argumentContainer', 'argumentBtn'),
-        
-        // --- 拓展類 ---
-        '去拓展': () => executeVoiceCommand('expandContainer', 'expandBtn'),
-        '整合拓展': () => executeVoiceCommand('expandContainer', 'expandBtn'),
-        
-        // --- 書籍類 ---
-        '睇書': () => executeVoiceCommand('booksContainer', 'booksBtn'),
-        '書籍討論': () => executeVoiceCommand('booksContainer', 'booksBtn'),
-        '文萃': () => executeVoiceCommand('featuredContainer', null), // 進入文萃
-        
-        // --- 功能類 ---
-        '打開歷史': () => { stopVoiceListening("正在翻閱紀錄...", true); openHistoryContainer(); },
-        '歷史紀錄': () => { stopVoiceListening("正在翻閱紀錄...", true); openHistoryContainer(); },
-        '打開雲端': () => { stopVoiceListening("正在連接雲端...", true); openStudentLoginModal(); },
-        '交功課': () => { stopVoiceListening("正在連接雲端...", true); openStudentLoginModal(); },
-        '返主頁': () => { stopVoiceListening("正在返回...", true); returnToHome(); },
-        '關閉': () => { stopVoiceListening("再會。", false); }
+    // 4. ★★★ 核心修改：使用「萬用字元」攔截所有語音 ★★★
+    // 我們不再依賴 annyang 的精確指令，而是自己寫邏輯判斷
+    // 這樣可以忽略標點符號和語氣詞
+    const catchAllCommand = {
+        '*splat': (text) => {
+            processVoiceInput(text);
+        }
     };
+    
+    // 先移除所有舊指令，再加入萬用指令
+    annyang.removeCommands();
+    annyang.addCommands(catchAllCommand);
  
-    // 4. 加入指令
-    annyang.addCommands(commands);
- 
-    // 5. ★關鍵新增：監聽所有識別結果 (用於 UI 回饋)★
-    annyang.addCallback('result', function(phrases) {
-        console.log("聽到語音:", phrases);
-        // phrases 是一個陣列，包含多個可能的結果，第一個是最可信的
-        const heardText = phrases[0];
-        
-        // 更新 UI 顯示聽到的內容
-        const status = document.getElementById('voiceStatusText');
-        if (status) {
-            status.innerText = `聽到：「${heardText}」`;
-            status.style.color = "#d69a92"; // 顯示為豆沙紅，提示正在處理
-        }
-    });
- 
-    // 6. 監聽無匹配指令
-    annyang.addCallback('resultNoMatch', function(phrases) {
-        const status = document.getElementById('voiceStatusText');
-        if (status) {
-            status.innerText = `無法識別：「${phrases[0]}」`;
-            // 1秒後自動重置提示
-            setTimeout(() => {
-                if(isVoiceListening) status.innerText = "請再試一次...";
-            }, 1500);
-        }
-    });
- 
-    // 7. 綁定長按事件
+    // 5. 綁定長按事件
     window.addEventListener('mousedown', handleVoiceTouchStart);
     window.addEventListener('touchstart', handleVoiceTouchStart, { passive: true });
     window.addEventListener('mouseup', handleVoiceTouchEnd);
@@ -181,32 +132,110 @@ function initVoiceControl() {
     window.addEventListener('touchmove', handleVoiceMove, { passive: true });
 }
  
+// === ★★★ 核心：模糊匹配邏輯處理 ★★★ ===
+function processVoiceInput(text) {
+    console.log("原始語音輸入:", text);
+    
+    // 1. 更新 UI 顯示聽到的內容 (讓你知道它聽到了什麼)
+    const status = document.getElementById('voiceStatusText');
+    if (status) {
+        status.innerText = `聽到：「${text}」`;
+        status.style.color = "#d69a92"; // 變色提示正在處理
+    }
+ 
+    // 2. 轉為字串並移除標點符號 (優化識別率)
+    // 移除逗號、句號、空白
+    const cleanText = text.toString().replace(/[，。、？!！\s]/g, '');
+    
+    console.log("清洗後語音:", cleanText);
+ 
+    // 3. 關鍵字判斷 (只要包含關鍵字就觸發)
+    // --- 寫作 ---
+    if (cleanText.includes('寫作') || cleanText.includes('作文') || cleanText.includes('敘事')) {
+        executeVoiceCommand('writingContainer', 'writingBtn');
+    }
+    // --- 閱讀 ---
+    else if (cleanText.includes('閱讀') || cleanText.includes('睇書')) {
+        executeVoiceCommand('readingContainer', 'readingBtn');
+    }
+    // --- 議論 ---
+    else if (cleanText.includes('議論')) {
+        executeVoiceCommand('argumentContainer', 'argumentBtn');
+    }
+    // --- 拓展 ---
+    else if (cleanText.includes('拓展')) {
+        executeVoiceCommand('expandContainer', 'expandBtn');
+    }
+    // --- 書籍 ---
+    else if (cleanText.includes('書籍') || cleanText.includes('書本')) {
+        executeVoiceCommand('booksContainer', 'booksBtn');
+    }
+    // --- 文萃 ---
+    else if (cleanText.includes('文萃') || cleanText.includes('文章') || cleanText.includes('精選')) {
+        stopVoiceListening("正在前往文萃...", true);
+        setTimeout(() => { if (typeof openFeaturedArticles === 'function') openFeaturedArticles(); }, 500);
+    }
+    // --- 歷史 ---
+    else if (cleanText.includes('歷史') || cleanText.includes('紀錄')) {
+        stopVoiceListening("正在翻閱紀錄...", true);
+        setTimeout(() => { if (typeof openHistoryContainer === 'function') openHistoryContainer(); }, 500);
+    }
+    // --- 雲端/功課 ---
+    else if (cleanText.includes('雲端') || cleanText.includes('功課') || cleanText.includes('交野')) {
+        stopVoiceListening("正在連接雲端...", true);
+        setTimeout(() => { if (typeof openStudentLoginModal === 'function') openStudentLoginModal(); }, 500);
+    }
+    // --- 主頁 ---
+    else if (cleanText.includes('主頁') || cleanText.includes('首頁') || cleanText.includes('返去')) {
+        stopVoiceListening("正在返回...", true);
+        setTimeout(() => { if (typeof returnToHome === 'function') returnToHome(); }, 500);
+    }
+    // --- 關閉 ---
+    else if (cleanText.includes('關閉') || cleanText.includes('取消') || cleanText.includes('再見')) {
+        stopVoiceListening("再會。", false);
+    }
+    // --- 無法識別 ---
+    else {
+        if (status) {
+            status.innerText = `未能識別：「${text}」`;
+            // 震動兩下提示錯誤
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50, 50]);
+            
+            // 1.5秒後重置提示
+            setTimeout(() => {
+                if(isVoiceListening) {
+                    status.innerText = "請再試一次...";
+                    status.style.color = "#8fa398";
+                }
+            }, 1500);
+        }
+    }
+}
+ 
+// === 執行指令並跳轉 ===
 function executeVoiceCommand(containerId, btnId) {
-    // 成功匹配指令
     stopVoiceListening("收到，正在前往...", true);
     
     setTimeout(() => {
-        // 如果有按鈕，模擬點擊 (觸發按鈕的特效和邏輯)
+        // 嘗試點擊按鈕來觸發原本的轉場效果
         const btn = document.getElementById(btnId);
         if (btn) {
-            // 這裡假設你有 showContainer 函式
+            btn.click();
+        } else {
+            // 如果按鈕不存在，嘗試直接顯示容器 (Fallback)
             if (typeof showContainer === 'function') {
-                showContainer(containerId, btn);
-            } else {
-                btn.click();
-            }
-        } else if (containerId === 'featuredContainer') {
-            // 特殊處理：文萃 (如果沒有對應按鈕ID)
-            if (typeof openFeaturedArticles === 'function') {
-                openFeaturedArticles();
+                showContainer(containerId);
             }
         }
     }, 600);
 }
  
-// === 長按偵測邏輯 (保持不變) ===
+// === 長按偵測邏輯 (不變) ===
 function handleVoiceTouchStart(e) {
-    if (e.target.closest('button, input, textarea, select, .btn, .anime-card')) return;
+    // 忽略按鈕和輸入框
+    if (e.target.closest('button, input, textarea, select, .btn, .anime-card, .history-card')) return;
+    
+    // 如果正在聆聽，點擊任意處關閉
     if (isVoiceListening) { stopVoiceListening(); return; }
  
     if (e.type === 'touchstart') {
@@ -220,9 +249,11 @@ function handleVoiceTouchStart(e) {
     if (voiceLongPressTimer) clearTimeout(voiceLongPressTimer);
  
     voiceLongPressTimer = setTimeout(() => {
-        if (window.getSelection().toString().length > 0) return; // 有選字則不觸發
+        // 檢查是否有選取文字，有的話不觸發
+        if (window.getSelection().toString().length > 0) return;
  
         startVoiceListening();
+        // 成功觸發震動
         if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
         
     }, VOICE_LONG_PRESS_DURATION);
@@ -234,6 +265,7 @@ function handleVoiceMove(e) {
     if (e.type === 'touchmove') { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
     else { cx = e.clientX; cy = e.clientY; }
  
+    // 移動超過 10px 視為滑動，取消長按
     if (Math.abs(cx - voiceStartX) > 10 || Math.abs(cy - voiceStartY) > 10) {
         clearTimeout(voiceLongPressTimer);
         voiceLongPressTimer = null;
@@ -247,32 +279,33 @@ function handleVoiceTouchEnd(e) {
     }
 }
  
-// === UI 控制 ===
+// === UI 控制邏輯 ===
 function startVoiceListening() {
     isVoiceListening = true;
+    
     const overlay = document.getElementById('voiceOverlay');
     const status = document.getElementById('voiceStatusText');
     
     overlay.style.display = 'flex';
     status.innerText = "聆聽中...";
-    status.style.color = "#8fa398"; // 初始為灰綠色
+    status.style.color = "#8fa398"; 
     
     void overlay.offsetWidth;
     overlay.classList.add('active');
  
-    // 啟動 (continuous: false 代表講完一句就停，適合指令)
+    // 啟動 (continuous: false = 講一句就停)
     annyang.start({ autoRestart: false, continuous: false });
 }
  
 function stopVoiceListening(message = null, success = false) {
-    annyang.abort();
+    annyang.abort(); // 停止錄音
     
     const overlay = document.getElementById('voiceOverlay');
     const status = document.getElementById('voiceStatusText');
  
     if (message) {
         status.innerText = message;
-        status.style.color = success ? "#2A9689" : "#5d4037";
+        status.style.color = success ? "#2A9689" : "#5d4037"; // 成功綠 / 普通咖
         
         setTimeout(() => {
             closeOverlay();
@@ -285,13 +318,13 @@ function stopVoiceListening(message = null, success = false) {
 function closeOverlay() {
     const overlay = document.getElementById('voiceOverlay');
     overlay.classList.remove('active');
+    
     setTimeout(() => {
         overlay.style.display = 'none';
         isVoiceListening = false;
-    }, 400);
+    }, 400); 
 }
-
-
+ 
 
 		
 // ==========================================
