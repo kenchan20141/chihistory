@@ -364,6 +364,17 @@ async function searchSimilarEssays(studentText, targetType) {
     <span>閱讀資源</span>      <!-- 文字改為統稱 -->
 </button>
 
+
+
+<!-- === 語音導航回饋遮罩 (平時隱藏) === -->
+<div id="voiceOverlay" class="voice-overlay">
+    <div class="voice-indicator">
+        <i class="fas fa-microphone"></i>
+        <div class="voice-text">請說話...</div>
+        <div class="voice-wave"></div>
+        <div class="voice-wave delay"></div>
+    </div>
+</div>
 		  
     <!-- 5. 音樂播放器 -->
     <button class="side-menu-item" onclick="toggleMusicPlayer()">
@@ -7691,6 +7702,81 @@ body.cat-dragging { cursor: grabbing !important; }
 }
 
 
+
+	/* === 語音導航遮罩樣式 === */
+.voice-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(253, 252, 248, 0.8); /* 莫蘭迪米白，半透明 */
+    backdrop-filter: blur(5px);
+    z-index: 2147483647; /* 最頂層 */
+    display: none; /* 預設隱藏 */
+    justify-content: center;
+    align-items: center;
+    pointer-events: none; /* 關鍵：讓手指放開的事件能穿透到底層 */
+}
+
+.voice-overlay.active {
+    display: flex;
+}
+
+.voice-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    height: 120px;
+    background-color: #8fa398; /* 莫蘭迪灰綠 */
+    border-radius: 50%;
+    color: white;
+    font-size: 32px;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(143, 163, 152, 0.4);
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.voice-text {
+    font-size: 14px;
+    margin-top: 8px;
+    font-family: 'Noto Serif TC', serif;
+    opacity: 0.9;
+}
+
+/* 聲波擴散動畫 */
+.voice-wave {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid #d69a92; /* 莫蘭迪豆沙紅 */
+    opacity: 0;
+    z-index: -1;
+}
+
+.voice-overlay.active .voice-wave {
+    animation: waveExpand 2s infinite;
+}
+
+.voice-overlay.active .voice-wave.delay {
+    animation-delay: 0.6s;
+}
+
+@keyframes waveExpand {
+    0% { width: 100%; height: 100%; opacity: 0.8; border-width: 4px; }
+    100% { width: 300%; height: 300%; opacity: 0; border-width: 0px; }
+}
+
+@keyframes popIn {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
 	
 	
 </style>
@@ -23905,6 +23991,185 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 	
 </script>
+
+
+
+
+
+<script>
+
+
+// ==========================================
+// === 全域長按語音導航系統 (智能判斷版) ===
+// ==========================================
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. 檢查支援度
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        console.log("此瀏覽器不支援語音識別");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'zh-HK'; // 粵語
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    // 2. 變數設定
+    let pressTimer = null;
+    let isRecognitionActive = false;
+    const LONG_PRESS_MS = 800; // 長按 0.8 秒觸發
+    const overlay = document.getElementById('voiceOverlay');
+
+    // 3. 指令集 (可自行擴充)
+    const commands = {
+        '主頁': () => returnToHome(),
+        '返去': () => returnToHome(),
+        '寫作': () => { showContainer('writingContainer'); document.getElementById('writingBtn').classList.add('active'); },
+        '閱讀': () => { showContainer('readingContainer'); document.getElementById('readingBtn').classList.add('active'); },
+        '議論': () => { showContainer('argumentContainer'); document.getElementById('argumentBtn').classList.add('active'); },
+        '拓展': () => { showContainer('expandContainer'); document.getElementById('expandBtn').classList.add('active'); },
+        '文粹': () => { checkFeaturedAccess(); },
+        '文章': () => { checkFeaturedAccess(); },
+        '歷史': () => openHistoryContainer(),
+        '紀錄': () => openHistoryContainer(),
+        '雲端': () => openStudentLoginModal(),
+        '功課': () => openStudentLoginModal(),
+        '音樂': () => toggleMusicPlayer(),
+        '歌': () => toggleMusicPlayer(),
+        '貓': () => openCatMenu()
+    };
+
+    // 4. 核心：檢查點擊目標是否為「空白處」
+    function isSafeTarget(target) {
+        // 如果點到以下元素，視為用戶想操作介面，不觸發語音
+        const dangerTags = ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A', 'I', 'CANVAS'];
+        if (dangerTags.includes(target.tagName)) return false;
+        
+        // 如果點到可編輯區域
+        if (target.isContentEditable) return false;
+
+        // 如果點到任何有文字的段落 (視為想選取文字)
+        // 這裡判斷：如果該元素內有直接的文字節點，且長度 > 0，則視為文字區
+        // 但為了寬容度，我們主要檢查是否為輸入框或按鈕即可。
+        // 若要更嚴格，可加入 P, SPAN, H1-H6 到 dangerTags
+        
+        // 檢查是否正在選取文字 (如果有選取範圍，不觸發)
+        const selection = window.getSelection();
+        if (selection && selection.toString().length > 0) return false;
+
+        return true;
+    }
+
+    // 5. 開始長按計時
+    function handleStart(e) {
+        // 如果已經在錄音，忽略
+        if (isRecognitionActive) return;
+
+        // 智能判斷：如果點到了按鈕或輸入框，直接退出，讓瀏覽器處理預設行為
+        if (!isSafeTarget(e.target)) return;
+
+        // 清除舊計時器
+        clearTimeout(pressTimer);
+
+        // 設定計時器
+        pressTimer = setTimeout(() => {
+            // 時間到，啟動錄音
+            startRecognition();
+        }, LONG_PRESS_MS);
+    }
+
+    // 6. 結束長按 (手指放開或移動)
+    function handleEnd(e) {
+        // 如果計時器還在跑 (未滿 0.8秒)，代表是短按或點擊
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+
+        // 如果正在錄音，則停止
+        if (isRecognitionActive) {
+            stopRecognition();
+        }
+    }
+
+    // 啟動錄音功能
+    function startRecognition() {
+        try {
+            isRecognitionActive = true;
+            recognition.start();
+            
+            // 顯示 UI
+            overlay.classList.add('active');
+            
+            // 震動回饋
+            if (navigator.vibrate) navigator.vibrate(50);
+            
+        } catch (err) {
+            console.error("無法啟動語音:", err);
+            isRecognitionActive = false;
+        }
+    }
+
+    // 停止錄音功能
+    function stopRecognition() {
+        isRecognitionActive = false;
+        recognition.stop();
+        overlay.classList.remove('active');
+    }
+
+    // 7. 綁定全域事件 (Body)
+    // 使用 passive: true 可以優化滾動效能，但這裡我們不需要阻止滾動
+    document.body.addEventListener('touchstart', handleStart, { passive: true });
+    document.body.addEventListener('touchend', handleEnd, { passive: true });
+    document.body.addEventListener('touchcancel', handleEnd, { passive: true });
+    
+    // 電腦滑鼠支援 (測試用)
+    document.body.addEventListener('mousedown', handleStart);
+    document.body.addEventListener('mouseup', handleEnd);
+    document.body.addEventListener('mouseleave', handleEnd);
+
+    // 當頁面滾動時，取消長按 (防止滾動時誤觸)
+    window.addEventListener('scroll', () => {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+    }, { passive: true });
+
+    // 8. 識別結果處理
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log("語音指令:", transcript);
+
+        let found = false;
+        for (const [key, action] of Object.entries(commands)) {
+            if (transcript.includes(key)) {
+                action();
+                found = true;
+                if (navigator.vibrate) navigator.vibrate([50, 50]); // 成功雙震動
+                break;
+            }
+        }
+        
+        if (!found) {
+            // 聽不懂時的微小回饋 (可選：讓介面閃紅一下)
+            const indicator = document.querySelector('.voice-indicator');
+            if(indicator) {
+                indicator.style.backgroundColor = '#d69a92'; // 轉紅
+                setTimeout(() => indicator.style.backgroundColor = '', 500);
+            }
+        }
+    };
+
+    recognition.onerror = (e) => {
+        console.log("語音錯誤:", e.error);
+        stopRecognition();
+    };
+});
+	
+</script>
+
 	
 
 <!-- Live2D 畫布容器 -->
