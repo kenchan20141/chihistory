@@ -23343,12 +23343,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
-    function createRecognition() {
-        const reco = new SpeechRecognition();
-        reco.lang = 'zh-HK';
-        reco.continuous = false;
-        reco.interimResults = true;
-        reco.maxAlternatives = 1;
+   function createRecognition() {
+    const reco = new SpeechRecognition();
+    reco.lang = 'zh-HK';
+    // --- 針對部分 Android 機型的修正 ---
+    reco.continuous = false;    // 確保單次識別
+    reco.interimResults = false; // 先改成 false 測試看看能不能聽到
+    reco.maxAlternatives = 1;
 
         reco.onstart = () => {
             statusText.innerText = "請說話...";
@@ -23377,21 +23378,23 @@ document.addEventListener('DOMContentLoaded', function() {
             handleCommands(transcript);
         };
 
-        reco.onerror = (e) => {
-            console.error("語音錯誤:", e.error);
-            clearTimeout(soundWatchdog);
-            
-            if (e.error === 'no-speech') {
-                statusText.innerText = "太安靜了...";
-            } else if (e.error === 'not-allowed') {
-                statusText.innerText = "請允許麥克風權限";
-            } else if (e.error === 'audio-capture') {
-                statusText.innerText = "麥克風被佔用";
-            } else {
-                statusText.innerText = "錯誤: " + e.error;
-            }
-            setTimeout(stopListening, 1500);
-        };
+       // 請找到你代碼中的 reco.onerror 部分，改為這樣：
+reco.onerror = (e) => {
+    console.error("語音錯誤:", e.error);
+    clearTimeout(soundWatchdog);
+    
+    // 用 alert 強制彈出 Android 的內部報錯
+    alert("Android 語音錯誤代碼: " + e.error); 
+
+    if (e.error === 'no-speech') {
+        statusText.innerText = "太安靜了...";
+    } else if (e.error === 'not-allowed') {
+        statusText.innerText = "請允許麥克風權限";
+    } else {
+        statusText.innerText = "錯誤: " + e.error;
+    }
+    setTimeout(stopListening, 1500);
+};
         
         // ★ 新增：結束時自動恢復
         reco.onend = () => {
