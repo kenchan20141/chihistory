@@ -23432,38 +23432,123 @@ document.addEventListener('DOMContentLoaded', function() {
 
         console.log("語音最終結果:", transcript);
 
-        // 指令映射表
-        const commands = {
-            '作家文粹': () => checkFeaturedAccess(),
-            '文粹': () => checkFeaturedAccess(),
-            '文章': () => checkFeaturedAccess(),
-            
-            '主頁': () => returnToHome(),
-            '返去': () => returnToHome(),
-            '首頁': () => returnToHome(),
+      // 輔助函式：模擬點擊語薈中的工具連結
+const triggerTool = (toolId) => {
+    // 1. 先打開語薈主容器
+    document.getElementById('expandToolsBtn2').click();
+    // 2. 延遲一下等待 DOM 展開，然後觸發具體工具
+    setTimeout(() => {
+        const link = document.querySelector(`a[data-tool-id="${toolId}"]`);
+        if (link) {
+            link.click();
+        } else {
+            console.error("找不到工具 ID:", toolId);
+        }
+    }, 400); // 400ms 確保語薈開啟動畫完成
+};
 
-            '寫作': () => document.getElementById('writingBtn').click(),
-            '敘事': () => document.getElementById('writingBtn').click(),
-            
-            '閱讀': () => document.getElementById('readingBtn').click(),
-            
-            '議論': () => document.getElementById('argumentBtn').click(),
-            
-            '拓展': () => document.getElementById('expandBtn').click(),
-            '整合': () => document.getElementById('expandBtn').click(),
-            
-            '歷史': () => openHistoryContainer(),
-            '紀錄': () => openHistoryContainer(),
-            
-            '雲端': () => openStudentLoginModal(),
-            '功課': () => openStudentLoginModal(),
-            
-            '語薈': () => document.getElementById('expandToolsBtn2').click(),
-            '工具': () => document.getElementById('expandToolsBtn2').click(),
-            
-            '音樂': () => toggleMusicPlayer(),
-            '開歌': () => toggleMusicPlayer()
-        };
+// 指令映射表（全面涵蓋版）
+const commands = {
+    // --- 頂層主功能 ---
+    '作家文粹': () => checkFeaturedAccess(),
+    '作家': () => checkFeaturedAccess(),
+    '文粹': () => checkFeaturedAccess(),
+    '文章': () => checkFeaturedAccess(),
+    '主頁': () => returnToHome(),
+    '返回': () => returnToHome(),
+    '首頁': () => returnToHome(),
+    '作文': () => document.getElementById('writingBtn').click(),
+    '敘事': () => document.getElementById('writingBtn').click(),
+	 '敘事抒情': () => document.getElementById('writingBtn').click(),
+    '閱讀': () => document.getElementById('readingBtn').click(),
+    '議論': () => document.getElementById('argumentBtn').click(),
+	'議論文': () => document.getElementById('argumentBtn').click(),
+    '拓展': () => document.getElementById('expandBtn').click(),
+    '整合': () => document.getElementById('expandBtn').click(),
+    '歷史': () => openHistoryContainer(),
+    '紀錄': () => openHistoryContainer(),
+    '雲端': () => openStudentLoginModal(),
+    '功課': () => openStudentLoginModal(),
+    '語薈': () => document.getElementById('expandToolsBtn2').click(),
+    '工具': () => document.getElementById('expandToolsBtn2').click(),
+    '與會': () => document.getElementById('expandToolsBtn2').click(),
+	'月會': () => document.getElementById('expandToolsBtn2').click(),
+    '音樂': () => toggleMusicPlayer(),
+    '歌': () => toggleMusicPlayer(),
+
+    // --- 語薈：應試與課外探索 ---
+    '題孳': () => triggerTool('tizi'),
+	'體脂': () => triggerTool('tizi'),
+    '出題': () => triggerTool('tizi'),
+    '擬題': () => triggerTool('tizi'),
+    '文學片段': () => triggerTool('reading-pieces'),
+	'文學': () => triggerTool('reading-pieces'),
+    '片段': () => triggerTool('reading-pieces'),
+    '文樞': () => triggerTool('mensyu'),
+	'文書': () => triggerTool('mensyu'),
+    '翻譯': () => triggerTool('mensyu'),
+    '文言文': () => triggerTool('mensyu'),
+    '慢讀': () => triggerTool('slowreading'),
+	 '萬毒': () => triggerTool('slowreading'),
+    '專題探究': () => triggerTool('study'),
+	 '探究': () => triggerTool('study'),
+    '研究': () => triggerTool('study'),
+    '一瞬之詩': () => triggerTool('wabisabi'),
+	'一瞬': () => triggerTool('wabisabi'),
+    '詩意': () => triggerTool('wabisabi'),
+    '書籍概覽': () => triggerTool('book-overview'),
+    '詞海拾心': () => triggerTool('lyrics'),
+	'辭海': () => triggerTool('lyrics'),
+    '歌詞': () => triggerTool('lyrics'),
+    '遊戲': () => triggerTool('lyrics'),
+
+    // --- 語薈：寫作創作相關 ---
+    '翻水': () => triggerTool('fanshui-narrative'),
+	'番薯': () => triggerTool('fanshui-narrative'),
+    '範文': () => triggerTool('fanshui-narrative'),
+    '原稿紙': () => triggerTool('manuscript'),
+    '字斟句酌': () => triggerTool('words'),
+	'自針巨著': () => triggerTool('words'),
+    '潤色': () => triggerTool('words'),
+    '幻燈片': () => triggerTool('slideshow'),
+    '展示': () => triggerTool('slideshow'),
+
+    // --- 語薈：閱讀溫習 ---
+    '語弈錄': () => triggerTool('yuyilu'),
+	'乳液龍': () => triggerTool('yuyilu'),
+    '課文溫習': () => triggerTool('yuyilu'),
+    '計時器': () => triggerTool('timer'),
+    '背書': () => triggerTool('timer'),
+
+    // --- 語薈：實用工具與流程 ---
+    '帙雲': () => triggerTool('zhiyun'),
+	'奪魂': () => triggerTool('zhiyun'),
+	'疊雲': () => triggerTool('zhiyun'),
+    '琢玉': () => triggerTool('zhuoyu'),
+	'剁肉': () => triggerTool('zhuoyu'),
+    '批閱': () => triggerTool('zhuoyu'),
+    '搶答器': () => triggerTool('quizbuzzer'),
+    '脈問堂': () => triggerTool('pulseqa'),
+	'麥問堂': () => triggerTool('pulseqa'),
+    '文字轉換': () => triggerTool('ocr'),
+	'OCR': () => triggerTool('ocr'),
+    '手寫': () => triggerTool('ocr'),
+    '電子書': () => triggerTool('epub'),
+    '分貝計': () => triggerTool('decibelmeter'),
+    '量度': () => triggerTool('decibelmeter'),
+    '以文會友': () => triggerTool('friends'),
+	 '指紋會有': () => triggerTool('friends'),
+    '交友': () => triggerTool('friends'),
+
+    // --- 語薈：學習支援 (AI 聊天室) ---
+    '喻蛋': () => triggerTool('chitutor'),
+	'魚蛋': () => triggerTool('chitutor'),
+    '史萊姆': () => triggerTool('histutor'),
+    '解憂': () => triggerTool('counseling'),
+    '雜貨店': () => triggerTool('counseling'),
+    '自學': () => triggerTool('self-learning'),
+    '資源': () => triggerTool('self-learning')
+};
 
         let match = false;
         for (const [key, action] of Object.entries(commands)) {
@@ -23512,6 +23597,8 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 });
 </script>
+	
+
 
 <!-- === 新增：閱讀資源選擇視窗 (二合一) === -->
 <div id="bookResourceModal" class="report-menu-overlay" onclick="closeBookResourceMenu(event)" style="z-index: 20005;">
@@ -24064,7 +24151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <div class="voice-status" id="voiceStatusText">聆聽中</div>
 </div>
-
+	
 
 
 </body>
