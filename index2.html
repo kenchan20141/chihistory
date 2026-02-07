@@ -7620,6 +7620,77 @@ body.cat-dragging { cursor: grabbing !important; }
     50% { opacity: 0.5; }
     100% { opacity: 1; }
 }
+
+
+
+/* === 語音導航按鈕樣式 (莫蘭迪風) === */
+.voice-nav-btn {
+    position: fixed;
+    bottom: 25px;
+    left: 25px; /* 放在左下角，避開右下角的音樂/其他按鈕 */
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    /* 莫蘭迪灰綠：靜止狀態 */
+    background-color: #8fa398; 
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 4px 15px rgba(143, 163, 152, 0.4);
+    cursor: pointer;
+    z-index: 99999;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    
+    /* 關鍵：防止長按時選取按鈕文字或跳出選單 */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.voice-nav-btn:active, .voice-nav-btn.listening {
+    transform: scale(1.15);
+    /* 莫蘭迪豆沙紅：錄音狀態 */
+    background-color: #d69a92; 
+    box-shadow: 0 4px 20px rgba(214, 154, 146, 0.6);
+}
+
+/* 錄音時的漣漪動畫 */
+.voice-ripple {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid #d69a92;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.voice-nav-btn.listening .voice-ripple {
+    animation: rippleEffect 1.5s infinite;
+}
+
+@keyframes rippleEffect {
+    0% { width: 100%; height: 100%; opacity: 0.8; }
+    100% { width: 250%; height: 250%; opacity: 0; }
+}
+
+/* 手機版微調位置，避免擋住內容 */
+@media (max-width: 600px) {
+    .voice-nav-btn {
+        bottom: 20px;
+        left: 20px;
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+    }
+}
+
+
 	
 	
 </style>
@@ -10785,6 +10856,16 @@ refreshBtn.addEventListener('click', fetchHitokoto);
 </div>
 </div>
 </div>
+
+
+
+<!-- === 莫蘭迪語音導航按鈕 === -->
+<div id="voiceNavBtn" class="voice-nav-btn" title="長按說話">
+    <i class="fas fa-microphone"></i>
+    <div class="voice-ripple"></div>
+</div>
+
+	
 
 <!-- 音樂播放器 HTML (已更換圖示) -->
 <!-- 音樂播放器 HTML (已移除懸浮按鈕) -->
@@ -16536,39 +16617,81 @@ modalCloseBtn.addEventListener('click', closeModalEditor);
 // --- OCR 整合邏輯 ---
 const ocrBtn = document.getElementById('modal-ocr-btn');
 let ocrWindow = null;
-const VERCEL_OCR_URL = 'https://script.google.com/macros/s/AKfycby_bFZLYfPvfv5EUsbpnYE3I5NuB5wrGEnXU0ojmDMo7_GYFsR2uKKrTSES9Q4clJkVAg/exec';
+// 原本的 VERCEL_OCR_URL 替換為本地路徑
+// const VERCEL_OCR_URL = 'https://gemini-ocr-proxy.vercel.app/'; // 舊的
+const OCR_TOOL_PATH = 'toolbox/ocr.html'; // 新的路徑
 
 if (ocrBtn) {
-ocrBtn.addEventListener('click', function() {
-if (ocrWindow && !ocrWindow.closed) {
-ocrWindow.focus();
-return;
-}
-ocrWindow = window.open(VERCEL_OCR_URL, 'OCRWindow', 'width=650,height=850,scrollbars=yes,resizable=yes');
-});
+    ocrBtn.addEventListener('click', function() {
+        if (ocrWindow && !ocrWindow.closed) {
+            ocrWindow.focus();
+            return;
+        }
+        // 開啟本地的 ocr.html
+        ocrWindow = window.open(OCR_TOOL_PATH, 'OCRWindow', 'width=900,height=850,scrollbars=yes,resizable=yes');
+    });
 }
 
-window.addEventListener('message', function(event) {
-    // 1. 允許來自 script.google.com 或 googleusercontent.com 的訊息
-    // 或是為了測試方便，暫時移除 origin 檢查 (如下所示)
+// ▼▼▼▼▼ 貼上這段新代碼 ▼▼▼▼▼
+
+// === OCR 訊息接收監聽器 (防重複版) ===
+// 定義一個處理函式，而不是匿名函式，這樣比較好管理
+// === OCR 訊息接收監聽器 (修訂版：優先更新懸浮視窗) ===
+function handleOCRMessage(event) {
+    // 1. 安全檢查
+    if (!event.data || event.data.type !== 'ocrResult') return;
+
+    console.log("收到 OCR 文字:", event.data.text);
+    const newText = event.data.text;
+
+    // 2. 定義目標輸入框
+    let targetEl = null;
+
+    // --- 關鍵修正開始 ---
+    // 判斷懸浮視窗 (Modal) 是否正在顯示
+    const modal = document.getElementById('outline-editor-modal');
+    const modalTextarea = document.getElementById('modal-textarea');
     
-    if (event.data && event.data.type === 'ocrResult') {
-        const ocrText = event.data.text;
-        
-        // 確保變數 modalTextarea 存在
-        const textarea = document.getElementById('modal-textarea');
-        if (textarea) {
-            textarea.value += (textarea.value.trim() ? '\n' : '') + ocrText;
-            
-            // 如果有定義 ocrWindow 變數，則關閉它
-            if (typeof ocrWindow !== 'undefined' && ocrWindow) {
-                ocrWindow.close();
-            }
-            
-            textarea.focus();
+    // 如果懸浮視窗存在且正在顯示 (display !== 'none')
+    if (modal && modal.style.display !== 'none' && modalTextarea) {
+        // ★ 強制鎖定：目標就是眼前這個懸浮框
+        targetEl = modalTextarea;
+    } else {
+        // 如果懸浮視窗沒開，才去讀取上一次點擊的 ID
+        const savedId = sessionStorage.getItem('sansi_current_editing_id');
+        if (savedId) {
+            targetEl = document.getElementById(savedId);
         }
     }
-});
+    // --- 關鍵修正結束 ---
+
+    if (targetEl) {
+        // 3. 插入文字 (自動補換行)
+        const currentVal = targetEl.value;
+        const prefix = (currentVal && !currentVal.endsWith('\n')) ? '\n' : '';
+        
+        targetEl.value += prefix + newText;
+
+        // 4. ★ 重要：觸發 input 事件
+        // 這會讓瀏覽器知道內容變了，也會觸發 sessionStorage 的自動存檔
+        targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // 5. 視覺回饋：聚焦並捲動到底部
+        targetEl.focus();
+        targetEl.scrollTop = targetEl.scrollHeight;
+    }
+
+    // 6. 關閉 OCR 彈出視窗 (確保變數 ocrWindow 存在)
+    if (typeof ocrWindow !== 'undefined' && ocrWindow && !ocrWindow.closed) {
+        ocrWindow.close();
+    }
+}
+
+// 重新綁定監聽器 (確保不會重複)
+window.removeEventListener('message', handleOCRMessage);
+window.addEventListener('message', handleOCRMessage);
+
+// ▲▲▲▲▲ 貼上結束 ▲▲▲▲▲
 });
 
 /**
@@ -23654,7 +23777,134 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 	
+<script>
 
+
+// ==========================================
+// === 莫蘭迪語音導航系統 (粵語版) ===
+// ==========================================
+document.addEventListener('DOMContentLoaded', function() {
+    const voiceBtn = document.getElementById('voiceNavBtn');
+    
+    // 檢查瀏覽器支援
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        if(voiceBtn) voiceBtn.style.display = 'none'; // 不支援則隱藏
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'zh-HK'; // 設定為粵語
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    let isListening = false;
+
+    // --- 指令映射表 (可隨意擴充) ---
+    const commands = {
+        '作家文粹': () => { checkFeaturedAccess(); },
+        '文粹': () => { checkFeaturedAccess(); },
+        '文章': () => { checkFeaturedAccess(); },
+        
+        '主頁': () => { returnToHome(); },
+        '返去': () => { returnToHome(); },
+        
+        '寫作': () => { document.getElementById('writingBtn').click(); },
+        '敘事': () => { document.getElementById('writingBtn').click(); },
+        
+        '閱讀': () => { document.getElementById('readingBtn').click(); },
+        
+        '議論': () => { document.getElementById('argumentBtn').click(); },
+        
+        '拓展': () => { document.getElementById('expandBtn').click(); },
+        '整合': () => { document.getElementById('expandBtn').click(); },
+        
+        '歷史': () => { openHistoryContainer(); },
+        '紀錄': () => { openHistoryContainer(); },
+        
+        '雲端': () => { openStudentLoginModal(); },
+        '功課': () => { openStudentLoginModal(); },
+        
+        '音樂': () => { toggleMusicPlayer(); },
+        '歌': () => { toggleMusicPlayer(); }
+    };
+
+    // --- 事件處理 ---
+
+    // 開始錄音 (按下)
+    const startListen = (e) => {
+        // 阻止預設行為，防止選取文字或右鍵菜單
+        if (e.type === 'touchstart') e.preventDefault(); 
+        
+        if (isListening) return;
+        try {
+            recognition.start();
+            isListening = true;
+            voiceBtn.classList.add('listening');
+            
+            // 輕微震動回饋
+            if (navigator.vibrate) navigator.vibrate(30);
+        } catch (err) {
+            console.log("語音啟動頻繁:", err);
+        }
+    };
+
+    // 停止錄音 (放開)
+    const stopListen = (e) => {
+        if (!isListening) return;
+        recognition.stop();
+        isListening = false;
+        voiceBtn.classList.remove('listening');
+    };
+
+    // 綁定電腦滑鼠與手機觸控事件
+    voiceBtn.addEventListener('mousedown', startListen);
+    voiceBtn.addEventListener('mouseup', stopListen);
+    voiceBtn.addEventListener('mouseleave', stopListen); // 滑鼠移出也停止
+
+    voiceBtn.addEventListener('touchstart', startListen, { passive: false });
+    voiceBtn.addEventListener('touchend', stopListen);
+    voiceBtn.addEventListener('touchcancel', stopListen);
+    
+    // 防止右鍵選單干擾長按
+    voiceBtn.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+
+    // --- 識別結果處理 ---
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log("收到語音指令:", transcript);
+        
+        // 簡單的關鍵字匹配邏輯
+        let matchFound = false;
+        for (const [key, action] of Object.entries(commands)) {
+            if (transcript.includes(key)) {
+                action();
+                matchFound = true;
+                // 成功震動回饋
+                if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+                break; // 找到一個指令就停止
+            }
+        }
+
+        if (!matchFound) {
+            // 若聽不懂，這裡可以選擇是否給予提示，目前保持靜默符合「極少文字」原則
+            // 或者可以讓按鈕閃爍一下紅色表示錯誤
+            voiceBtn.style.backgroundColor = '#d69a92'; // 錯誤紅
+            setTimeout(() => { voiceBtn.style.backgroundColor = ''; }, 500);
+        }
+    };
+
+    recognition.onerror = (event) => {
+        console.error("語音識別錯誤:", event.error);
+        isListening = false;
+        voiceBtn.classList.remove('listening');
+    };
+});
+	
+</script>
 	
 
 <!-- Live2D 畫布容器 -->
