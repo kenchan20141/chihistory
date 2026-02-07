@@ -56,7 +56,7 @@ form-action 'self';
 
 
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/annyang/2.6.1/annyang.min.js"></script>
+
 	
 <!-- 引入 Chart.js 以繪製雷達圖 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -84,247 +84,6 @@ form-action 'self';
 	<script>
 
 
-// ==========================================
-// === 語音導航系統 (模糊匹配強力版) ===
-// ==========================================
- 
-let voiceLongPressTimer = null;
-const VOICE_LONG_PRESS_DURATION = 800; // 稍微縮短長按時間，反應更快
-let isVoiceListening = false;
-let voiceStartX = 0, voiceStartY = 0;
- 
-document.addEventListener('DOMContentLoaded', function() {
-    initVoiceControl();
-});
- 
-function initVoiceControl() {
-    // 1. 檢查瀏覽器支援
-    if (!window.annyang) {
-        console.warn("此瀏覽器不支援 Web Speech API (Annyang)");
-        return;
-    }
- 
-    // 2. 開啟除錯模式 (F12 Console 會顯示詳細資訊)
-    annyang.debug(true);
- 
-    // 3. 設定語言 (廣東話)
-    annyang.setLanguage('zh-HK');
- 
-    // 4. ★★★ 核心修改：使用「萬用字元」攔截所有語音 ★★★
-    // 我們不再依賴 annyang 的精確指令，而是自己寫邏輯判斷
-    // 這樣可以忽略標點符號和語氣詞
-    const catchAllCommand = {
-        '*splat': (text) => {
-            processVoiceInput(text);
-        }
-    };
-    
-    // 先移除所有舊指令，再加入萬用指令
-    annyang.removeCommands();
-    annyang.addCommands(catchAllCommand);
- 
-    // 5. 綁定長按事件
-    window.addEventListener('mousedown', handleVoiceTouchStart);
-    window.addEventListener('touchstart', handleVoiceTouchStart, { passive: true });
-    window.addEventListener('mouseup', handleVoiceTouchEnd);
-    window.addEventListener('touchend', handleVoiceTouchEnd);
-    window.addEventListener('mousemove', handleVoiceMove);
-    window.addEventListener('touchmove', handleVoiceMove, { passive: true });
-}
- 
-// === ★★★ 核心：模糊匹配邏輯處理 ★★★ ===
-function processVoiceInput(text) {
-    console.log("原始語音輸入:", text);
-    
-    // 1. 更新 UI 顯示聽到的內容 (讓你知道它聽到了什麼)
-    const status = document.getElementById('voiceStatusText');
-    if (status) {
-        status.innerText = `聽到：「${text}」`;
-        status.style.color = "#d69a92"; // 變色提示正在處理
-    }
- 
-    // 2. 轉為字串並移除標點符號 (優化識別率)
-    // 移除逗號、句號、空白
-    const cleanText = text.toString().replace(/[，。、？!！\s]/g, '');
-    
-    console.log("清洗後語音:", cleanText);
- 
-    // 3. 關鍵字判斷 (只要包含關鍵字就觸發)
-    // --- 寫作 ---
-    if (cleanText.includes('寫作') || cleanText.includes('作文') || cleanText.includes('敘事')) {
-        executeVoiceCommand('writingContainer', 'writingBtn');
-    }
-    // --- 閱讀 ---
-    else if (cleanText.includes('閱讀') || cleanText.includes('睇書')) {
-        executeVoiceCommand('readingContainer', 'readingBtn');
-    }
-    // --- 議論 ---
-    else if (cleanText.includes('議論')) {
-        executeVoiceCommand('argumentContainer', 'argumentBtn');
-    }
-    // --- 拓展 ---
-    else if (cleanText.includes('拓展')) {
-        executeVoiceCommand('expandContainer', 'expandBtn');
-    }
-    // --- 書籍 ---
-    else if (cleanText.includes('書籍') || cleanText.includes('書本')) {
-        executeVoiceCommand('booksContainer', 'booksBtn');
-    }
-    // --- 文萃 ---
-    else if (cleanText.includes('文萃') || cleanText.includes('文章') || cleanText.includes('精選')) {
-        stopVoiceListening("正在前往文萃...", true);
-        setTimeout(() => { if (typeof openFeaturedArticles === 'function') openFeaturedArticles(); }, 500);
-    }
-    // --- 歷史 ---
-    else if (cleanText.includes('歷史') || cleanText.includes('紀錄')) {
-        stopVoiceListening("正在翻閱紀錄...", true);
-        setTimeout(() => { if (typeof openHistoryContainer === 'function') openHistoryContainer(); }, 500);
-    }
-    // --- 雲端/功課 ---
-    else if (cleanText.includes('雲端') || cleanText.includes('功課') || cleanText.includes('交野')) {
-        stopVoiceListening("正在連接雲端...", true);
-        setTimeout(() => { if (typeof openStudentLoginModal === 'function') openStudentLoginModal(); }, 500);
-    }
-    // --- 主頁 ---
-    else if (cleanText.includes('主頁') || cleanText.includes('首頁') || cleanText.includes('返去')) {
-        stopVoiceListening("正在返回...", true);
-        setTimeout(() => { if (typeof returnToHome === 'function') returnToHome(); }, 500);
-    }
-    // --- 關閉 ---
-    else if (cleanText.includes('關閉') || cleanText.includes('取消') || cleanText.includes('再見')) {
-        stopVoiceListening("再會。", false);
-    }
-    // --- 無法識別 ---
-    else {
-        if (status) {
-            status.innerText = `未能識別：「${text}」`;
-            // 震動兩下提示錯誤
-            if (navigator.vibrate) navigator.vibrate([50, 50, 50, 50]);
-            
-            // 1.5秒後重置提示
-            setTimeout(() => {
-                if(isVoiceListening) {
-                    status.innerText = "請再試一次...";
-                    status.style.color = "#8fa398";
-                }
-            }, 1500);
-        }
-    }
-}
- 
-// === 執行指令並跳轉 ===
-function executeVoiceCommand(containerId, btnId) {
-    stopVoiceListening("收到，正在前往...", true);
-    
-    setTimeout(() => {
-        // 嘗試點擊按鈕來觸發原本的轉場效果
-        const btn = document.getElementById(btnId);
-        if (btn) {
-            btn.click();
-        } else {
-            // 如果按鈕不存在，嘗試直接顯示容器 (Fallback)
-            if (typeof showContainer === 'function') {
-                showContainer(containerId);
-            }
-        }
-    }, 600);
-}
- 
-// === 長按偵測邏輯 (不變) ===
-function handleVoiceTouchStart(e) {
-    // 忽略按鈕和輸入框
-    if (e.target.closest('button, input, textarea, select, .btn, .anime-card, .history-card')) return;
-    
-    // 如果正在聆聽，點擊任意處關閉
-    if (isVoiceListening) { stopVoiceListening(); return; }
- 
-    if (e.type === 'touchstart') {
-        voiceStartX = e.touches[0].clientX;
-        voiceStartY = e.touches[0].clientY;
-    } else {
-        voiceStartX = e.clientX;
-        voiceStartY = e.clientY;
-    }
- 
-    if (voiceLongPressTimer) clearTimeout(voiceLongPressTimer);
- 
-    voiceLongPressTimer = setTimeout(() => {
-        // 檢查是否有選取文字，有的話不觸發
-        if (window.getSelection().toString().length > 0) return;
- 
-        startVoiceListening();
-        // 成功觸發震動
-        if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
-        
-    }, VOICE_LONG_PRESS_DURATION);
-}
- 
-function handleVoiceMove(e) {
-    if (!voiceLongPressTimer) return;
-    let cx, cy;
-    if (e.type === 'touchmove') { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
-    else { cx = e.clientX; cy = e.clientY; }
- 
-    // 移動超過 10px 視為滑動，取消長按
-    if (Math.abs(cx - voiceStartX) > 10 || Math.abs(cy - voiceStartY) > 10) {
-        clearTimeout(voiceLongPressTimer);
-        voiceLongPressTimer = null;
-    }
-}
- 
-function handleVoiceTouchEnd(e) {
-    if (voiceLongPressTimer) {
-        clearTimeout(voiceLongPressTimer);
-        voiceLongPressTimer = null;
-    }
-}
- 
-// === UI 控制邏輯 ===
-function startVoiceListening() {
-    isVoiceListening = true;
-    
-    const overlay = document.getElementById('voiceOverlay');
-    const status = document.getElementById('voiceStatusText');
-    
-    overlay.style.display = 'flex';
-    status.innerText = "聆聽中...";
-    status.style.color = "#8fa398"; 
-    
-    void overlay.offsetWidth;
-    overlay.classList.add('active');
- 
-    // 啟動 (continuous: false = 講一句就停)
-    annyang.start({ autoRestart: false, continuous: false });
-}
- 
-function stopVoiceListening(message = null, success = false) {
-    annyang.abort(); // 停止錄音
-    
-    const overlay = document.getElementById('voiceOverlay');
-    const status = document.getElementById('voiceStatusText');
- 
-    if (message) {
-        status.innerText = message;
-        status.style.color = success ? "#2A9689" : "#5d4037"; // 成功綠 / 普通咖
-        
-        setTimeout(() => {
-            closeOverlay();
-        }, 1200);
-    } else {
-        closeOverlay();
-    }
-}
- 
-function closeOverlay() {
-    const overlay = document.getElementById('voiceOverlay');
-    overlay.classList.remove('active');
-    
-    setTimeout(() => {
-        overlay.style.display = 'none';
-        isVoiceListening = false;
-    }, 400); 
-}
- 
 
 		
 // ==========================================
@@ -7861,104 +7620,7 @@ body.cat-dragging { cursor: grabbing !important; }
     50% { opacity: 0.5; }
     100% { opacity: 1; }
 }
-
-
-/* ========================================= */
-/* === 語音導航：莫蘭迪宣紙風格 UI (純淨版) === */
-/* ========================================= */
- 
-#voiceOverlay {
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 2147483647; /* 最頂層 */
-    
-    /* 修改處：移除圓點雜訊，改為純淨的暖米色 */
-    background-color: rgba(247, 245, 240, 0.98);
-    
-    /* 這裡移除了 background-image: radial-gradient... */
-    
-    display: none; /* 預設隱藏 */
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-    backdrop-filter: blur(5px); /* 增加一點模糊感 */
-    
-    pointer-events: none;
-}
- 
-#voiceOverlay.active {
-    pointer-events: auto;
-}
- 
-/* 核心內容卡片 */
-.voice-paper-card {
-    position: relative;
-    padding: 50px 70px;
-    background-color: #fffefb;
-    
-    /* 邊框改為極細的實線，更乾淨 */
-    border: 1px solid #dcdcdc;
-    
-    /* 陰影更柔和 */
-    box-shadow: 0 20px 50px rgba(161, 136, 127, 0.15);
-    
-    border-radius: 4px;
-    text-align: center;
-    transform: scale(0.95) translateY(10px);
-    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
- 
-/* 標題 */
-.voice-title {
-    font-family: 'Noto Serif TC', serif;
-    font-size: 2rem;
-    color: #5d4037; /* 莫蘭迪深褐 */
-    margin-bottom: 20px;
-    letter-spacing: 0.2em;
-    font-weight: 700;
-}
- 
-/* 狀態文字 */
-.voice-status {
-    font-family: 'Noto Serif TC', serif;
-    font-size: 1.4rem; /* 字體加大 */
-    color: #8fa398;    /* 莫蘭迪綠 */
-    margin-bottom: 35px;
-    letter-spacing: 1px;
-    min-height: 1.5em; /* 預留高度防止跳動 */
-}
- 
-/* 水墨暈染聲波 */
-.voice-ink-wave {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 12px;
-    height: 50px;
-}
- 
-.ink-dot {
-    width: 12px;
-    height: 12px;
-    background-color: #a692c2; /* 莫蘭迪香芋紫 */
-    border-radius: 50%;
-    animation: inkBreath 1.5s infinite ease-in-out;
-    filter: blur(0.5px); /* 輕微水墨感 */
-}
- 
-.ink-dot:nth-child(2) { animation-delay: 0.2s; background-color: #7da3c0; /* 霧霾藍 */ }
-.ink-dot:nth-child(3) { animation-delay: 0.4s; background-color: #d69a92; /* 豆沙紅 */ }
- 
-@keyframes inkBreath {
-    0%, 100% { transform: scale(1); opacity: 0.6; }
-    50% { transform: scale(1.6); opacity: 1; }
-}
- 
-/* 顯示狀態 */
-#voiceOverlay.active { opacity: 1; }
-#voiceOverlay.active .voice-paper-card { transform: scale(1) translateY(0); }
+	
 	
 </style>
 
@@ -11657,9 +11319,9 @@ const READING_API_URL = CLOUDFLARE_WORKER_URL;
 const LLAMA3_API_URL = CLOUDFLARE_WORKER_URL;  
  
 // 模型設定保持不變
-const MODEL = "gemini";
+const MODEL = "gemini-search";
 const READING_MODEL = "deepseek";
-const LLAMA3_MODEL = "gemini";
+const LLAMA3_MODEL = "gemini-search";
 
 
 // =======================================================
@@ -16445,33 +16107,60 @@ ${basePrompt}
  * 嘗試從骯髒的字串中提取並解析 JSON
  * 能處理 AI 在 JSON 前後添加的廢話、Markdown 代碼塊等
  */
+/**
+ * 嘗試從骯髒的字串中提取並解析 JSON (增強容錯版)
+ * 能處理 AI 在 JSON 前後添加的廢話、Markdown 代碼塊
+ * ★ 修復：自動將缺失的數值 (如 "key":,) 補為 0
+ */
 function safeJSONParse(rawString) {
     if (!rawString) return null;
-
-    // 1. 嘗試直接解析
+ 
+    // --- 預處理：清洗並修復常見的 AI 語法錯誤 ---
+    let cleanString = rawString;
+ 
+    // 1. 移除 Markdown 代碼塊標記
+    cleanString = cleanString.replace(/```json/g, '').replace(/```/g, '');
+ 
+    // 2. ★ 核心修復：填補缺失的數值 ★
+    // 將 "key":, 替換為 "key": 0,
+    cleanString = cleanString.replace(/:\s*,/g, ': 0,');
+    // 將 "key": } 替換為 "key": 0 } (針對最後一項)
+    cleanString = cleanString.replace(/:\s*}/g, ': 0}');
+    // 將 "key": NaN 替換為 "key": 0
+    cleanString = cleanString.replace(/:\s*NaN/gi, ': 0');
+ 
+    // --- 第一次嘗試：直接解析 ---
     try {
-        return JSON.parse(rawString);
+        return JSON.parse(cleanString);
     } catch (e) {
-        // 忽略錯誤，繼續嘗試修復
+        // 忽略錯誤，繼續嘗試提取
     }
-
-    // 2. 尋找 JSON 物件的開始 `{` 和結束 `}`
-    const firstBrace = rawString.indexOf('{');
-    const lastBrace = rawString.lastIndexOf('}');
-
+ 
+    // --- 第二次嘗試：提取 {} 內容後再解析 ---
+    const firstBrace = cleanString.indexOf('{');
+    const lastBrace = cleanString.lastIndexOf('}');
+ 
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        const cleanString = rawString.substring(firstBrace, lastBrace + 1);
+        let extracted = cleanString.substring(firstBrace, lastBrace + 1);
+        
+        // 對提取後的字串再次執行修復 (雙重保險)
+        extracted = extracted.replace(/:\s*,/g, ': 0,');
+        extracted = extracted.replace(/:\s*}/g, ': 0}');
+        extracted = extracted.replace(/:\s*NaN/gi, ': 0');
+ 
         try {
-            return JSON.parse(cleanString);
+            return JSON.parse(extracted);
         } catch (e) {
-            console.error("JSON 修復失敗 (提取後仍格式錯誤):", cleanString);
+            console.error("JSON 修復失敗 (提取後仍格式錯誤):", extracted);
+            // ★★★ 修改：解析失敗直接回傳 null，不回傳預設 0 分物件 ★★★
             return null;
         }
     }
-
+ 
     console.error("無法在字串中找到有效的 JSON 結構");
     return null;
 }
+ 
 
 
 
@@ -16534,41 +16223,83 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     const originalGradingMatch = originalApiResponse.match(/<grading_json>([\s\S]*?)<\/grading_json>/i);
     
     // --- 分數解析邏輯 (極簡化：直接信任後端回傳的 JSON) ---
+   // --- 分數解析邏輯 ---
     if (originalGradingMatch && originalGradingMatch[1]) {
-        // 使用 safeJSONParse 來處理
         scoresForDisplay = safeJSONParse(originalGradingMatch[1]);
-        
-        if (!scoresForDisplay) {
-            console.error("JSON Parsing Failed. Raw:", originalGradingMatch[1]);
-        }
-    } else {
-        console.warn("找不到 <grading_json> 標籤，可能由後端被過濾或生成失敗。");
     }
     
-    // 計算最終總分與等級 (這部份仍保留在前端作顯示用，因為只是單純加總)
+    // 計算最終總分與等級
     if (scoresForDisplay) {
-        // ★★★ 注意：這裡不再執行 applyV8Rules 或 applyWordCountRule ★★★
-        // 這些規則已經在後端執行完畢，scoresForDisplay 已經是調整後的數值。
-        
-        // 應用最終一致性規則 (可以保留作為前端最後一道防線，或也移至後端)
+        // 1. 先執行一致性規則 (扣題分數把關)
         scoresForDisplay = applyFinalConsistencyRule(scoresForDisplay);
         
-        const finalTotalScoreAfterRules = (scoresForDisplay.content * 4) + (scoresForDisplay.expression * 3) + (scoresForDisplay.structure * 2) + 5 + 1;
-        finalGradeForDisplay = determineGrade(Math.min(finalTotalScoreAfterRules, 100));
-        
-        // 針對字數過少的極端情況進行降級 (可選：保留在前端做即時反應，或移至後端)
+        // 2. ★★★ 修正核心：字數限制規則 (Cap Rule) ★★★
+        // 邏輯：字數不足時，將各項分數的「上限」鎖死，但不影響原本就低分的情況
+     // 2. ★★★ 修正核心：字數限制規則 (Cap Rule V4 - 表達分完全獨立) ★★★
         const wordCount = fullTextContent.length;
+        
+        // 定義各項分數上限
+        // contentCap 和 structureCap 根據字數嚴格限制
+        let contentCap = 10;
+        let structureCap = 10;
+        
+    // 1. 將 const 改為 let，允許修改 expressionCap
+        let expressionCap = 10;
+        // --- 根據字數設定內容與結構的限制 ---
         if (wordCount < 500) {
-            finalGradeForDisplay = "1";
+            // < 500字：內容與結構極刑，上限 2分；文筆上限 6分
+            contentCap = 2;
+            structureCap = 2;
+            expressionCap = 6; // 這裡也要設為 6，確保邏輯一致
+        } else if (wordCount < 650) {
+            // < 650字：內容上限 4分，結構上限 5分
+            contentCap = 4;
+            structureCap = 5;
+            
+            // ★★★ 新增這行：650字以下，文筆最高限制在 6 分 ★★★
+            expressionCap = 6;
+            
         } else if (wordCount < 800) {
-            const gradeHierarchy = ["1", "2", "3", "4", "5", "5*", "5**"];
-            const originalGradeIndex = gradeHierarchy.indexOf(finalGradeForDisplay);
-            if (originalGradeIndex > gradeHierarchy.indexOf("3")) {
-                finalGradeForDisplay = "3";
+            // < 800字：內容與結構上限 5分
+            contentCap = 5;
+            structureCap = 5;
+            // 800字以下的文筆維持不設限 (expressionCap 保持 10)
+        }
+ 
+        // --- 執行數值壓制 ---
+        // 表達分數 (expression) 這裡使用 min(..., 10) 實際上就是不限制，保持原分
+        
+        if (contentCap < 10 || structureCap < 10) {
+            console.log(`觸發字數規則 (${wordCount}字)：內容上限${contentCap}, 結構上限${structureCap}, 表達分不設限`);
+            
+            scoresForDisplay.content = Math.min(scoresForDisplay.content, contentCap);
+            scoresForDisplay.structure = Math.min(scoresForDisplay.structure, structureCap);
+            // 表達分完全獨立
+            scoresForDisplay.expression = Math.min(scoresForDisplay.expression, expressionCap);
+            
+            // 同步限制雷達圖數據 (細緻化處理)
+            if (scoresForDisplay.radar) {
+                for (let key in scoresForDisplay.radar) {
+                    if (['立意', '取材', '扣題'].includes(key)) {
+                        // 內容範疇 -> 跟隨 contentCap
+                        scoresForDisplay.radar[key] = Math.min(scoresForDisplay.radar[key], contentCap);
+                    } else if (['詳略'].includes(key)) {
+                        // 結構範疇 -> 跟隨 structureCap
+                        scoresForDisplay.radar[key] = Math.min(scoresForDisplay.radar[key], structureCap);
+                    } else {
+                        // 詞彙、文學性 -> 屬於表達範疇，完全不設限
+                        scoresForDisplay.radar[key] = Math.min(scoresForDisplay.radar[key], expressionCap);
+                    }
+                }
             }
         }
+ 
+        // 3. ★★★ 最後才計算總分與等級 ★★★
+        // 這樣算出來的總分就會自然反映出 LV3, LV2 或 LV1，而不會不合理地卡在 72分
+        const finalTotalScoreAfterRules = (scoresForDisplay.content * 4) + (scoresForDisplay.expression * 3) + (scoresForDisplay.structure * 2) + 5 + 1; // +5(標點預設) +1(錯別字預設)
+        
+        finalGradeForDisplay = determineGrade(Math.min(finalTotalScoreAfterRules, 100));
     }
-
     // --- AI 點評語氣重寫 (保留) ---
     const originalCritiqueText = critiqueMatch ? critiqueMatch[1].trim() : "未生成點評";
     let finalCritiqueText = originalCritiqueText;
@@ -16805,7 +16536,7 @@ modalCloseBtn.addEventListener('click', closeModalEditor);
 // --- OCR 整合邏輯 ---
 const ocrBtn = document.getElementById('modal-ocr-btn');
 let ocrWindow = null;
-const VERCEL_OCR_URL = 'https://gemini-ocr-proxy.vercel.app/';
+const VERCEL_OCR_URL = 'https://sites.google.com/ccckyc.edu.hk/ocr/';
 
 if (ocrBtn) {
 ocrBtn.addEventListener('click', function() {
@@ -24011,25 +23742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
  
 	
-
-
-	<!-- 語音導航介面 -->
-<div id="voiceOverlay">
-    <div class="voice-paper-card">
-        <div class="voice-title">聞聲・知意</div>
-        <div class="voice-status" id="voiceStatusText">請下達指令...</div>
-        
-        <div class="voice-ink-wave">
-            <div class="ink-dot"></div>
-            <div class="ink-dot"></div>
-            <div class="ink-dot"></div>
-        </div>
-        
-        <div style="margin-top: 30px; font-size: 0.95rem; color: #aaa; font-family: 'Noto Serif TC', serif; border-top: 1px dashed #ddd; padding-top: 15px;">
-            「去寫作」、「打開歷史」、「返主頁」
-        </div>
-    </div>
-</div>
+	
 	
 
 
