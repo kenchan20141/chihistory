@@ -16536,7 +16536,7 @@ modalCloseBtn.addEventListener('click', closeModalEditor);
 // --- OCR 整合邏輯 ---
 const ocrBtn = document.getElementById('modal-ocr-btn');
 let ocrWindow = null;
-const VERCEL_OCR_URL = 'https://sites.google.com/ccckyc.edu.hk/ocr';
+const VERCEL_OCR_URL = 'https://script.google.com/macros/s/AKfycby_bFZLYfPvfv5EUsbpnYE3I5NuB5wrGEnXU0ojmDMo7_GYFsR2uKKrTSES9Q4clJkVAg/exec';
 
 if (ocrBtn) {
 ocrBtn.addEventListener('click', function() {
@@ -16549,27 +16549,22 @@ ocrWindow = window.open(VERCEL_OCR_URL, 'OCRWindow', 'width=650,height=850,scrol
 }
 
 window.addEventListener('message', function(event) {
-    // ★★★ 修改：暫時移除 event.origin 的網域檢查 ★★★
-    // 因為 Google Sites 可能會從不同的子網域傳送訊息，為了確保能收到，我們先只檢查資料格式
+    // 1. 允許來自 script.google.com 或 googleusercontent.com 的訊息
+    // 或是為了測試方便，暫時移除 origin 檢查 (如下所示)
     
     if (event.data && event.data.type === 'ocrResult') {
         const ocrText = event.data.text;
-        const textarea = document.getElementById('modal-textarea');
         
+        // 確保變數 modalTextarea 存在
+        const textarea = document.getElementById('modal-textarea');
         if (textarea) {
-            // 將文字填入編輯框
             textarea.value += (textarea.value.trim() ? '\n' : '') + ocrText;
             
-            // 嘗試自動關閉 OCR 視窗
+            // 如果有定義 ocrWindow 變數，則關閉它
             if (typeof ocrWindow !== 'undefined' && ocrWindow) {
-                try {
-                    ocrWindow.close();
-                } catch(e) {
-                    console.log("無法自動關閉視窗 (跨網域限制)");
-                }
+                ocrWindow.close();
             }
             
-            // 聚焦回輸入框
             textarea.focus();
         }
     }
