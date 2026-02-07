@@ -23329,56 +23329,106 @@ function enterFeaturedFromMenu() {
 document.addEventListener('DOMContentLoaded', function() {
     const overlay = document.getElementById('voice-overlay');
     const statusText = document.getElementById('voiceStatusText');
-    
     let recognition = null;
     let longPressTimer = null;
-    let isLongPressActive = false; // 是否已經進入長按模式
-    let startY = 0; // 用於檢測滑動
+    let isLongPressing = false;
+    let soundWatchdog = null; // 用來監視有沒有聲音
+
+    const PRESS_DURATION = 800; 
 
     // 檢查支援度
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
-    // --- 建立識別物件 ---
+    // --- 核心：建立新的識別實例 (每次使用都重建，防止當機) ---
     function createRecognition() {
         const reco = new SpeechRecognition();
         reco.lang = 'zh-HK';
-        reco.continuous = true; 
-        reco.interimResults = true; 
+        reco.continuous = false;
+        reco.interimResults = true;
         reco.maxAlternatives = 1;
 
         reco.onstart = () => {
-            // 雖然啟動了，但如果不顯示介面，就保持安靜
-            if (isLongPressActive) {
-                statusText.innerText = "聆聽中...";
-            }
+            statusText.innerText = "請說話...";
+            // ★ 修改 1：啟動成功後才震動，避免搶佔音訊通道
+            if (navigator.vibrate) navigator.vibrate(50);
+            
+            // ★ 修改 2：啟動看門狗，如果 5 秒都沒聽到聲音，就提示用戶
+            soundWatchdog = setTimeout(() => {
+                if (statusText.innerText === "請說話...") {
+                    statusText.innerText = "沒聽到聲音？請靠近一點...";
+                }
+            }, 5000);
+        };
+
+        reco.onsoundstart = () => {
+            statusText.innerText = "聆聽中..."; // 只要變這個字，代表麥克風通了
+            clearTimeout(soundWatchdog); // 清除看門狗
         };
 
         reco.onresult = (event) => {
-            // 只有當「長按模式」啟動後，才處理結果
-            if (!isLongPressActive) return;
-
-            const result = event.results[event.results.length - 1];
+            const result = event.results[event.resultIndex];
             const transcript = result[0].transcript;
             
-            // 顯示文字
+            // 即時顯示
             statusText.innerText = transcript;
+            clearTimeout(soundWatchdog);
 
-            // 如果手指已放開且語音結束，執行指令
-            if (result.isFinal) {
-                handleCommands(transcript);
-            }
+            if (!result.isFinal) return;
+
+            handleCommands(transcript);
         };
 
         reco.onerror = (e) => {
-            // 靜默失敗，不要 alert 干擾用戶
-            console.log("語音背景錯誤:", e.error);
+            console.error("語音錯誤:", e.error);
+            if (e.error === 'no-speech') {
+                statusText.innerText = "太安靜了...";
+            } else if (e.error === 'not-allowed') {
+                statusText.innerText = "權限被拒絕";
+                alert("請到手機設定 -> 瀏覽器 -> 允許麥克風權限");
+            } else {
+                statusText.innerText = "重試中...";
+            }
+            // 錯誤發生時稍微延遲後關閉
+            setTimeout(stopListening, 1000);
         };
 
         return reco;
     }
 
-    // --- 指令處理 ---
+    // --- 啟動流程 ---
+    function startListening() {
+        if (isLongPressing) return; // 防止重複
+        isLongPressing = true;
+        
+        overlay.classList.add('active'); 
+        statusText.innerText = "啟動中...";
+
+        try {
+            // 每次都建立新的，確保乾淨
+            recognition = createRecognition();
+            recognition.start();
+        } catch (e) {
+            console.error("啟動例外:", e);
+            statusText.innerText = "無法啟動";
+            stopListening();
+        }
+    }
+
+    // --- 停止流程 ---
+    function stopListening() {
+        isLongPressing = false;
+        overlay.classList.remove('active');
+        clearTimeout(soundWatchdog);
+        
+        if (recognition) {
+            try { recognition.stop(); } catch(e){}
+            // 重要：斷開引用
+            recognition = null;
+        }
+    }
+
+    // --- 指令處理 (保持原本邏輯) ---
     function handleCommands(transcript) {
         const commands = {
             '作家文粹': () => checkFeaturedAccess(),
@@ -23410,7 +23460,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 statusText.innerText = `跳轉: ${key}`;
                 setTimeout(() => {
                     action();
-                    overlay.classList.remove('active');
+                    stopListening();
                 }, 500);
                 match = true;
                 break;
@@ -23419,88 +23469,59 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!match) {
             statusText.innerText = "???";
-            setTimeout(() => overlay.classList.remove('active'), 1000);
+            setTimeout(stopListening, 1500);
         }
     }
 
-    // --- 觸控邏輯 (核心) ---
+    // --- 觸控事件處理 ---
+    function isValidTarget(target) {
+        if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT', 'OPTION'].includes(target.tagName)) return false;
+        if (target.isContentEditable) return false;
+        if (window.getSelection().toString().length > 0) return false;
+        return true;
+    }
 
-    function handleTouchStart(e) {
-        // 排除按鈕等互動元素
-        if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT'].includes(e.target.tagName)) return;
-        if (e.target.isContentEditable) return;
+    const handleStart = (e) => {
+        // 如果介面已經打開，點一下就關閉 (當作取消鍵)
+        if (overlay.classList.contains('active')) {
+            e.preventDefault(); // 防止穿透點擊
+            stopListening();
+            return;
+        }
 
-        // 1. 初始化狀態
-        isLongPressActive = false; // 先假設不是長按
-        startY = e.touches[0].clientY;
+        if (!isValidTarget(e.target)) return;
 
-        // 2. ★ 偷跑策略：立即啟動麥克風 (滿足瀏覽器安全要求) ★
-        try {
-            if (recognition) recognition.abort();
-            recognition = createRecognition();
-            recognition.start();
-        } catch(e) {}
-
-        // 3. 設定計時器，800ms 後才顯示介面
+        // ★ 修改 3：如果是手機 (touchstart)，為了保險起見，
+        // 建議將長按時間稍微縮短，或者提示用戶「請長按直到震動」
         longPressTimer = setTimeout(() => {
-            isLongPressActive = true; // 標記為長按模式
-            
-            // 顯示介面
-            overlay.classList.add('active');
-            statusText.innerText = "請說指令...";
-            
-            // 震動提示用戶「現在可以說話了」
-            if (navigator.vibrate) navigator.vibrate(50);
-            
-        }, 800); // 這裡設定長按時間
-    }
-
-    function handleTouchMove(e) {
-        // 如果滑動超過一定距離，取消長按計時
-        const currentY = e.touches[0].clientY;
-        if (Math.abs(currentY - startY) > 20) {
-            clearTimeout(longPressTimer);
-            if (!isLongPressActive && recognition) {
-                recognition.abort(); // 中斷偷跑的錄音
+            if (window.getSelection().toString().length === 0) {
+                startListening();
             }
-        }
-    }
+        }, PRESS_DURATION);
+    };
 
-    function handleTouchEnd(e) {
-        // 清除計時器
+    const handleEnd = () => {
         clearTimeout(longPressTimer);
+        // 注意：這裡不主動 stopListening，
+        // 讓 recognition 自己判斷語音結束 (因為 interimResults=true)，
+        // 或者等用戶說完話。
+        // 但為了體驗，如果手放開時還沒識別到任何東西，也可以選擇關閉。
+        // 這裡我們保持開啟，直到識別完成或錯誤。
+    };
 
-        if (isLongPressActive) {
-            // === 情況 A：長按成功後放手 ===
-            // 這是您要的「放手等於發送/結束」
-            statusText.innerText = "處理中...";
-            try { recognition.stop(); } catch(e){}
-            
-        } else {
-            // === 情況 B：短按 (普通點擊) ===
-            // 這是您要的「一點下去沒反應」
-            // 立即殺死剛才偷跑的麥克風，不讓它繼續錄音
-            if (recognition) recognition.abort();
-            
-            // 什麼都不做，讓瀏覽器處理正常的 click 事件
-        }
-        
-        isLongPressActive = false;
-    }
+    const handleMove = () => {
+        clearTimeout(longPressTimer);
+    };
 
-    // --- 綁定事件 ---
-    document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    document.addEventListener('touchmove', handleTouchMove, { passive: true });
-    document.addEventListener('touchend', handleTouchEnd);
+    // 綁定事件
+    document.addEventListener('touchstart', handleStart, { passive: false }); // passive: false 允許 preventDefault
+    document.addEventListener('touchend', handleEnd);
+    document.addEventListener('touchmove', handleMove, { passive: true });
     
-    // 電腦測試用
-    document.addEventListener('mousedown', (e) => {
-        // 電腦版模擬 touchstart
-        if (e.button !== 0) return;
-        const fakeTouch = { target: e.target, touches: [{ clientY: e.clientY }] };
-        handleTouchStart(fakeTouch);
-    });
-    document.addEventListener('mouseup', handleTouchEnd);
+    // 電腦版
+    document.addEventListener('mousedown', handleStart);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('mouseleave', handleEnd);
 });
 </script>
 
