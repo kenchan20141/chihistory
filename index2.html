@@ -23351,13 +23351,22 @@ document.addEventListener('DOMContentLoaded', function() {
     recognition.maxAlternatives = 1;
 
     // --- 核心：智慧判斷點擊位置 ---
-    function isValidTarget(target) {
-        if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT', 'OPTION'].includes(target.tagName)) return false;
-        if (target.isContentEditable) return false;
-        const selection = window.getSelection();
-        if (selection.toString().length > 0) return false;
-        return true;
-    }
+   // 1. 修正目標判定：允許在語薈的節點 (.node) 上長按
+function isValidTarget(target) {
+    // 如果是在語薈的節點 (.node) 或其子元素上長按，允許觸發
+    if (target.closest('.node')) return true;
+    
+    // 排除輸入框、按鈕等互動元素
+    if (['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'OPTION'].includes(target.tagName)) return false;
+    
+    // 如果是普通 A 標籤且不在 .node 內，則不允許（避免跟普通超連結衝突）
+    if (target.tagName === 'A' && !target.closest('.node')) return false;
+    
+    if (target.isContentEditable) return false;
+    const selection = window.getSelection();
+    if (selection.toString().length > 0) return false;
+    return true;
+}
 
 
 function handleCommands(transcript) {
@@ -23456,22 +23465,35 @@ function handleCommands(transcript) {
     document.addEventListener('mouseleave', handleEnd);
 
     // --- 語音識別結果處理 (優化版) ---
- // --- 語音識別結果處理 (修訂版：優先顯示校正名稱) ---
+// 2. 修正識別與跳轉邏輯
 recognition.onresult = (event) => {
     const result = event.results[event.resultIndex];
     const transcript = result[0].transcript.trim();
+    const statusText = document.getElementById('voiceStatusText');
 
     // 輔助函式：模擬點擊語薈中的工具連結
     const triggerTool = (toolId) => {
-        const expandBtn = document.getElementById('expandToolsBtn2');
-        if (expandBtn) expandBtn.click();
+        // 先判斷語薈是否已開啟
+        const toolsContainer = document.getElementById('toolsContainer2');
+        const isAlreadyOpen = toolsContainer && toolsContainer.style.display === 'flex';
+
+        if (!isAlreadyOpen) {
+            const expandBtn = document.getElementById('expandToolsBtn2');
+            if (expandBtn) expandBtn.click();
+        }
+
+        // 延遲執行以等待 DOM 或動畫就緒
         setTimeout(() => {
             const link = document.querySelector(`a[data-tool-id="${toolId}"]`);
-            if (link) link.click();
-        }, 400);
+            if (link) {
+                // 如果預覽視窗開著，先關閉它
+                if (typeof closePreviewModal === 'function') closePreviewModal();
+                link.click();
+            }
+        }, isAlreadyOpen ? 100 : 400);
     };
 
-    // 指令映射表（display 為頁面顯示文字，action 為執行的函式）
+    // 指令映射表（完整保留您提供的版本）
     const voiceCommands = {
         // --- 頂層主功能 ---
         '作家文粹': { display: '作家文粹', action: () => checkFeaturedAccess() },
@@ -23575,7 +23597,7 @@ recognition.onresult = (event) => {
         '資源': { display: '自學資源', action: () => triggerTool('self-learning') }
     };
 
-    // 核心邏輯：先找出是否有匹配項
+    // 核心邏輯：攔截錯字
     let foundMatch = null;
     for (const [key, command] of Object.entries(voiceCommands)) {
         if (transcript.includes(key)) {
@@ -23586,23 +23608,18 @@ recognition.onresult = (event) => {
 
     if (result.isFinal) {
         if (foundMatch) {
-            // 如果有匹配，直接顯示「校正後名稱」，不顯示原始錯字
             statusText.innerText = `正在跳轉: ${foundMatch.display}`;
             if (navigator.vibrate) navigator.vibrate([30, 30, 30]);
-            
             setTimeout(() => {
                 foundMatch.action();
                 stopListening();
             }, 500);
         } else {
-            // 沒有匹配才顯示原始識別文字
             statusText.innerText = transcript + " (未識別)";
             setTimeout(stopListening, 1500);
         }
     } else {
-        // 中間過程的即時反饋
         if (foundMatch) {
-            // 即使在中間過程中，一旦偵測到關鍵字，就立即顯示正確名稱
             statusText.innerText = `識別到: ${foundMatch.display}`;
         } else {
             statusText.innerText = transcript;
