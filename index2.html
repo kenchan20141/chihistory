@@ -23345,7 +23345,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
    function createRecognition() {
     const reco = new SpeechRecognition();
-    reco.lang = 'zh-HK';
+   reco.lang = 'cmn-Hant-HK'; 
     // --- 針對部分 Android 機型的修正 ---
     reco.continuous = false;    // 確保單次識別
     reco.interimResults = false; // 先改成 false 測試看看能不能聽到
