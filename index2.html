@@ -23404,46 +23404,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- 啟動流程 (關鍵修正) ---
-  async function startListening() {
-    if (isLongPressing) return;
-    isLongPressing = true;
-    
-    // 1. 獲取背景音樂元素
-    const bgAudio = document.getElementById('audio');
-    
-    try {
-        // 2. ★ 核心修正：必須等待音效引擎完全掛起
+    function startListening() {
+        if (isLongPressing) return;
+        isLongPressing = true;
+        
+        // ★★★ 核心修正：強制掛起音效引擎，釋放音訊通道給麥克風 ★★★
         if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
-            console.log("正在掛起音效引擎...");
-            await SansiAudio.context.suspend(); 
+            SansiAudio.context.suspend().then(() => console.log("音效引擎已掛起 (讓路給語音)"));
         }
 
-        // 3. 暫停背景音樂 (HTML5 Audio 也要徹底停止)
-        if (bgAudio) {
-            wasMusicPlaying = !bgAudio.paused;
+        // ★★★ 核心修正：暫停背景音樂 ★★★
+        const bgAudio = document.getElementById('audio');
+        if (bgAudio && !bgAudio.paused) {
+            wasMusicPlaying = true;
             bgAudio.pause();
-            // iOS 必須重置 currentTime 有時才能釋放音訊焦點
-            // bgAudio.currentTime = bgAudio.currentTime; 
+        } else {
+            wasMusicPlaying = false;
         }
         
         overlay.classList.add('active'); 
         statusText.innerText = "啟動中...";
 
-        // 4. 建立並啟動識別
-        recognition = createRecognition();
-        
-        // 額外微調：確保在執行 start 之前，UI 已經更新，給予系統緩衝
-        await new Promise(r => setTimeout(r, 100));
-        
-        recognition.start();
-        console.log("🎤 麥克風已正式啟動");
-
-    } catch (e) {
-        console.error("啟動失敗:", e);
-        statusText.innerText = "啟動失敗，請重試";
-        stopListening();
+        try {
+            recognition = createRecognition();
+            recognition.start();
+        } catch (e) {
+            console.error("啟動例外:", e);
+            statusText.innerText = "無法啟動";
+            stopListening();
+        }
     }
-}
+
     // --- 停止流程 (關鍵修正) ---
     function stopListening() {
         isLongPressing = false;
