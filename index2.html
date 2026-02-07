@@ -23326,7 +23326,6 @@ function enterFeaturedFromMenu() {
 
 
 <script>
-
 document.addEventListener('DOMContentLoaded', function() {
     // 1. 設定與變數
     const overlay = document.getElementById('voice-overlay');
@@ -23346,20 +23345,17 @@ document.addEventListener('DOMContentLoaded', function() {
     recognition = new SpeechRecognition();
     recognition.lang = 'zh-HK'; // 設定為粵語
     recognition.continuous = false;
-    recognition.interimResults = false;
+    
+    // ★★★ 關鍵修改 1：開啟即時結果，手機上體驗會好很多 ★★★
+    recognition.interimResults = true; 
+    recognition.maxAlternatives = 1;
 
     // --- 核心：智慧判斷點擊位置 ---
     function isValidTarget(target) {
-        // 1. 如果點擊的是輸入框、按鈕、連結，視為無效
         if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT', 'OPTION'].includes(target.tagName)) return false;
-        
-        // 2. 如果點擊的元素是可編輯的 (contenteditable)，視為無效
         if (target.isContentEditable) return false;
-
-        // 3. (關鍵) 如果點擊的是文字段落 (P, SPAN, DIV)，檢查是否有選取文字
         const selection = window.getSelection();
-        if (selection.toString().length > 0) return false; // 正在選字，不觸發
-
+        if (selection.toString().length > 0) return false;
         return true;
     }
 
@@ -23367,13 +23363,15 @@ document.addEventListener('DOMContentLoaded', function() {
     function startListening() {
         isLongPressing = true;
         overlay.classList.add('active'); // 顯示介面
-        statusText.innerText = "請說指令";
+        statusText.innerText = "請說指令...";
         
         try {
             recognition.start();
-            if (navigator.vibrate) navigator.vibrate(50); // 震動回饋
+            if (navigator.vibrate) navigator.vibrate(50);
         } catch (e) {
             console.log("語音啟動重疊", e);
+            // 如果已經啟動，重置一下文字
+            statusText.innerText = "聆聽中...";
         }
     }
 
@@ -23386,17 +23384,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- 觸控/滑鼠 事件監聽 ---
     const handleStart = (e) => {
-        // 如果已經在語音模式，點擊則關閉
         if (overlay.classList.contains('active')) {
             stopListening();
             return;
         }
-
         if (!isValidTarget(e.target)) return;
 
-        // 開始計時
         longPressTimer = setTimeout(() => {
-            // 再次檢查是否正在選取文字 (防止長按選字時觸發)
             if (window.getSelection().toString().length === 0) {
                 startListening();
             }
@@ -23404,7 +23398,6 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     const handleEnd = () => {
-        // 手指放開，清除計時器
         if (longPressTimer) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
@@ -23412,28 +23405,32 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     const handleMove = () => {
-        // 如果手指移動幅度大，視為滑動，取消長按
         if (longPressTimer) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
         }
     };
 
-    // 綁定全域事件 (Passive 設為 true 以優化滾動效能)
     document.addEventListener('touchstart', handleStart, { passive: true });
     document.addEventListener('touchend', handleEnd);
     document.addEventListener('touchmove', handleMove, { passive: true });
-    
-    // 電腦版滑鼠支援 (方便測試)
     document.addEventListener('mousedown', handleStart);
     document.addEventListener('mouseup', handleEnd);
     document.addEventListener('mouseleave', handleEnd);
 
-    // --- 語音識別結果處理 ---
+    // --- 語音識別結果處理 (優化版) ---
     recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        console.log("語音指令:", transcript);
-        statusText.innerText = "識別中...";
+        // 取得最新的一段識別結果
+        const result = event.results[event.resultIndex];
+        const transcript = result[0].transcript;
+        
+        // ★★★ 關鍵修改 2：即時顯示使用者正在說的話 ★★★
+        statusText.innerText = transcript; 
+
+        // 如果這句還沒講完 (isFinal = false)，就不執行指令匹配，只顯示文字
+        if (!result.isFinal) return;
+
+        console.log("語音最終結果:", transcript);
 
         // 指令映射表
         const commands = {
@@ -23471,39 +23468,50 @@ document.addEventListener('DOMContentLoaded', function() {
         let match = false;
         for (const [key, action] of Object.entries(commands)) {
             if (transcript.includes(key)) {
-                if (navigator.vibrate) navigator.vibrate([30, 30, 30]); // 成功震動
-                statusText.innerText = "正在跳轉";
+                if (navigator.vibrate) navigator.vibrate([30, 30, 30]);
+                statusText.innerText = `正在跳轉: ${key}`;
                 setTimeout(() => {
                     action();
                     stopListening();
-                }, 500); // 稍微停留讓用家看到狀態
+                }, 500);
                 match = true;
                 break;
             }
         }
 
         if (!match) {
-            statusText.innerText = "???";
-            setTimeout(stopListening, 1000);
+            statusText.innerText = "??? (未識別指令)";
+            // 識別失敗後稍等一下再關閉，讓用戶看到問號
+            setTimeout(stopListening, 1500);
         }
     };
 
+    // --- 錯誤處理 (優化版) ---
     recognition.onerror = (e) => {
         console.error("語音錯誤:", e.error);
-        stopListening();
+        
+        // ★★★ 關鍵修改 3：將錯誤顯示給用戶看 ★★★
+        if (e.error === 'no-speech') {
+            statusText.innerText = "沒聽到聲音...";
+        } else if (e.error === 'network') {
+            statusText.innerText = "網絡不穩...";
+        } else if (e.error === 'not-allowed') {
+            statusText.innerText = "請允許麥克風權限";
+        } else {
+            statusText.innerText = "識別錯誤";
+        }
+        
+        setTimeout(stopListening, 1500);
     };
     
     recognition.onend = () => {
-        if (isLongPressing) {
-            // 如果介面還開著但識別結束，可以選擇重啟或關閉
-            // 這裡選擇關閉以保持簡潔
-            stopListening();
+        // 如果介面還開著但識別結束 (非人為指令觸發的結束)，關閉介面
+        if (overlay.classList.contains('active') && statusText.innerText === "請說指令...") {
+             stopListening();
         }
     };
 });
-	
 </script>
-	
 
 
 <!-- === 新增：閱讀資源選擇視窗 (二合一) === -->
