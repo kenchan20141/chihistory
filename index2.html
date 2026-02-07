@@ -23327,270 +23327,67 @@ function enterFeaturedFromMenu() {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. 設定與變數
     const overlay = document.getElementById('voice-overlay');
     const statusText = document.getElementById('voiceStatusText');
     let recognition = null;
     let longPressTimer = null;
     let isLongPressing = false;
-    let soundWatchdog = null;
     
-    // 記錄音樂播放器之前的狀態
-    let wasMusicPlaying = false; 
+    // 長按觸發時間 (毫秒)
+    const PRESS_DURATION = 800; 
 
-    // ★ 修改 1：縮短長按時間，提升手機觸發成功率
-    const PRESS_DURATION = 500; 
-
+    // 檢查瀏覽器支援
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) return; // 不支援則不執行
 
-   function createRecognition() {
-    const reco = new SpeechRecognition();
+    // 初始化語音識別
+    recognition = new SpeechRecognition();
+    recognition.lang = 'zh-HK'; // 設定為粵語
+    recognition.continuous = false;
     
-    // 不要寫死 zh-HK，試著讓它根據系統自動匹配
-    // 或者嘗試一個更寬鬆的標籤
-    try {
-        // 先嘗試廣東話
-        reco.lang = 'zh-HK'; 
-    } catch(e) {
-        // 如果失敗，則不設語言，讓 Chrome 抓系統預設（即便它是英文）
-        reco.lang = navigator.language; 
-    }
+    // ★★★ 關鍵修改 1：開啟即時結果，手機上體驗會好很多 ★★★
+    recognition.interimResults = true; 
+    recognition.maxAlternatives = 1;
 
-    // --- 針對部分 Android 機型的修正 ---
-    reco.continuous = false;    // 確保單次識別
-    reco.interimResults = false; // 先改成 false 測試看看能不能聽到
-    reco.maxAlternatives = 1;
-
-        reco.onstart = () => {
-            statusText.innerText = "請說話...";
-            if (navigator.vibrate) navigator.vibrate(50);
-            
-            // 看門狗：如果 5 秒都沒聽到聲音
-            soundWatchdog = setTimeout(() => {
-                if (statusText.innerText === "請說話...") {
-                    statusText.innerText = "沒聽到聲音？(請暫停背景音樂)";
-                }
-            }, 5000);
-        };
-
-        reco.onsoundstart = () => {
-            statusText.innerText = "聆聽中..."; 
-            clearTimeout(soundWatchdog);
-        };
-
-        reco.onresult = (event) => {
-            const result = event.results[event.resultIndex];
-            const transcript = result[0].transcript;
-            statusText.innerText = transcript;
-            clearTimeout(soundWatchdog);
-
-            if (!result.isFinal) return;
-            handleCommands(transcript);
-        };
-
-       // 請找到你代碼中的 reco.onerror 部分，改為這樣：
-reco.onerror = (e) => {
-    console.error("語音錯誤:", e.error);
-    clearTimeout(soundWatchdog);
-    
-    // 用 alert 強制彈出 Android 的內部報錯
-    alert("Android 語音錯誤代碼: " + e.error); 
-
-    if (e.error === 'no-speech') {
-        statusText.innerText = "太安靜了...";
-    } else if (e.error === 'not-allowed') {
-        statusText.innerText = "請允許麥克風權限";
-    } else {
-        statusText.innerText = "錯誤: " + e.error;
-    }
-    setTimeout(stopListening, 1500);
-};
-        
-        // ★ 新增：結束時自動恢復
-        reco.onend = () => {
-            if (overlay.classList.contains('active')) {
-                stopListening();
-            }
-        };
-
-        return reco;
-    }
-
-  let activeRecognition = null; // 在全域宣告一個變數來追蹤實例
-
-async function startListening() {
-    if (isLongPressing) return;
-    isLongPressing = true;
-    
-    // A. ★ 立即清除舊實例 (防止 ABORTED 關鍵)
-    if (activeRecognition) {
-        try {
-            activeRecognition.abort(); // 強制中斷舊的
-            activeRecognition = null;
-        } catch(e) {}
-    }
-
-    // B. 掛起音效引擎
-    if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
-        await SansiAudio.context.suspend();
-    }
-
-    overlay.classList.add('active'); 
-    statusText.innerText = "正在連線...";
-
-    // C. ★ 延遲啟動 (Android 系統穩定需要時間)
-    setTimeout(() => {
-        try {
-            activeRecognition = createRecognition();
-            
-            // Android 專屬設定優化
-            activeRecognition.continuous = false; 
-            activeRecognition.interimResults = false; 
-
-            activeRecognition.start();
-            console.log("辨識已成功啟動");
-        } catch (e) {
-            console.error("啟動失敗:", e);
-            stopListening();
-        }
-    }, 500); // 增加到 500ms，確保系統音訊通道完全切換
-}
-
- // 請確保 activeRecognition 在全域已經宣告（例如在 startListening 之上）
-// let activeRecognition = null; 
-
-async function stopListening() {
-    // 1. 重置長按與狀態鎖定，防止邏輯死鎖
-    isLongPressing = false;
-
-    // 2. 立即隱藏 UI 介面，給予用戶視覺回饋
-    const overlay = document.getElementById('voice-overlay');
-    if (overlay) {
-        overlay.classList.remove('active');
-    }
-
-    // 3. 清除「沒聽到聲音」的看門狗計時器 (Watchdog)
-    if (typeof soundWatchdog !== 'undefined' && soundWatchdog) {
-        clearTimeout(soundWatchdog);
-        soundWatchdog = null;
-    }
-
-    // 4. ★ 核心修復：徹底終結辨識實例 (解決 ABORTED 的關鍵) ★
-    // 在 Android 上，必須移除事件監聽並使用 abort() 確保硬體立即釋放
-    if (typeof activeRecognition !== 'undefined' && activeRecognition) {
-        try {
-            // 移除所有回呼函式，避免 abort 觸發額外的 onerror 或 onend 邏輯
-            activeRecognition.onresult = null;
-            activeRecognition.onerror = null;
-            activeRecognition.onend = null;
-            
-            activeRecognition.abort(); // 強制中止辨識請求
-            console.log("🎤 麥克風硬體已強制釋放 (Abort)");
-        } catch (e) {
-            console.warn("終止辨識實例時發生預期外的錯誤:", e);
-        }
-        activeRecognition = null; // 歸位為空，確保下次啟動是全新的
-    }
-
-    // 5. 恢復音效引擎 (Web Audio API)
-    // 使用 await 確保音訊通道切換完成
-    if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
-        try {
-            if (SansiAudio.context.state === 'suspended') {
-                await SansiAudio.context.resume();
-                console.log("🔊 SansiAudio 引擎已恢復");
-            }
-        } catch (e) {
-            console.error("恢復音效引擎失敗:", e);
-        }
-    }
-
-    // 6. 恢復背景音樂 (如果之前有在播放)
-    if (typeof wasMusicPlaying !== 'undefined' && wasMusicPlaying) {
-        const bgAudio = document.getElementById('audio');
-        if (bgAudio) {
-            try {
-                // 部分行動瀏覽器要求必須在非同步後有用戶互動才能 resume 音樂
-                // 這裡嘗試直接播放
-                await bgAudio.play();
-                console.log("🎵 背景音樂已自動恢復");
-            } catch (e) {
-                console.log("音樂恢復播放受阻 (行動裝置隱私限制):", e);
-            }
-        }
-        wasMusicPlaying = false; // 重置狀態標記
-    }
-    
-    // 7. 額外：清空狀態文字
-    const statusText = document.getElementById('voiceStatusText');
-    if (statusText) {
-        // 1秒後重置文字，讓用戶有時間看到最後的結果
-        setTimeout(() => {
-            if (!isLongPressing) statusText.innerText = "聆聽中";
-        }, 1000);
-    }
-}
-
-    // --- 指令處理 (保持不變) ---
-    function handleCommands(transcript) {
-        const commands = {
-            '作家文粹': () => checkFeaturedAccess(),
-            '文粹': () => checkFeaturedAccess(),
-            '文章': () => checkFeaturedAccess(),
-            '主頁': () => returnToHome(),
-            '返去': () => returnToHome(),
-            '首頁': () => returnToHome(),
-            '寫作': () => document.getElementById('writingBtn').click(),
-            '敘事': () => document.getElementById('writingBtn').click(),
-            '閱讀': () => document.getElementById('readingBtn').click(),
-            '議論': () => document.getElementById('argumentBtn').click(),
-            '拓展': () => document.getElementById('expandBtn').click(),
-            '整合': () => document.getElementById('expandBtn').click(),
-            '歷史': () => openHistoryContainer(),
-            '紀錄': () => openHistoryContainer(),
-            '雲端': () => openStudentLoginModal(),
-            '功課': () => openStudentLoginModal(),
-            '語薈': () => document.getElementById('expandToolsBtn2').click(),
-            '工具': () => document.getElementById('expandToolsBtn2').click(),
-            '音樂': () => toggleMusicPlayer(),
-            '開歌': () => toggleMusicPlayer()
-        };
-
-        let match = false;
-        for (const [key, action] of Object.entries(commands)) {
-            if (transcript.includes(key)) {
-                if (navigator.vibrate) navigator.vibrate([30, 30, 30]);
-                statusText.innerText = `跳轉: ${key}`;
-                setTimeout(() => {
-                    action();
-                    stopListening();
-                }, 500);
-                match = true;
-                break;
-            }
-        }
-
-        if (!match) {
-            statusText.innerText = "???";
-            setTimeout(stopListening, 1500);
-        }
-    }
-
-    // --- 觸控事件處理 ---
+    // --- 核心：智慧判斷點擊位置 ---
     function isValidTarget(target) {
         if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT', 'OPTION'].includes(target.tagName)) return false;
         if (target.isContentEditable) return false;
-        if (window.getSelection().toString().length > 0) return false;
+        const selection = window.getSelection();
+        if (selection.toString().length > 0) return false;
         return true;
     }
 
+    // --- 啟動語音 ---
+    function startListening() {
+        isLongPressing = true;
+        overlay.classList.add('active'); // 顯示介面
+        statusText.innerText = "請說指令...";
+        
+        try {
+            recognition.start();
+            if (navigator.vibrate) navigator.vibrate(50);
+        } catch (e) {
+            console.log("語音啟動重疊", e);
+            // 如果已經啟動，重置一下文字
+            statusText.innerText = "聆聽中...";
+        }
+    }
+
+    // --- 停止語音 ---
+    function stopListening() {
+        overlay.classList.remove('active');
+        isLongPressing = false;
+        try { recognition.stop(); } catch(e){}
+    }
+
+    // --- 觸控/滑鼠 事件監聽 ---
     const handleStart = (e) => {
         if (overlay.classList.contains('active')) {
-            e.preventDefault(); 
             stopListening();
             return;
         }
-
         if (!isValidTarget(e.target)) return;
 
         longPressTimer = setTimeout(() => {
@@ -23601,20 +23398,118 @@ async function stopListening() {
     };
 
     const handleEnd = () => {
-        clearTimeout(longPressTimer);
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
     };
 
     const handleMove = () => {
-        clearTimeout(longPressTimer);
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
     };
 
-    document.addEventListener('touchstart', handleStart, { passive: false });
+    document.addEventListener('touchstart', handleStart, { passive: true });
     document.addEventListener('touchend', handleEnd);
     document.addEventListener('touchmove', handleMove, { passive: true });
-    
     document.addEventListener('mousedown', handleStart);
     document.addEventListener('mouseup', handleEnd);
     document.addEventListener('mouseleave', handleEnd);
+
+    // --- 語音識別結果處理 (優化版) ---
+    recognition.onresult = (event) => {
+        // 取得最新的一段識別結果
+        const result = event.results[event.resultIndex];
+        const transcript = result[0].transcript;
+        
+        // ★★★ 關鍵修改 2：即時顯示使用者正在說的話 ★★★
+        statusText.innerText = transcript; 
+
+        // 如果這句還沒講完 (isFinal = false)，就不執行指令匹配，只顯示文字
+        if (!result.isFinal) return;
+
+        console.log("語音最終結果:", transcript);
+
+        // 指令映射表
+        const commands = {
+            '作家文粹': () => checkFeaturedAccess(),
+            '文粹': () => checkFeaturedAccess(),
+            '文章': () => checkFeaturedAccess(),
+            
+            '主頁': () => returnToHome(),
+            '返去': () => returnToHome(),
+            '首頁': () => returnToHome(),
+
+            '寫作': () => document.getElementById('writingBtn').click(),
+            '敘事': () => document.getElementById('writingBtn').click(),
+            
+            '閱讀': () => document.getElementById('readingBtn').click(),
+            
+            '議論': () => document.getElementById('argumentBtn').click(),
+            
+            '拓展': () => document.getElementById('expandBtn').click(),
+            '整合': () => document.getElementById('expandBtn').click(),
+            
+            '歷史': () => openHistoryContainer(),
+            '紀錄': () => openHistoryContainer(),
+            
+            '雲端': () => openStudentLoginModal(),
+            '功課': () => openStudentLoginModal(),
+            
+            '語薈': () => document.getElementById('expandToolsBtn2').click(),
+            '工具': () => document.getElementById('expandToolsBtn2').click(),
+            
+            '音樂': () => toggleMusicPlayer(),
+            '開歌': () => toggleMusicPlayer()
+        };
+
+        let match = false;
+        for (const [key, action] of Object.entries(commands)) {
+            if (transcript.includes(key)) {
+                if (navigator.vibrate) navigator.vibrate([30, 30, 30]);
+                statusText.innerText = `正在跳轉: ${key}`;
+                setTimeout(() => {
+                    action();
+                    stopListening();
+                }, 500);
+                match = true;
+                break;
+            }
+        }
+
+        if (!match) {
+            statusText.innerText = "??? (未識別指令)";
+            // 識別失敗後稍等一下再關閉，讓用戶看到問號
+            setTimeout(stopListening, 1500);
+        }
+    };
+
+    // --- 錯誤處理 (優化版) ---
+    recognition.onerror = (e) => {
+        console.error("語音錯誤:", e.error);
+        
+        // ★★★ 關鍵修改 3：將錯誤顯示給用戶看 ★★★
+        if (e.error === 'no-speech') {
+            statusText.innerText = "沒聽到聲音...";
+        } else if (e.error === 'network') {
+            statusText.innerText = "網絡不穩...";
+        } else if (e.error === 'not-allowed') {
+            statusText.innerText = "請允許麥克風權限";
+        } else {
+            statusText.innerText = "識別錯誤";
+        }
+        
+        setTimeout(stopListening, 1500);
+    };
+    
+    recognition.onend = () => {
+        // 如果介面還開著但識別結束 (非人為指令觸發的結束)，關閉介面
+        if (overlay.classList.contains('active') && statusText.innerText === "請說指令...") {
+             stopListening();
+        }
+    };
 });
 </script>
 
