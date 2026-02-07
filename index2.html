@@ -364,17 +364,6 @@ async function searchSimilarEssays(studentText, targetType) {
     <span>閱讀資源</span>      <!-- 文字改為統稱 -->
 </button>
 
-
-
-<!-- === 語音導航回饋遮罩 (平時隱藏) === -->
-<div id="voiceOverlay" class="voice-overlay">
-    <div class="voice-indicator">
-        <i class="fas fa-microphone"></i>
-        <div class="voice-text">請說話...</div>
-        <div class="voice-wave"></div>
-        <div class="voice-wave delay"></div>
-    </div>
-</div>
 		  
     <!-- 5. 音樂播放器 -->
     <button class="side-menu-item" onclick="toggleMusicPlayer()">
@@ -7634,149 +7623,78 @@ body.cat-dragging { cursor: grabbing !important; }
 
 
 
-/* === 語音導航按鈕樣式 (莫蘭迪風) === */
-.voice-nav-btn {
+/* === 莫蘭迪隱形語音導航介面 === */
+#voice-overlay {
     position: fixed;
-    bottom: 25px;
-    left: 25px; /* 放在左下角，避開右下角的音樂/其他按鈕 */
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    /* 莫蘭迪灰綠：靜止狀態 */
-    background-color: #8fa398; 
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    box-shadow: 0 4px 15px rgba(143, 163, 152, 0.4);
-    cursor: pointer;
-    z-index: 99999;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    
-    /* 關鍵：防止長按時選取按鈕文字或跳出選單 */
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
-}
-
-.voice-nav-btn:active, .voice-nav-btn.listening {
-    transform: scale(1.15);
-    /* 莫蘭迪豆沙紅：錄音狀態 */
-    background-color: #d69a92; 
-    box-shadow: 0 4px 20px rgba(214, 154, 146, 0.6);
-}
-
-/* 錄音時的漣漪動畫 */
-.voice-ripple {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    border: 2px solid #d69a92;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.voice-nav-btn.listening .voice-ripple {
-    animation: rippleEffect 1.5s infinite;
-}
-
-@keyframes rippleEffect {
-    0% { width: 100%; height: 100%; opacity: 0.8; }
-    100% { width: 250%; height: 250%; opacity: 0; }
-}
-
-/* 手機版微調位置，避免擋住內容 */
-@media (max-width: 600px) {
-    .voice-nav-btn {
-        bottom: 20px;
-        left: 20px;
-        width: 45px;
-        height: 45px;
-        font-size: 18px;
-    }
-}
-
-
-
-	/* === 語音導航遮罩樣式 === */
-.voice-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(253, 252, 248, 0.8); /* 莫蘭迪米白，半透明 */
-    backdrop-filter: blur(5px);
-    z-index: 2147483647; /* 最頂層 */
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background-color: rgba(253, 252, 248, 0.9); /* 米白高模糊遮罩 */
+    backdrop-filter: blur(10px);
+    z-index: 2147483647; /* 確保最頂層 */
     display: none; /* 預設隱藏 */
-    justify-content: center;
-    align-items: center;
-    pointer-events: none; /* 關鍵：讓手指放開的事件能穿透到底層 */
-}
-
-.voice-overlay.active {
-    display: flex;
-}
-
-.voice-indicator {
-    display: flex;
     flex-direction: column;
-    align-items: center;
     justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#voice-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+
+/* 核心呼吸圓圈 */
+.voice-circle {
     width: 120px;
     height: 120px;
-    background-color: #8fa398; /* 莫蘭迪灰綠 */
     border-radius: 50%;
-    color: white;
-    font-size: 32px;
-    position: relative;
+    background: linear-gradient(135deg, #8fa398 0%, #7d9186 100%); /* 莫蘭迪灰綠 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
     box-shadow: 0 10px 30px rgba(143, 163, 152, 0.4);
-    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    animation: breathe 2s infinite ease-in-out;
 }
 
-.voice-text {
-    font-size: 14px;
-    margin-top: 8px;
-    font-family: 'Noto Serif TC', serif;
-    opacity: 0.9;
+.voice-icon {
+    font-size: 3rem;
+    color: white;
 }
 
-/* 聲波擴散動畫 */
-.voice-wave {
+/* 漣漪動畫 */
+.voice-ripple-ring {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 100%;
-    height: 100%;
+    width: 100%; height: 100%;
     border-radius: 50%;
-    border: 2px solid #d69a92; /* 莫蘭迪豆沙紅 */
+    border: 2px solid #8fa398;
     opacity: 0;
-    z-index: -1;
+    animation: ripple-out 2s infinite;
 }
 
-.voice-overlay.active .voice-wave {
-    animation: waveExpand 2s infinite;
+.voice-ripple-ring:nth-child(2) { animation-delay: 0.6s; }
+.voice-ripple-ring:nth-child(3) { animation-delay: 1.2s; }
+
+/* 狀態文字 (極簡) */
+.voice-status {
+    margin-top: 30px;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.2rem;
+    color: #5d4037; /* 深咖啡 */
+    letter-spacing: 5px;
+    font-weight: bold;
 }
 
-.voice-overlay.active .voice-wave.delay {
-    animation-delay: 0.6s;
+@keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
 }
 
-@keyframes waveExpand {
-    0% { width: 100%; height: 100%; opacity: 0.8; border-width: 4px; }
-    100% { width: 300%; height: 300%; opacity: 0; border-width: 0px; }
+@keyframes ripple-out {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.5); opacity: 0; }
 }
-
-@keyframes popIn {
-    0% { transform: scale(0); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-}
+	
 	
 	
 </style>
@@ -10942,16 +10860,6 @@ refreshBtn.addEventListener('click', fetchHitokoto);
 </div>
 </div>
 </div>
-
-
-
-<!-- === 莫蘭迪語音導航按鈕 === -->
-<div id="voiceNavBtn" class="voice-nav-btn" title="長按說話">
-    <i class="fas fa-microphone"></i>
-    <div class="voice-ripple"></div>
-</div>
-
-	
 
 <!-- 音樂播放器 HTML (已更換圖示) -->
 <!-- 音樂播放器 HTML (已移除懸浮按鈕) -->
@@ -23414,6 +23322,187 @@ function enterFeaturedFromMenu() {
 }
 	
 </script>
+
+
+
+<script>
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. 設定與變數
+    const overlay = document.getElementById('voice-overlay');
+    const statusText = document.getElementById('voiceStatusText');
+    let recognition = null;
+    let longPressTimer = null;
+    let isLongPressing = false;
+    
+    // 長按觸發時間 (毫秒)
+    const PRESS_DURATION = 800; 
+
+    // 檢查瀏覽器支援
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return; // 不支援則不執行
+
+    // 初始化語音識別
+    recognition = new SpeechRecognition();
+    recognition.lang = 'zh-HK'; // 設定為粵語
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    // --- 核心：智慧判斷點擊位置 ---
+    function isValidTarget(target) {
+        // 1. 如果點擊的是輸入框、按鈕、連結，視為無效
+        if (['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT', 'OPTION'].includes(target.tagName)) return false;
+        
+        // 2. 如果點擊的元素是可編輯的 (contenteditable)，視為無效
+        if (target.isContentEditable) return false;
+
+        // 3. (關鍵) 如果點擊的是文字段落 (P, SPAN, DIV)，檢查是否有選取文字
+        const selection = window.getSelection();
+        if (selection.toString().length > 0) return false; // 正在選字，不觸發
+
+        return true;
+    }
+
+    // --- 啟動語音 ---
+    function startListening() {
+        isLongPressing = true;
+        overlay.classList.add('active'); // 顯示介面
+        statusText.innerText = "請說指令";
+        
+        try {
+            recognition.start();
+            if (navigator.vibrate) navigator.vibrate(50); // 震動回饋
+        } catch (e) {
+            console.log("語音啟動重疊", e);
+        }
+    }
+
+    // --- 停止語音 ---
+    function stopListening() {
+        overlay.classList.remove('active');
+        isLongPressing = false;
+        try { recognition.stop(); } catch(e){}
+    }
+
+    // --- 觸控/滑鼠 事件監聽 ---
+    const handleStart = (e) => {
+        // 如果已經在語音模式，點擊則關閉
+        if (overlay.classList.contains('active')) {
+            stopListening();
+            return;
+        }
+
+        if (!isValidTarget(e.target)) return;
+
+        // 開始計時
+        longPressTimer = setTimeout(() => {
+            // 再次檢查是否正在選取文字 (防止長按選字時觸發)
+            if (window.getSelection().toString().length === 0) {
+                startListening();
+            }
+        }, PRESS_DURATION);
+    };
+
+    const handleEnd = () => {
+        // 手指放開，清除計時器
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    };
+
+    const handleMove = () => {
+        // 如果手指移動幅度大，視為滑動，取消長按
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+    };
+
+    // 綁定全域事件 (Passive 設為 true 以優化滾動效能)
+    document.addEventListener('touchstart', handleStart, { passive: true });
+    document.addEventListener('touchend', handleEnd);
+    document.addEventListener('touchmove', handleMove, { passive: true });
+    
+    // 電腦版滑鼠支援 (方便測試)
+    document.addEventListener('mousedown', handleStart);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('mouseleave', handleEnd);
+
+    // --- 語音識別結果處理 ---
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log("語音指令:", transcript);
+        statusText.innerText = "識別中...";
+
+        // 指令映射表
+        const commands = {
+            '作家文粹': () => checkFeaturedAccess(),
+            '文粹': () => checkFeaturedAccess(),
+            '文章': () => checkFeaturedAccess(),
+            
+            '主頁': () => returnToHome(),
+            '返去': () => returnToHome(),
+            '首頁': () => returnToHome(),
+
+            '寫作': () => document.getElementById('writingBtn').click(),
+            '敘事': () => document.getElementById('writingBtn').click(),
+            
+            '閱讀': () => document.getElementById('readingBtn').click(),
+            
+            '議論': () => document.getElementById('argumentBtn').click(),
+            
+            '拓展': () => document.getElementById('expandBtn').click(),
+            '整合': () => document.getElementById('expandBtn').click(),
+            
+            '歷史': () => openHistoryContainer(),
+            '紀錄': () => openHistoryContainer(),
+            
+            '雲端': () => openStudentLoginModal(),
+            '功課': () => openStudentLoginModal(),
+            
+            '語薈': () => document.getElementById('expandToolsBtn2').click(),
+            '工具': () => document.getElementById('expandToolsBtn2').click(),
+            
+            '音樂': () => toggleMusicPlayer(),
+            '開歌': () => toggleMusicPlayer()
+        };
+
+        let match = false;
+        for (const [key, action] of Object.entries(commands)) {
+            if (transcript.includes(key)) {
+                if (navigator.vibrate) navigator.vibrate([30, 30, 30]); // 成功震動
+                statusText.innerText = "正在跳轉";
+                setTimeout(() => {
+                    action();
+                    stopListening();
+                }, 500); // 稍微停留讓用家看到狀態
+                match = true;
+                break;
+            }
+        }
+
+        if (!match) {
+            statusText.innerText = "???";
+            setTimeout(stopListening, 1000);
+        }
+    };
+
+    recognition.onerror = (e) => {
+        console.error("語音錯誤:", e.error);
+        stopListening();
+    };
+    
+    recognition.onend = () => {
+        if (isLongPressing) {
+            // 如果介面還開著但識別結束，可以選擇重啟或關閉
+            // 這裡選擇關閉以保持簡潔
+            stopListening();
+        }
+    };
+});
+	
+</script>
 	
 
 
@@ -23863,312 +23952,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 	
-<script>
-
-
-// ==========================================
-// === 莫蘭迪語音導航系統 (粵語版) ===
-// ==========================================
-document.addEventListener('DOMContentLoaded', function() {
-    const voiceBtn = document.getElementById('voiceNavBtn');
-    
-    // 檢查瀏覽器支援
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        if(voiceBtn) voiceBtn.style.display = 'none'; // 不支援則隱藏
-        return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-HK'; // 設定為粵語
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    let isListening = false;
-
-    // --- 指令映射表 (可隨意擴充) ---
-    const commands = {
-        '作家文粹': () => { checkFeaturedAccess(); },
-        '文粹': () => { checkFeaturedAccess(); },
-        '文章': () => { checkFeaturedAccess(); },
-        
-        '主頁': () => { returnToHome(); },
-        '返去': () => { returnToHome(); },
-        
-        '寫作': () => { document.getElementById('writingBtn').click(); },
-        '敘事': () => { document.getElementById('writingBtn').click(); },
-        
-        '閱讀': () => { document.getElementById('readingBtn').click(); },
-        
-        '議論': () => { document.getElementById('argumentBtn').click(); },
-        
-        '拓展': () => { document.getElementById('expandBtn').click(); },
-        '整合': () => { document.getElementById('expandBtn').click(); },
-        
-        '歷史': () => { openHistoryContainer(); },
-        '紀錄': () => { openHistoryContainer(); },
-        
-        '雲端': () => { openStudentLoginModal(); },
-        '功課': () => { openStudentLoginModal(); },
-        
-        '音樂': () => { toggleMusicPlayer(); },
-        '歌': () => { toggleMusicPlayer(); }
-    };
-
-    // --- 事件處理 ---
-
-    // 開始錄音 (按下)
-    const startListen = (e) => {
-        // 阻止預設行為，防止選取文字或右鍵菜單
-        if (e.type === 'touchstart') e.preventDefault(); 
-        
-        if (isListening) return;
-        try {
-            recognition.start();
-            isListening = true;
-            voiceBtn.classList.add('listening');
-            
-            // 輕微震動回饋
-            if (navigator.vibrate) navigator.vibrate(30);
-        } catch (err) {
-            console.log("語音啟動頻繁:", err);
-        }
-    };
-
-    // 停止錄音 (放開)
-    const stopListen = (e) => {
-        if (!isListening) return;
-        recognition.stop();
-        isListening = false;
-        voiceBtn.classList.remove('listening');
-    };
-
-    // 綁定電腦滑鼠與手機觸控事件
-    voiceBtn.addEventListener('mousedown', startListen);
-    voiceBtn.addEventListener('mouseup', stopListen);
-    voiceBtn.addEventListener('mouseleave', stopListen); // 滑鼠移出也停止
-
-    voiceBtn.addEventListener('touchstart', startListen, { passive: false });
-    voiceBtn.addEventListener('touchend', stopListen);
-    voiceBtn.addEventListener('touchcancel', stopListen);
-    
-    // 防止右鍵選單干擾長按
-    voiceBtn.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        return false;
-    });
-
-    // --- 識別結果處理 ---
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        console.log("收到語音指令:", transcript);
-        
-        // 簡單的關鍵字匹配邏輯
-        let matchFound = false;
-        for (const [key, action] of Object.entries(commands)) {
-            if (transcript.includes(key)) {
-                action();
-                matchFound = true;
-                // 成功震動回饋
-                if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
-                break; // 找到一個指令就停止
-            }
-        }
-
-        if (!matchFound) {
-            // 若聽不懂，這裡可以選擇是否給予提示，目前保持靜默符合「極少文字」原則
-            // 或者可以讓按鈕閃爍一下紅色表示錯誤
-            voiceBtn.style.backgroundColor = '#d69a92'; // 錯誤紅
-            setTimeout(() => { voiceBtn.style.backgroundColor = ''; }, 500);
-        }
-    };
-
-    recognition.onerror = (event) => {
-        console.error("語音識別錯誤:", event.error);
-        isListening = false;
-        voiceBtn.classList.remove('listening');
-    };
-});
-	
-</script>
-
-
-
-
-
-<script>
-
-
-// ==========================================
-// === 全域長按語音導航系統 (智能判斷版) ===
-// ==========================================
-document.addEventListener('DOMContentLoaded', function() {
-    // 1. 檢查支援度
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.log("此瀏覽器不支援語音識別");
-        return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-HK'; // 粵語
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    // 2. 變數設定
-    let pressTimer = null;
-    let isRecognitionActive = false;
-    const LONG_PRESS_MS = 800; // 長按 0.8 秒觸發
-    const overlay = document.getElementById('voiceOverlay');
-
-    // 3. 指令集 (可自行擴充)
-    const commands = {
-        '主頁': () => returnToHome(),
-        '返去': () => returnToHome(),
-        '寫作': () => { showContainer('writingContainer'); document.getElementById('writingBtn').classList.add('active'); },
-        '閱讀': () => { showContainer('readingContainer'); document.getElementById('readingBtn').classList.add('active'); },
-        '議論': () => { showContainer('argumentContainer'); document.getElementById('argumentBtn').classList.add('active'); },
-        '拓展': () => { showContainer('expandContainer'); document.getElementById('expandBtn').classList.add('active'); },
-        '文粹': () => { checkFeaturedAccess(); },
-        '文章': () => { checkFeaturedAccess(); },
-        '歷史': () => openHistoryContainer(),
-        '紀錄': () => openHistoryContainer(),
-        '雲端': () => openStudentLoginModal(),
-        '功課': () => openStudentLoginModal(),
-        '音樂': () => toggleMusicPlayer(),
-        '歌': () => toggleMusicPlayer(),
-        '貓': () => openCatMenu()
-    };
-
-    // 4. 核心：檢查點擊目標是否為「空白處」
-    function isSafeTarget(target) {
-        // 如果點到以下元素，視為用戶想操作介面，不觸發語音
-        const dangerTags = ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A', 'I', 'CANVAS'];
-        if (dangerTags.includes(target.tagName)) return false;
-        
-        // 如果點到可編輯區域
-        if (target.isContentEditable) return false;
-
-        // 如果點到任何有文字的段落 (視為想選取文字)
-        // 這裡判斷：如果該元素內有直接的文字節點，且長度 > 0，則視為文字區
-        // 但為了寬容度，我們主要檢查是否為輸入框或按鈕即可。
-        // 若要更嚴格，可加入 P, SPAN, H1-H6 到 dangerTags
-        
-        // 檢查是否正在選取文字 (如果有選取範圍，不觸發)
-        const selection = window.getSelection();
-        if (selection && selection.toString().length > 0) return false;
-
-        return true;
-    }
-
-    // 5. 開始長按計時
-    function handleStart(e) {
-        // 如果已經在錄音，忽略
-        if (isRecognitionActive) return;
-
-        // 智能判斷：如果點到了按鈕或輸入框，直接退出，讓瀏覽器處理預設行為
-        if (!isSafeTarget(e.target)) return;
-
-        // 清除舊計時器
-        clearTimeout(pressTimer);
-
-        // 設定計時器
-        pressTimer = setTimeout(() => {
-            // 時間到，啟動錄音
-            startRecognition();
-        }, LONG_PRESS_MS);
-    }
-
-    // 6. 結束長按 (手指放開或移動)
-    function handleEnd(e) {
-        // 如果計時器還在跑 (未滿 0.8秒)，代表是短按或點擊
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-        }
-
-        // 如果正在錄音，則停止
-        if (isRecognitionActive) {
-            stopRecognition();
-        }
-    }
-
-    // 啟動錄音功能
-    function startRecognition() {
-        try {
-            isRecognitionActive = true;
-            recognition.start();
-            
-            // 顯示 UI
-            overlay.classList.add('active');
-            
-            // 震動回饋
-            if (navigator.vibrate) navigator.vibrate(50);
-            
-        } catch (err) {
-            console.error("無法啟動語音:", err);
-            isRecognitionActive = false;
-        }
-    }
-
-    // 停止錄音功能
-    function stopRecognition() {
-        isRecognitionActive = false;
-        recognition.stop();
-        overlay.classList.remove('active');
-    }
-
-    // 7. 綁定全域事件 (Body)
-    // 使用 passive: true 可以優化滾動效能，但這裡我們不需要阻止滾動
-    document.body.addEventListener('touchstart', handleStart, { passive: true });
-    document.body.addEventListener('touchend', handleEnd, { passive: true });
-    document.body.addEventListener('touchcancel', handleEnd, { passive: true });
-    
-    // 電腦滑鼠支援 (測試用)
-    document.body.addEventListener('mousedown', handleStart);
-    document.body.addEventListener('mouseup', handleEnd);
-    document.body.addEventListener('mouseleave', handleEnd);
-
-    // 當頁面滾動時，取消長按 (防止滾動時誤觸)
-    window.addEventListener('scroll', () => {
-        if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-        }
-    }, { passive: true });
-
-    // 8. 識別結果處理
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        console.log("語音指令:", transcript);
-
-        let found = false;
-        for (const [key, action] of Object.entries(commands)) {
-            if (transcript.includes(key)) {
-                action();
-                found = true;
-                if (navigator.vibrate) navigator.vibrate([50, 50]); // 成功雙震動
-                break;
-            }
-        }
-        
-        if (!found) {
-            // 聽不懂時的微小回饋 (可選：讓介面閃紅一下)
-            const indicator = document.querySelector('.voice-indicator');
-            if(indicator) {
-                indicator.style.backgroundColor = '#d69a92'; // 轉紅
-                setTimeout(() => indicator.style.backgroundColor = '', 500);
-            }
-        }
-    };
-
-    recognition.onerror = (e) => {
-        console.log("語音錯誤:", e.error);
-        stopRecognition();
-    };
-});
-	
-</script>
 
 	
 
@@ -24264,7 +24047,16 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
  
 	
-	
+	<!-- 隱形語音導航介面 -->
+<div id="voice-overlay">
+    <div class="voice-circle">
+        <div class="voice-ripple-ring"></div>
+        <div class="voice-ripple-ring"></div>
+        <div class="voice-ripple-ring"></div>
+        <i class="fas fa-microphone voice-icon"></i>
+    </div>
+    <div class="voice-status" id="voiceStatusText">聆聽中</div>
+</div>
 	
 
 
