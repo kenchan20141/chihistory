@@ -23406,61 +23406,120 @@ reco.onerror = (e) => {
         return reco;
     }
 
-    // --- 啟動流程 (關鍵修正) ---
-    function startListening() {
-        if (isLongPressing) return;
-        isLongPressing = true;
-        
-        // ★★★ 核心修正：強制掛起音效引擎，釋放音訊通道給麥克風 ★★★
-        if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
-            SansiAudio.context.suspend().then(() => console.log("音效引擎已掛起 (讓路給語音)"));
-        }
+  let activeRecognition = null; // 在全域宣告一個變數來追蹤實例
 
-        // ★★★ 核心修正：暫停背景音樂 ★★★
-        const bgAudio = document.getElementById('audio');
-        if (bgAudio && !bgAudio.paused) {
-            wasMusicPlaying = true;
-            bgAudio.pause();
-        } else {
-            wasMusicPlaying = false;
-        }
-        
-        overlay.classList.add('active'); 
-        statusText.innerText = "啟動中...";
-
+async function startListening() {
+    if (isLongPressing) return;
+    isLongPressing = true;
+    
+    // A. ★ 立即清除舊實例 (防止 ABORTED 關鍵)
+    if (activeRecognition) {
         try {
-            recognition = createRecognition();
-            recognition.start();
+            activeRecognition.abort(); // 強制中斷舊的
+            activeRecognition = null;
+        } catch(e) {}
+    }
+
+    // B. 掛起音效引擎
+    if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
+        await SansiAudio.context.suspend();
+    }
+
+    overlay.classList.add('active'); 
+    statusText.innerText = "正在連線...";
+
+    // C. ★ 延遲啟動 (Android 系統穩定需要時間)
+    setTimeout(() => {
+        try {
+            activeRecognition = createRecognition();
+            
+            // Android 專屬設定優化
+            activeRecognition.continuous = false; 
+            activeRecognition.interimResults = false; 
+
+            activeRecognition.start();
+            console.log("辨識已成功啟動");
         } catch (e) {
-            console.error("啟動例外:", e);
-            statusText.innerText = "無法啟動";
+            console.error("啟動失敗:", e);
             stopListening();
         }
-    }
+    }, 500); // 增加到 500ms，確保系統音訊通道完全切換
+}
 
-    // --- 停止流程 (關鍵修正) ---
-    function stopListening() {
-        isLongPressing = false;
+ // 請確保 activeRecognition 在全域已經宣告（例如在 startListening 之上）
+// let activeRecognition = null; 
+
+async function stopListening() {
+    // 1. 重置長按與狀態鎖定，防止邏輯死鎖
+    isLongPressing = false;
+
+    // 2. 立即隱藏 UI 介面，給予用戶視覺回饋
+    const overlay = document.getElementById('voice-overlay');
+    if (overlay) {
         overlay.classList.remove('active');
+    }
+
+    // 3. 清除「沒聽到聲音」的看門狗計時器 (Watchdog)
+    if (typeof soundWatchdog !== 'undefined' && soundWatchdog) {
         clearTimeout(soundWatchdog);
-        
-        if (recognition) {
-            try { recognition.stop(); } catch(e){}
-            recognition = null;
-        }
+        soundWatchdog = null;
+    }
 
-        // ★★★ 核心修正：恢復音效引擎 ★★★
-        if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
-            SansiAudio.context.resume().then(() => console.log("音效引擎已恢復"));
+    // 4. ★ 核心修復：徹底終結辨識實例 (解決 ABORTED 的關鍵) ★
+    // 在 Android 上，必須移除事件監聽並使用 abort() 確保硬體立即釋放
+    if (typeof activeRecognition !== 'undefined' && activeRecognition) {
+        try {
+            // 移除所有回呼函式，避免 abort 觸發額外的 onerror 或 onend 邏輯
+            activeRecognition.onresult = null;
+            activeRecognition.onerror = null;
+            activeRecognition.onend = null;
+            
+            activeRecognition.abort(); // 強制中止辨識請求
+            console.log("🎤 麥克風硬體已強制釋放 (Abort)");
+        } catch (e) {
+            console.warn("終止辨識實例時發生預期外的錯誤:", e);
         }
+        activeRecognition = null; // 歸位為空，確保下次啟動是全新的
+    }
 
-        // ★★★ 核心修正：如果原本有播音樂，恢復播放 ★★★
-        if (wasMusicPlaying) {
-            const bgAudio = document.getElementById('audio');
-            if (bgAudio) bgAudio.play().catch(e => console.log("音樂恢復失敗", e));
-            wasMusicPlaying = false;
+    // 5. 恢復音效引擎 (Web Audio API)
+    // 使用 await 確保音訊通道切換完成
+    if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
+        try {
+            if (SansiAudio.context.state === 'suspended') {
+                await SansiAudio.context.resume();
+                console.log("🔊 SansiAudio 引擎已恢復");
+            }
+        } catch (e) {
+            console.error("恢復音效引擎失敗:", e);
         }
     }
+
+    // 6. 恢復背景音樂 (如果之前有在播放)
+    if (typeof wasMusicPlaying !== 'undefined' && wasMusicPlaying) {
+        const bgAudio = document.getElementById('audio');
+        if (bgAudio) {
+            try {
+                // 部分行動瀏覽器要求必須在非同步後有用戶互動才能 resume 音樂
+                // 這裡嘗試直接播放
+                await bgAudio.play();
+                console.log("🎵 背景音樂已自動恢復");
+            } catch (e) {
+                console.log("音樂恢復播放受阻 (行動裝置隱私限制):", e);
+            }
+        }
+        wasMusicPlaying = false; // 重置狀態標記
+    }
+    
+    // 7. 額外：清空狀態文字
+    const statusText = document.getElementById('voiceStatusText');
+    if (statusText) {
+        // 1秒後重置文字，讓用戶有時間看到最後的結果
+        setTimeout(() => {
+            if (!isLongPressing) statusText.innerText = "聆聽中";
+        }, 1000);
+    }
+}
 
     // --- 指令處理 (保持不變) ---
     function handleCommands(transcript) {
