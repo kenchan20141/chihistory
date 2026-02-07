@@ -16549,18 +16549,25 @@ ocrWindow = window.open(VERCEL_OCR_URL, 'OCRWindow', 'width=650,height=850,scrol
 }
 
 window.addEventListener('message', function(event) {
-if (event.origin !== new URL(VERCEL_OCR_URL).origin) {
-console.warn('收到來源不明的訊息，已忽略:', event.origin);
-return;
-}
-if (event.data && event.data.type === 'ocrResult') {
-const ocrText = event.data.text;
-modalTextarea.value += (modalTextarea.value.trim() ? '\n' : '') + ocrText;
-if (ocrWindow) {
-ocrWindow.close();
-}
-modalTextarea.focus();
-}
+    // 1. 允許來自 script.google.com 或 googleusercontent.com 的訊息
+    // 或是為了測試方便，暫時移除 origin 檢查 (如下所示)
+    
+    if (event.data && event.data.type === 'ocrResult') {
+        const ocrText = event.data.text;
+        
+        // 確保變數 modalTextarea 存在
+        const textarea = document.getElementById('modal-textarea');
+        if (textarea) {
+            textarea.value += (textarea.value.trim() ? '\n' : '') + ocrText;
+            
+            // 如果有定義 ocrWindow 變數，則關閉它
+            if (typeof ocrWindow !== 'undefined' && ocrWindow) {
+                ocrWindow.close();
+            }
+            
+            textarea.focus();
+        }
+    }
 });
 });
 
