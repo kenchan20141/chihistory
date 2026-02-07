@@ -23455,19 +23455,21 @@ function handleCommands(transcript) {
     document.addEventListener('mouseup', handleEnd);
     document.addEventListener('mouseleave', handleEnd);
 
-    // --- 語音識別結果處理 (優化版) ---
-    recognition.onresult = (event) => {
-        // 取得最新的一段識別結果
-        const result = event.results[event.resultIndex];
-        const transcript = result[0].transcript;
-        
-        // ★★★ 關鍵修改 2：即時顯示使用者正在說的話 ★★★
-        statusText.innerText = transcript; 
+// 找到這一行並修正：
+reco.onresult = (event) => {
+    const result = event.results[event.resultIndex];
+    const transcript = result[0].transcript;
+    
+    // 讓畫面上即時顯示聽到的字
+    const statusText = document.getElementById('voiceStatusText');
+    if (statusText) statusText.innerText = transcript;
 
-        // 如果這句還沒講完 (isFinal = false)，就不執行指令匹配，只顯示文字
-        if (!result.isFinal) return;
+    if (!result.isFinal) return;
 
-        console.log("語音最終結果:", transcript);
+    // ★ 修正處：確保這裡呼叫的是 handleCommands(transcript) 
+    // 不要傳入第二個參數 commands，因為函式內部會直接讀取全域的 voiceCommands
+    handleCommands(transcript); 
+};
 
 // 輔助函式：模擬點擊語薈中的工具連結
 const triggerTool = (toolId) => {
