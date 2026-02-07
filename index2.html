@@ -23345,7 +23345,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
    function createRecognition() {
     const reco = new SpeechRecognition();
-   reco.lang = 'cmn-Hant-HK'; 
+    
+    // 不要寫死 zh-HK，試著讓它根據系統自動匹配
+    // 或者嘗試一個更寬鬆的標籤
+    try {
+        // 先嘗試廣東話
+        reco.lang = 'zh-HK'; 
+    } catch(e) {
+        // 如果失敗，則不設語言，讓 Chrome 抓系統預設（即便它是英文）
+        reco.lang = navigator.language; 
+    }
+
     // --- 針對部分 Android 機型的修正 ---
     reco.continuous = false;    // 確保單次識別
     reco.interimResults = false; // 先改成 false 測試看看能不能聽到
