@@ -23332,15 +23332,17 @@ document.addEventListener('DOMContentLoaded', function() {
     let recognition = null;
     let longPressTimer = null;
     let isLongPressing = false;
-    let soundWatchdog = null; // 用來監視有沒有聲音
+    let soundWatchdog = null;
+    
+    // 記錄音樂播放器之前的狀態
+    let wasMusicPlaying = false; 
 
-    const PRESS_DURATION = 800; 
+    // ★ 修改 1：縮短長按時間，提升手機觸發成功率
+    const PRESS_DURATION = 500; 
 
-    // 檢查支援度
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
-    // --- 核心：建立新的識別實例 (每次使用都重建，防止當機) ---
     function createRecognition() {
         const reco = new SpeechRecognition();
         reco.lang = 'zh-HK';
@@ -23350,62 +23352,80 @@ document.addEventListener('DOMContentLoaded', function() {
 
         reco.onstart = () => {
             statusText.innerText = "請說話...";
-            // ★ 修改 1：啟動成功後才震動，避免搶佔音訊通道
             if (navigator.vibrate) navigator.vibrate(50);
             
-            // ★ 修改 2：啟動看門狗，如果 5 秒都沒聽到聲音，就提示用戶
+            // 看門狗：如果 5 秒都沒聽到聲音
             soundWatchdog = setTimeout(() => {
                 if (statusText.innerText === "請說話...") {
-                    statusText.innerText = "沒聽到聲音？請靠近一點...";
+                    statusText.innerText = "沒聽到聲音？(請暫停背景音樂)";
                 }
             }, 5000);
         };
 
         reco.onsoundstart = () => {
-            statusText.innerText = "聆聽中..."; // 只要變這個字，代表麥克風通了
-            clearTimeout(soundWatchdog); // 清除看門狗
+            statusText.innerText = "聆聽中..."; 
+            clearTimeout(soundWatchdog);
         };
 
         reco.onresult = (event) => {
             const result = event.results[event.resultIndex];
             const transcript = result[0].transcript;
-            
-            // 即時顯示
             statusText.innerText = transcript;
             clearTimeout(soundWatchdog);
 
             if (!result.isFinal) return;
-
             handleCommands(transcript);
         };
 
         reco.onerror = (e) => {
             console.error("語音錯誤:", e.error);
+            clearTimeout(soundWatchdog);
+            
             if (e.error === 'no-speech') {
                 statusText.innerText = "太安靜了...";
             } else if (e.error === 'not-allowed') {
-                statusText.innerText = "權限被拒絕";
-                alert("請到手機設定 -> 瀏覽器 -> 允許麥克風權限");
+                statusText.innerText = "請允許麥克風權限";
+            } else if (e.error === 'audio-capture') {
+                statusText.innerText = "麥克風被佔用";
             } else {
-                statusText.innerText = "重試中...";
+                statusText.innerText = "錯誤: " + e.error;
             }
-            // 錯誤發生時稍微延遲後關閉
-            setTimeout(stopListening, 1000);
+            setTimeout(stopListening, 1500);
+        };
+        
+        // ★ 新增：結束時自動恢復
+        reco.onend = () => {
+            if (overlay.classList.contains('active')) {
+                stopListening();
+            }
         };
 
         return reco;
     }
 
-    // --- 啟動流程 ---
+    // --- 啟動流程 (關鍵修正) ---
     function startListening() {
-        if (isLongPressing) return; // 防止重複
+        if (isLongPressing) return;
         isLongPressing = true;
+        
+        // ★★★ 核心修正：強制掛起音效引擎，釋放音訊通道給麥克風 ★★★
+        if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
+            SansiAudio.context.suspend().then(() => console.log("音效引擎已掛起 (讓路給語音)"));
+        }
+
+        // ★★★ 核心修正：暫停背景音樂 ★★★
+        const bgAudio = document.getElementById('audio');
+        if (bgAudio && !bgAudio.paused) {
+            wasMusicPlaying = true;
+            bgAudio.pause();
+        } else {
+            wasMusicPlaying = false;
+        }
         
         overlay.classList.add('active'); 
         statusText.innerText = "啟動中...";
 
         try {
-            // 每次都建立新的，確保乾淨
             recognition = createRecognition();
             recognition.start();
         } catch (e) {
@@ -23415,7 +23435,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- 停止流程 ---
+    // --- 停止流程 (關鍵修正) ---
     function stopListening() {
         isLongPressing = false;
         overlay.classList.remove('active');
@@ -23423,12 +23443,23 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (recognition) {
             try { recognition.stop(); } catch(e){}
-            // 重要：斷開引用
             recognition = null;
+        }
+
+        // ★★★ 核心修正：恢復音效引擎 ★★★
+        if (typeof SansiAudio !== 'undefined' && SansiAudio.context) {
+            SansiAudio.context.resume().then(() => console.log("音效引擎已恢復"));
+        }
+
+        // ★★★ 核心修正：如果原本有播音樂，恢復播放 ★★★
+        if (wasMusicPlaying) {
+            const bgAudio = document.getElementById('audio');
+            if (bgAudio) bgAudio.play().catch(e => console.log("音樂恢復失敗", e));
+            wasMusicPlaying = false;
         }
     }
 
-    // --- 指令處理 (保持原本邏輯) ---
+    // --- 指令處理 (保持不變) ---
     function handleCommands(transcript) {
         const commands = {
             '作家文粹': () => checkFeaturedAccess(),
@@ -23482,17 +23513,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const handleStart = (e) => {
-        // 如果介面已經打開，點一下就關閉 (當作取消鍵)
         if (overlay.classList.contains('active')) {
-            e.preventDefault(); // 防止穿透點擊
+            e.preventDefault(); 
             stopListening();
             return;
         }
 
         if (!isValidTarget(e.target)) return;
 
-        // ★ 修改 3：如果是手機 (touchstart)，為了保險起見，
-        // 建議將長按時間稍微縮短，或者提示用戶「請長按直到震動」
         longPressTimer = setTimeout(() => {
             if (window.getSelection().toString().length === 0) {
                 startListening();
@@ -23502,23 +23530,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const handleEnd = () => {
         clearTimeout(longPressTimer);
-        // 注意：這裡不主動 stopListening，
-        // 讓 recognition 自己判斷語音結束 (因為 interimResults=true)，
-        // 或者等用戶說完話。
-        // 但為了體驗，如果手放開時還沒識別到任何東西，也可以選擇關閉。
-        // 這裡我們保持開啟，直到識別完成或錯誤。
     };
 
     const handleMove = () => {
         clearTimeout(longPressTimer);
     };
 
-    // 綁定事件
-    document.addEventListener('touchstart', handleStart, { passive: false }); // passive: false 允許 preventDefault
+    document.addEventListener('touchstart', handleStart, { passive: false });
     document.addEventListener('touchend', handleEnd);
     document.addEventListener('touchmove', handleMove, { passive: true });
     
-    // 電腦版
     document.addEventListener('mousedown', handleStart);
     document.addEventListener('mouseup', handleEnd);
     document.addEventListener('mouseleave', handleEnd);
