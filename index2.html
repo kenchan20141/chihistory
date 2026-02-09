@@ -23757,77 +23757,29 @@ recognition.onresult = (event) => {
 
 
 
+
 <script>
 
-// ==========================================
-// === [新增] 前往繳交確認視窗 (極簡莫蘭迪版) ===
-// ==========================================
+// === 前往繳交確認邏輯 ===
  
-// 1. 初始化確認視窗 HTML (只執行一次)
-(function initJumpConfirmModal() {
-    if (document.getElementById('jumpConfirmModal')) return;
- 
-    const modalHTML = `
-    <div id="jumpConfirmModal" class="morandi-modal-overlay" style="z-index: 40000;">
-        <div class="morandi-modal-card" style="padding: 25px 30px; width: auto; min-width: 260px;">
-            <!-- 極簡標題 -->
-            <h3 class="morandi-title" style="margin: 0 0 20px 0; font-size: 1.2rem; color: #5d4037;">
-                <i class="fas fa-share-square" style="margin-right: 8px;"></i>前往繳交？
-            </h3>
-            
-            <!-- 按鈕群組 -->
-            <div class="morandi-btn-group">
-                <button class="morandi-btn btn-gray" onclick="closeJumpConfirmModal()">取消</button>
-                <button id="realJumpBtn" class="morandi-btn"
-                        style="background-color: #8fa398; color: white; box-shadow: 0 4px 10px rgba(143, 163, 152, 0.3);"
-                        onclick="executeJumpToRecord()">
-                    確定
-                </button>
-            </div>
-        </div>
-    </div>`;
- 
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-})();
- 
-// 2. 開啟確認視窗
+// 1. 開啟確認視窗
 function openJumpConfirmModal() {
-    const modal = document.getElementById('jumpConfirmModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        // 重置按鈕狀態
-        const btn = document.getElementById('realJumpBtn');
-        if(btn) {
-            btn.disabled = false;
-            btn.innerHTML = '確定';
-        }
-    }
+    document.getElementById('jumpToRecordModal').style.display = 'flex';
 }
  
-// 3. 關閉確認視窗
-function closeJumpConfirmModal() {
-    const modal = document.getElementById('jumpConfirmModal');
-    if (modal) modal.style.display = 'none';
-}
- 
-// 4. 執行真正的跳轉 (確認後觸發)
-async function executeJumpToRecord() {
-    const btn = document.getElementById('realJumpBtn');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    }
- 
-    // 呼叫原本的跳轉邏輯
-    await jumpToLatestHistoryRecord();
+// 2. 用戶點擊確定後執行
+async function confirmJumpAndGo() {
+    // 關閉視窗
+    document.getElementById('jumpToRecordModal').style.display = 'none';
     
-    // 跳轉後關閉視窗
-    closeJumpConfirmModal();
+    // 執行原本的跳轉邏輯
+    await jumpToLatestHistoryRecord();
 }
+
 
 </script>
 
-
+	
 	
 
 	<script>
@@ -23840,8 +23792,6 @@ function appendGoToSubmitButton() {
     const container = document.getElementById("resultCanvasBody");
     if (!container) return;
  
-    // 使用莫蘭迪綠色 (#8fa398)
-    // ★★★ 修改處：onclick 改為 openJumpConfirmModal() ★★★
     const btnHTML = `
         <div style="margin-top: 30px; margin-bottom: 50px; text-align: right; border-top: 1px dashed #e0ddd7; padding-top: 15px;">
             <button class="btn-action"
@@ -23850,7 +23800,7 @@ function appendGoToSubmitButton() {
                     style="background-color: #8fa398; border: none; box-shadow: 0 4px 10px rgba(143, 163, 152, 0.4); display: inline-flex; align-items: center; gap: 8px;">
                 <i class="fas fa-external-link-alt"></i> 前往繳交
             </button>
-            <div style="font-size: 0.85rem; color: #aaa; margin-top: 5px;">(點擊跳轉至個人紀錄以進行繳交)</div>
+        
         </div>`;
     
     container.insertAdjacentHTML('beforeend', btnHTML);
@@ -24491,6 +24441,19 @@ function forceOpenBooks() {
         <i class="fas fa-microphone voice-icon"></i>
     </div>
     <div class="voice-status" id="voiceStatusText">聆聽中</div>
+</div>
+
+
+	<!-- === 前往繳交確認視窗 (沿用通用莫蘭迪設計) === -->
+<div id="jumpToRecordModal" class="morandi-modal-overlay" style="z-index: 40000;">
+    <div class="morandi-modal-card">
+        <h3 class="morandi-title">前往繳交？</h3>
+        <p class="morandi-text">即將離開此頁面並跳轉至紀錄詳情。</p>
+        <div class="morandi-btn-group">
+            <button onclick="document.getElementById('jumpToRecordModal').style.display='none'" class="morandi-btn btn-gray">取消</button>
+            <button onclick="confirmJumpAndGo()" class="morandi-btn" style="background-color: #8fa398; color: white; box-shadow: 0 4px 10px rgba(143, 163, 152, 0.4);">確定</button>
+        </div>
+    </div>
 </div>
 	
 
