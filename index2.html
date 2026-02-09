@@ -17273,28 +17273,88 @@ function captureContainerHTML(containerId) {
 
 
 
-// 1. 修正目標判定：排除文章列表卡片，避免與「長按取消已讀」衝突
-function isValidTarget(target) {
-    // ★★★ 新增：如果點擊目標在文章列表卡片內，直接忽略 (讓給取消已讀功能) ★★★
-    if (target.closest('.article-item')) return false;
+
+
+
+
+
+
+// ==========================================
+// === [新增] 前往繳交連結功能 ===
+// ==========================================
  
-    // 如果是在語薈的節點 (.node) 或其子元素上長按，允許觸發
-    if (target.closest('.node')) return true;
+// 1. 在結果畫布底部加入按鈕的輔助函式
+function appendGoToSubmitButton() {
+    const container = document.getElementById("resultCanvasBody");
+    if (!container) return;
+ 
+    // 使用莫蘭迪綠色 (#8fa398) 區分，並加上跳轉圖示
+    const btnHTML = `
+        <div style="margin-top: 30px; text-align: right; border-top: 1px dashed #e0ddd7; padding-top: 15px;">
+            <button class="btn-action"
+                    onclick="jumpToLatestHistoryRecord()"
+                    style="background-color: #8fa398; border: none; box-shadow: 0 4px 10px rgba(143, 163, 152, 0.4); display: inline-flex; align-items: center; gap: 8px;">
+                <i class="fas fa-external-link-alt"></i> 前往繳交
+            </button>
+            <div style="font-size: 0.85rem; color: #aaa; margin-top: 5px;">(點擊跳轉至個人紀錄以進行繳交)</div>
+        </div>`;
     
-    // 排除輸入框、按鈕等互動元素
-    if (['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT', 'OPTION'].includes(target.tagName)) return false;
+    // 插入到內容的最底部
+    container.insertAdjacentHTML('beforeend', btnHTML);
+}
+ 
+// 2. 執行跳轉邏輯
+async function jumpToLatestHistoryRecord() {
+    // 檢查是否有剛生成的紀錄時間戳
+    if (!lastGeneratedTimestamp) {
+        alert("找不到剛生成的紀錄，請嘗試直接進入「歷史紀錄」查看。");
+        return;
+    }
+ 
+    // 顯示過渡狀態
+    const btn = event.target.closest('button');
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 跳轉中...';
+ 
+    // 1. 根據時間戳找回 ID
+    const id = await findIdByTimestamp(lastGeneratedTimestamp);
     
-    // 如果是普通 A 標籤且不在 .node 內，則不允許（避免跟普通超連結衝突）
-    if (target.tagName === 'A' && !target.closest('.node')) return false;
-    
-    if (target.isContentEditable) return false;
-    const selection = window.getSelection();
-    if (selection.toString().length > 0) return false;
-    return true;
+    if (id) {
+        // 2. 關閉當前的結果畫布
+        closeResultCanvas();
+        
+        // 3. 打開歷史紀錄主頁
+        openHistoryContainer();
+        
+        // 4. 打開該紀錄的詳情視窗
+        await viewHistoryDetail(id);
+        
+        // 5. 自動捲動到視窗最底部的「繳交」按鈕處
+        setTimeout(() => {
+            const modalBody = document.querySelector('#historyModal .preview-modal-body');
+            if (modalBody) {
+                // 平滑捲動到底部
+                modalBody.scrollTo({
+                    top: modalBody.scrollHeight,
+                    behavior: 'smooth'
+                });
+                
+                // 額外視覺提示：讓繳交按鈕閃爍一下
+                setTimeout(() => {
+                    const submitBtn = modalBody.querySelector('.btn-morandi'); // 這是繳交按鈕的 class
+                    if (submitBtn) {
+                        submitBtn.style.transition = "transform 0.2s";
+                        submitBtn.style.transform = "scale(1.1)";
+                        setTimeout(() => submitBtn.style.transform = "scale(1)", 200);
+                    }
+                }, 600);
+            }
+        }, 300); // 等待視窗動畫開啟
+    } else {
+        alert("無法定位紀錄，請手動前往歷史紀錄查看。");
+    }
 }
 
-
-
+	
 	
 	
 // ==========================================
@@ -23389,7 +23449,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- 核心：智慧判斷點擊位置 ---
    // 1. 修正目標判定：允許在語薈的節點 (.node) 上長按
-// 1. 修正目標判定：允許在語薈的節點 (.node) 上長按
 // 1. 修正目標判定：排除文章列表卡片，避免與「長按取消已讀」衝突
 function isValidTarget(target) {
     // ★★★ 新增：如果點擊目標在文章列表卡片內，直接忽略 (讓給取消已讀功能) ★★★
