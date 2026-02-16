@@ -16605,29 +16605,38 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
             const currentTopic = localStorage.getItem("currentTopic") || "無題目";
 
             // 5. 建構三評 Prompt (主席視角)
-            const thirdEvalPrompt = `
-你現在是公開試的「試卷主席」(Chief Examiner)。系統偵測到一份異常試卷。
-有閱卷員給予極高表達分（A:${exprA}, B:${exprB}），但同時有閱卷員給予較低的內容或結構分（A:${contA}/${struA}, B:${contB}/${struB}）。
+             const thirdEvalPrompt = `
+你現在是公開試的「試卷主席」(Chief Examiner)。系統偵測到一份極具爭議的試卷。
+兩位閱卷員給予了極高的表達分（A:${exprA}, B:${exprB}），證明文筆極佳。
+但他們同時判定內容或結構不及格（A:${contA}/${struA}, B:${contB}/${struB}）。
 
-請重新審視這篇文章，你的任務是判斷：這是一篇「文筆好的離題文章/背誦文」，還是一篇「立意深遠、借事抒情」的滄海遺珠？
+這通常意味著兩種極端情況，你需要嚴格判斷是哪一種：
+
+【情況一：華麗的廢話 / 背誦套作】(維持原判)
+考生文筆很好，但內容完全沒有回應題目，或者只是在背誦一篇準備好的範文，與題目只有表面關聯（關鍵詞堆砌）。
+-> **判決：必須維持低分，甚至指出其離題的本質。**
+
+【情況二：滄海遺珠 / 深層立意】(平反加分)
+考生運用了極高明的象徵、借喻或意識流手法，一般閱卷員（AI）看不懂其深層邏輯，誤以為離題。
+-> **判決：大幅上調分數，並解釋其高明之處。**
 
 【題目】：${currentTopic}
 【文章】：
 ${fullTextContent}
 
-【仲裁指引】
-1. **借事抒情/象徵意義**：如果文章表面看似不扣題，但實則運用了象徵、借喻（如寫「跑步」來論述「人生長跑」），且邏輯通順，請大幅上調內容與結構分。
-2. **真正的離題**：如果文章文筆雖好，但內容確實與題目毫無關係（如題目是「或是」，卻寫了「堅持」），則維持低分。
-3. **上調空間**：如果屬於第一種情況，分數可上調至與表達分相稱的水平。
+【主席指令】
+1. **不要濫好人**：你的職責是守護評分標準。如果文章真的是離題，請無情地維持低分。
+2. **檢測「偽裝」**：仔細檢查文章是否只是用華麗的詞藻包裝空洞的內容。
+3. **邏輯連貫性**：立意是否真的能扣連題目？還是強行拉扯？
 
 【輸出格式 (JSON)】
 請只輸出一段 JSON，不要輸出其他文字：
 {
-    "rationale": "簡短分析理由 (繁體中文)",
-    "is_off_topic": true/false,
-    "adjusted_content": 0-10 (修正後的內容分),
-    "adjusted_structure": 0-10 (修正後的結構分),
-    "adjusted_expression": 0-10 (修正後的表達分)
+    "rationale": "簡短且尖銳的分析理由 (繁體中文)，說明為何維持原判或為何改判。",
+    "is_off_topic": true/false (true=離題/維持原判, false=緊扣/平反),
+    "adjusted_content": 0-10 (若離題請維持${finalCont}或更低，若平反則給予應得高分),
+    "adjusted_structure": 0-10 (若結構混亂請維持${finalStru}或更低),
+    "adjusted_expression": 0-10 (通常維持${finalExpr})
 }`;
 
             try {
