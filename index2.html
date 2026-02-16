@@ -16581,7 +16581,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
 
         // 3. 判斷觸發條件
         const isExprHigh = (exprA >= 7 || exprB >= 7);       // 條件一：任一模型覺得文筆好
-        const isContentLow = (finalCont <= 4 || finalStru <= 4); // 條件二：最終被評為離題/空洞
+        const isContentLow = (finalCont <= 5 || finalStru <= 5); // 條件二：最終被評為離題/空洞
 
         if (isExprHigh && isContentLow) {
             console.warn(`🚨 [三評觸發] 偵測到評分爭議！`);
