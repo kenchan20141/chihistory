@@ -16563,13 +16563,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     console.groupEnd();
 
 
-	// =========================================================
-    // === [新增] 第三評觸發機制 (試卷主席仲裁) ===
-    // =========================================================
-    
-    // 1. 檢查是否符合「高分低能」條件 (只針對敘事抒情)
-    // 條件：表達 >= 7 分，但 (內容 <= 4 分 或 結構 <= 4 分)
-   if (uniqueIdPrefix === 'narrative' && scoresForDisplay) {
+	 if (uniqueIdPrefix === 'narrative' && scoresForDisplay) {
         // 1. 獲取個別模型的詳細分數
         const exprA = scoresA ? (scoresA.expression || 0) : 0;
         const contA = scoresA ? (scoresA.content || 0) : 0;
@@ -16579,105 +16573,110 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
         const contB = scoresB ? (scoresB.content || 0) : 0;
         const struB = scoresB ? (scoresB.structure || 0) : 0;
         
-        // 2. 獲取最終顯示分數 (用於比較與更新)
+        // 2. 獲取最終顯示分數
         const finalCont = scoresForDisplay.content;
         const finalStru = scoresForDisplay.structure;
         const finalExpr = scoresForDisplay.expression;
 
-        // 3. 判斷觸發條件 (按您的最新要求修訂)
-        // 條件A：其中一個模型的表達 >= 7
+        // --- 觸發條件判定 ---
+
+        // 情況 A：評分爭議 (高分低能)
+        // 邏輯：任一模型表達 >= 7，但任一模型內容/結構 <= 5
         const isExprHigh = (exprA >= 7 || exprB >= 7);
-        
-        // 條件B：其中一個模型的內容或結構 <= 5
-        // (注意：這裡排除了 0 分的情況，以免因模型連線失敗而誤觸發)
         const isContentLowA = (contA > 0 && contA <= 5) || (struA > 0 && struA <= 5);
         const isContentLowB = (contB > 0 && contB <= 5) || (struB > 0 && struB <= 5);
-        const isContentLow = isContentLowA || isContentLowB;
+        const isDispute = isExprHigh && (isContentLowA || isContentLowB);
 
-        if (isExprHigh && isContentLow) {
-            console.warn(`🚨 [三評觸發] 偵測到評分爭議！(文筆高但內容/結構低)`);
-            console.log(`觸發數據 -> Model A[文:${exprA}/內:${contA}/結:${struA}] | Model B[文:${exprB}/內:${contB}/結:${struB}]`);
+        // 情況 B：高分複核 (AI 生成嫌疑)
+        // 邏輯：任一模型在內容或結構給出 8 分或以上
+        // 原因：LLM 容易對 AI 生成的「完美廢話」給出極高分，需人工級別覆核
+        const isTooHigh = (contA >= 8 || struA >= 8 || contB >= 8 || struB >= 8);
+
+        if (isDispute || isTooHigh) {
+            let triggerReason = "";
+            if (isDispute) triggerReason += "[爭議:文佳理貧] ";
+            if (isTooHigh) triggerReason += "[覆核:極高分疑似AI] ";
+
+            console.warn(`🚨 [三評觸發] ${triggerReason}`);
+            console.log(`觸發數據 -> Model A[內:${contA}/結:${struA}] | Model B[內:${contB}/結:${struB}]`);
             
-            // 顯示載入提示
-            showLoading("陳SIR正在點評...");
+            showLoading("陳Sir正在點評...");
 
-            // 4. 獲取題目
+            // 3. 建構三評 Prompt (主席視角 - 包含真偽辨識)
             const currentTopic = localStorage.getItem("currentTopic") || "無題目";
 
-            // 5. 建構三評 Prompt (主席視角)
-             const thirdEvalPrompt = `
-你現在是公開試的「試卷主席」(Chief Examiner)。系統偵測到一份極具爭議的試卷。
-兩位閱卷員給予了極高的表達分（A:${exprA}, B:${exprB}），證明文筆極佳。
-但他們同時判定內容或結構不及格（A:${contA}/${struA}, B:${contB}/${struB}）。
+            const thirdEvalPrompt = `
+你現在是公開試的「試卷主席」(Chief Examiner)。系統將這份試卷轉交給你，原因：${triggerReason}。
 
-這通常意味著兩種極端情況，你需要嚴格判斷是哪一種：
-
-【情況一：華麗的廢話 / 背誦套作】(維持原判)
-考生文筆很好，但內容完全沒有回應題目，或者只是在背誦一篇準備好的範文，與題目只有表面關聯（關鍵詞堆砌）。
--> **判決：必須維持低分，甚至指出其離題的本質。**
-
-【情況二：滄海遺珠 / 深層立意】(平反加分)
-考生運用了極高明的象徵、借喻或意識流手法，一般閱卷員（AI）看不懂其深層邏輯，誤以為離題。
--> **判決：合理上調分數，並解釋其高明之處。**
+請以人類考官的敏銳度，嚴格審視這篇文章，判斷其真實水平。
 
 【題目】：${currentTopic}
 【文章】：
 ${fullTextContent}
 
-【主席指令】
-1. **不要濫好人**：你的職責是守護評分標準。如果文章真的是離題，請無情地維持低分。
-2. **檢測「偽裝」**：仔細檢查文章是否只是用華麗的詞藻包裝空洞的內容。
-3. **邏輯連貫性**：立意是否真的能扣連題目？還是強行拉扯？
+【仲裁指引：請判斷屬於下列哪種情況】
+
+情況 1：【AI 生成 / 堆砌辭藻】(針對高分嫌疑)
+特徵：文筆完美流暢，結構工整得像教科書，但缺乏獨特的「人味」、缺乏具體的在地生活細節、情感過於通用（Generic）。
+-> **判決：這是 AI 或背誦文。請將內容與結構分下調至 4-6 分，指出其空洞之處。**
+
+情況 2：【真人佳作 / 深刻體會】(針對高分嫌疑)
+特徵：可能有少許瑕疵，但情感真摯、細節獨特（Specific），能寫出人類才有的細膩感觸或哲理。
+-> **判決：這是真人佳作。維持分數，予以肯定。**
+
+情況 3：【離題 / 華麗廢話】(針對爭議評分)
+特徵：文筆極好，但內容完全不扣題，或邏輯斷裂。
+-> **判決：維持低分 (1-4分)。**
+
+情況 4：【借事抒情 / 滄海遺珠】(針對爭議評分)
+特徵：運用深層象徵，雖字面少提題目，但立意緊扣。
+-> **判決：合理平反加分，但加分幅度必須合理。**
 
 【輸出格式 (JSON)】
-請只輸出一段 JSON，不要輸出其他文字：
+請只輸出一段 JSON：
 {
-    "rationale": "簡短且尖銳的分析理由 (繁體中文)，說明為何維持原判或為何改判。",
-    "is_off_topic": true/false (true=離題/維持原判, false=緊扣/平反),
-    "adjusted_content": 0-10 (若離題請維持${finalCont}或更低，若平反則給予應得高分),
-    "adjusted_structure": 0-10 (若結構混亂請維持${finalStru}或更低),
-    "adjusted_expression": 0-10 (通常維持${finalExpr})
+    "rationale": "簡短分析理由 (繁體中文)，請明確指出你看出了它是AI味重還是真人真情。",
+    "is_off_topic": true/false,
+    "adjusted_content": 0-10 (修正後的內容分),
+    "adjusted_structure": 0-10 (修正後的結構分),
+    "adjusted_expression": 0-10 (修正後的表達分)
 }`;
 
             try {
-                // 6. 呼叫 API 進行三評 (使用 Reading API/DeepSeek 模型)
-                const thirdEvalRaw = await callReadingAPI(thirdEvalPrompt, 0.7);
-                
-                // 7. 解析 JSON
+                // 4. 呼叫 API (DeepSeek/Reading Model)
+                const thirdEvalRaw = await callReadingAPI(thirdEvalPrompt, 0.6); // 稍微降低溫度以提高判斷穩定性
                 const thirdEvalJson = safeJSONParse(thirdEvalRaw);
 
                 if (thirdEvalJson) {
                     console.group("⚖️ [三評報告] 試卷主席仲裁結果");
+                    console.log("觸發原因:", triggerReason);
                     console.log("分析理由:", thirdEvalJson.rationale);
-                    console.log("原始最終分:", { C: finalCont, S: finalStru, E: finalExpr });
-                    console.log("修正建議分:", { C: thirdEvalJson.adjusted_content, S: thirdEvalJson.adjusted_structure, E: thirdEvalJson.adjusted_expression });
+                    console.log("原始最終分:", { C: finalCont, S: finalStru });
+                    console.log("修正建議分:", { C: thirdEvalJson.adjusted_content, S: thirdEvalJson.adjusted_structure });
                     console.groupEnd();
 
-                    // 8. 更新最終分數 (只在分數有提升時才更新，防止誤判更低)
-                    // 更新內容分
-                    if (thirdEvalJson.adjusted_content > finalCont) {
-                        scoresForDisplay.content = thirdEvalJson.adjusted_content;
-                        if(scoresForDisplay.radar) {
-                            scoresForDisplay.radar.取材 = thirdEvalJson.adjusted_content;
-                            // 如果判定不再離題，扣題分與立意分也應回升
-                            if (!thirdEvalJson.is_off_topic) {
-                                scoresForDisplay.radar.扣題 = Math.max(scoresForDisplay.radar.扣題 || 0, thirdEvalJson.adjusted_content);
-                                scoresForDisplay.radar.立意 = Math.max(scoresForDisplay.radar.立意 || 0, thirdEvalJson.adjusted_content);
-                            }
-                        }
-                    }
+                    // 5. 更新分數邏輯 (雙向更新：可升可降)
                     
-                    // 更新結構分
-                    if (thirdEvalJson.adjusted_structure > finalStru) {
-                        scoresForDisplay.structure = thirdEvalJson.adjusted_structure;
-                        if(scoresForDisplay.radar) {
-                            scoresForDisplay.radar.詳略 = thirdEvalJson.adjusted_structure;
-                        }
-                    }
+                    // 如果是「高分嫌疑(isTooHigh)」，我們允許分數被「下調」
+                    // 如果是「爭議(isDispute)」，我們通常只允許「上調」(平反)
+                    // 但為了簡單與客觀，主席的決定具有最高權威，直接採用主席建議
+                    
+                    // 為了防止主席 AI 發神經給出 0 分，加一個安全檢查
+                    if (thirdEvalJson.adjusted_content > 0) scoresForDisplay.content = thirdEvalJson.adjusted_content;
+                    if (thirdEvalJson.adjusted_structure > 0) scoresForDisplay.structure = thirdEvalJson.adjusted_structure;
+                    if (thirdEvalJson.adjusted_expression > 0) scoresForDisplay.expression = thirdEvalJson.adjusted_expression;
 
-                    // 更新表達分 (主席認為值得更高才調整，否則維持原判)
-                    if (thirdEvalJson.adjusted_expression > finalExpr) {
-                        scoresForDisplay.expression = thirdEvalJson.adjusted_expression;
+                    // 同步更新雷達圖
+                    if(scoresForDisplay.radar) {
+                        scoresForDisplay.radar.取材 = scoresForDisplay.content;
+                        scoresForDisplay.radar.詳略 = scoresForDisplay.structure;
+                        scoresForDisplay.radar.文筆 = scoresForDisplay.expression;
+                        
+                        // 處理扣題分：如果主席認為不離題，扣題分應跟隨內容分
+                        if (!thirdEvalJson.is_off_topic) {
+                            scoresForDisplay.radar.扣題 = Math.max(scoresForDisplay.radar.扣題 || 0, scoresForDisplay.content);
+                            scoresForDisplay.radar.立意 = Math.max(scoresForDisplay.radar.立意 || 0, scoresForDisplay.content);
+                        }
                     }
 
                 } else {
