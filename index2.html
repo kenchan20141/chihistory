@@ -16655,26 +16655,48 @@ ${fullTextContent}
 
                     // 8. 更新最終分數 (只在分數有提升時才更新，防止誤判更低)
                     // 更新內容分
+                   // --- 更新內容分 ---
                     if (thirdEvalJson.adjusted_content > finalCont) {
-                        scoresForDisplay.content = thirdEvalJson.adjusted_content;
+                        // 規則：新分數不能超過「原分數 + 2」
+                        const cappedContent = Math.min(thirdEvalJson.adjusted_content, finalCont + 2);
+                        
+                        console.log(`[三評限制] 內容分嘗試由 ${finalCont} 升至 ${thirdEvalJson.adjusted_content} -> 最終鎖定為 ${cappedContent}`);
+                        
+                        scoresForDisplay.content = cappedContent;
+                        
                         if(scoresForDisplay.radar) {
-                            scoresForDisplay.radar.取材 = thirdEvalJson.adjusted_content;
+                            scoresForDisplay.radar.取材 = cappedContent;
                             // 如果判定不再離題，扣題分與立意分也應回升
                             if (!thirdEvalJson.is_off_topic) {
-                                scoresForDisplay.radar.扣題 = Math.max(scoresForDisplay.radar.扣題 || 0, thirdEvalJson.adjusted_content);
-                                scoresForDisplay.radar.立意 = Math.max(scoresForDisplay.radar.立意 || 0, thirdEvalJson.adjusted_content);
+                                scoresForDisplay.radar.扣題 = Math.max(scoresForDisplay.radar.扣題 || 0, cappedContent);
+                                scoresForDisplay.radar.立意 = Math.max(scoresForDisplay.radar.立意 || 0, cappedContent);
                             }
                         }
                     }
                     
-                    // 更新結構分
+                    // --- 更新結構分 ---
                     if (thirdEvalJson.adjusted_structure > finalStru) {
-                        scoresForDisplay.structure = thirdEvalJson.adjusted_structure;
+                        // 規則：新分數不能超過「原分數 + 2」
+                        const cappedStructure = Math.min(thirdEvalJson.adjusted_structure, finalStru + 2);
+                        
+                        console.log(`[三評限制] 結構分嘗試由 ${finalStru} 升至 ${thirdEvalJson.adjusted_structure} -> 最終鎖定為 ${cappedStructure}`);
+
+                        scoresForDisplay.structure = cappedStructure;
+                        
                         if(scoresForDisplay.radar) {
-                            scoresForDisplay.radar.詳略 = thirdEvalJson.adjusted_structure;
+                            scoresForDisplay.radar.詳略 = cappedStructure;
                         }
                     }
 
+                    // --- 更新表達分 ---
+                    // 表達分通常不受「離題」影響，且主席很少大幅調整表達分，
+                    // 但為了保險起見，也可以加上同樣限制 (視乎你需要，下面保持原樣或加上限制皆可)
+                    if (thirdEvalJson.adjusted_expression > finalExpr) {
+                        // 這裡選擇加上同樣的 +2 限制以保持一致性
+                        const cappedExpression = Math.min(thirdEvalJson.adjusted_expression, finalExpr + 2);
+                        scoresForDisplay.expression = cappedExpression;
+                    }
+					
                     // 更新表達分 (主席認為值得更高才調整，否則維持原判)
                     if (thirdEvalJson.adjusted_expression > finalExpr) {
                         scoresForDisplay.expression = thirdEvalJson.adjusted_expression;
