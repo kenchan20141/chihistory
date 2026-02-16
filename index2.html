@@ -16646,21 +16646,26 @@ ${fullTextContent}
                 // 7. 解析 JSON
                 const thirdEvalJson = safeJSONParse(thirdEvalRaw);
 
-                if (thirdEvalJson) {
+              if (thirdEvalJson) {
                     console.group("⚖️ [三評報告] 試卷主席仲裁結果");
                     console.log("分析理由:", thirdEvalJson.rationale);
-                    console.log("原始最終分:", { C: finalCont, S: finalStru, E: finalExpr });
-                    console.log("修正建議分:", { C: thirdEvalJson.adjusted_content, S: thirdEvalJson.adjusted_structure, E: thirdEvalJson.adjusted_expression });
-                    console.groupEnd();
+                    console.log("原始最終分 (Original):", { C: finalCont, S: finalStru, E: finalExpr });
+                    
+                    // ★ 修改 1：標明這是 AI 的原始建議，尚未過濾
+                    console.log("AI 原始建議 (Unfiltered):", { 
+                        C: thirdEvalJson.adjusted_content, 
+                        S: thirdEvalJson.adjusted_structure, 
+                        E: thirdEvalJson.adjusted_expression 
+                    });
 
                     // 8. 更新最終分數 (只在分數有提升時才更新，防止誤判更低)
-                    // 更新內容分
-                   // --- 更新內容分 ---
+                    
+                    // --- 更新內容分 ---
                     if (thirdEvalJson.adjusted_content > finalCont) {
                         // 規則：新分數不能超過「原分數 + 2」
                         const cappedContent = Math.min(thirdEvalJson.adjusted_content, finalCont + 2);
                         
-                        console.log(`[三評限制] 內容分嘗試由 ${finalCont} 升至 ${thirdEvalJson.adjusted_content} -> 最終鎖定為 ${cappedContent}`);
+                        console.log(`%c[限制規則執行] 內容: ${finalCont} -> AI建議:${thirdEvalJson.adjusted_content} -> 最終鎖定:${cappedContent}`, "color: orange; font-weight: bold;");
                         
                         scoresForDisplay.content = cappedContent;
                         
@@ -16679,7 +16684,7 @@ ${fullTextContent}
                         // 規則：新分數不能超過「原分數 + 2」
                         const cappedStructure = Math.min(thirdEvalJson.adjusted_structure, finalStru + 2);
                         
-                        console.log(`[三評限制] 結構分嘗試由 ${finalStru} 升至 ${thirdEvalJson.adjusted_structure} -> 最終鎖定為 ${cappedStructure}`);
+                        console.log(`%c[限制規則執行] 結構: ${finalStru} -> AI建議:${thirdEvalJson.adjusted_structure} -> 最終鎖定:${cappedStructure}`, "color: orange; font-weight: bold;");
 
                         scoresForDisplay.structure = cappedStructure;
                         
@@ -16689,18 +16694,22 @@ ${fullTextContent}
                     }
 
                     // --- 更新表達分 ---
-                    // 表達分通常不受「離題」影響，且主席很少大幅調整表達分，
-                    // 但為了保險起見，也可以加上同樣限制 (視乎你需要，下面保持原樣或加上限制皆可)
                     if (thirdEvalJson.adjusted_expression > finalExpr) {
-                        // 這裡選擇加上同樣的 +2 限制以保持一致性
                         const cappedExpression = Math.min(thirdEvalJson.adjusted_expression, finalExpr + 2);
+                        
+                        console.log(`%c[限制規則執行] 表達: ${finalExpr} -> AI建議:${thirdEvalJson.adjusted_expression} -> 最終鎖定:${cappedExpression}`, "color: orange; font-weight: bold;");
+                        
                         scoresForDisplay.expression = cappedExpression;
                     }
-					
-                    // 更新表達分 (主席認為值得更高才調整，否則維持原判)
-                    if (thirdEvalJson.adjusted_expression > finalExpr) {
-                        scoresForDisplay.expression = thirdEvalJson.adjusted_expression;
-                    }
+
+                    // ★ 修改 2：在 Group 結束前顯示最終採用的分數
+                    console.log("✅ 三評後最終採用分:", { 
+                        C: scoresForDisplay.content, 
+                        S: scoresForDisplay.structure, 
+                        E: scoresForDisplay.expression 
+                    });
+
+                    console.groupEnd();
 
                 } else {
                     console.warn("三評 JSON 解析失敗，維持原判。");
