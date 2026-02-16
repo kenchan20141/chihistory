@@ -16569,23 +16569,34 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     
     // 1. 檢查是否符合「高分低能」條件 (只針對敘事抒情)
     // 條件：表達 >= 7 分，但 (內容 <= 4 分 或 結構 <= 4 分)
-    if (uniqueIdPrefix === 'narrative' && scoresForDisplay) {
-        // 1. 獲取單獨模型的表達分 (只要其中一個 >= 7)
-        // scoresA 是 Gemini, scoresB 是 Llama3 (可能為 null)
+   if (uniqueIdPrefix === 'narrative' && scoresForDisplay) {
+        // 1. 獲取個別模型的詳細分數
         const exprA = scoresA ? (scoresA.expression || 0) : 0;
+        const contA = scoresA ? (scoresA.content || 0) : 0;
+        const struA = scoresA ? (scoresA.structure || 0) : 0;
+
         const exprB = scoresB ? (scoresB.expression || 0) : 0;
+        const contB = scoresB ? (scoresB.content || 0) : 0;
+        const struB = scoresB ? (scoresB.structure || 0) : 0;
         
-        // 2. 獲取最終計算後的內容與結構分 (只要其中一個 <= 4)
+        // 2. 獲取最終顯示分數 (用於比較與更新)
         const finalCont = scoresForDisplay.content;
         const finalStru = scoresForDisplay.structure;
+        const finalExpr = scoresForDisplay.expression;
 
-        // 3. 判斷觸發條件
-        const isExprHigh = (exprA >= 7 || exprB >= 7);       // 條件一：任一模型覺得文筆好
-        const isContentLow = (finalCont <= 5 || finalStru <= 5); // 條件二：最終被評為離題/空洞
+        // 3. 判斷觸發條件 (按您的最新要求修訂)
+        // 條件A：其中一個模型的表達 >= 7
+        const isExprHigh = (exprA >= 7 || exprB >= 7);
+        
+        // 條件B：其中一個模型的內容或結構 <= 5
+        // (注意：這裡排除了 0 分的情況，以免因模型連線失敗而誤觸發)
+        const isContentLowA = (contA > 0 && contA <= 5) || (struA > 0 && struA <= 5);
+        const isContentLowB = (contB > 0 && contB <= 5) || (struB > 0 && struB <= 5);
+        const isContentLow = isContentLowA || isContentLowB;
 
         if (isExprHigh && isContentLow) {
-            console.warn(`🚨 [三評觸發] 偵測到評分爭議！`);
-            console.log(`觸發數據 -> Model A表達:${exprA} / Model B表達:${exprB} | 最終內容:${finalCont} / 最終結構:${finalStru}`);
+            console.warn(`🚨 [三評觸發] 偵測到評分爭議！(文筆高但內容/結構低)`);
+            console.log(`觸發數據 -> Model A[文:${exprA}/內:${contA}/結:${struA}] | Model B[文:${exprB}/內:${contB}/結:${struB}]`);
             
             // 顯示載入提示
             showLoading("偵測到評分爭議，試卷主席正在重閱...");
@@ -16596,8 +16607,7 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
             // 5. 建構三評 Prompt (主席視角)
             const thirdEvalPrompt = `
 你現在是公開試的「試卷主席」(Chief Examiner)。系統偵測到一份異常試卷。
-閱卷員A給予表達分：${exprA}，閱卷員B給予表達分：${exprB}。
-但該文章最終被評為內容貧乏或離題（內容${finalCont}分/結構${finalStru}分）。
+有閱卷員給予極高表達分（A:${exprA}, B:${exprB}），但同時有閱卷員給予較低的內容或結構分（A:${contA}/${struA}, B:${contB}/${struB}）。
 
 請重新審視這篇文章，你的任務是判斷：這是一篇「文筆好的離題文章/背誦文」，還是一篇「立意深遠、借事抒情」的滄海遺珠？
 
@@ -16630,7 +16640,7 @@ ${fullTextContent}
                 if (thirdEvalJson) {
                     console.group("⚖️ [三評報告] 試卷主席仲裁結果");
                     console.log("分析理由:", thirdEvalJson.rationale);
-                    console.log("原始最終分:", { C: finalCont, S: finalStru });
+                    console.log("原始最終分:", { C: finalCont, S: finalStru, E: finalExpr });
                     console.log("修正建議分:", { C: thirdEvalJson.adjusted_content, S: thirdEvalJson.adjusted_structure, E: thirdEvalJson.adjusted_expression });
                     console.groupEnd();
 
@@ -16656,9 +16666,8 @@ ${fullTextContent}
                         }
                     }
 
-                    // 更新表達分 (通常維持，但若主席認為值得更高也可調整)
-                    // 注意：這裡比較的是「最終顯示的表達分」
-                    if (thirdEvalJson.adjusted_expression > scoresForDisplay.expression) {
+                    // 更新表達分 (主席認為值得更高才調整，否則維持原判)
+                    if (thirdEvalJson.adjusted_expression > finalExpr) {
                         scoresForDisplay.expression = thirdEvalJson.adjusted_expression;
                     }
 
