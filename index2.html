@@ -16570,24 +16570,36 @@ async function displayFullCommentWithGrading(containerId, originalApiResponse, l
     // 1. 檢查是否符合「高分低能」條件 (只針對敘事抒情)
     // 條件：表達 >= 7 分，但 (內容 <= 4 分 或 結構 <= 4 分)
     if (uniqueIdPrefix === 'narrative' && scoresForDisplay) {
-        const currentExpr = scoresForDisplay.expression;
-        const currentCont = scoresForDisplay.content;
-        const currentStru = scoresForDisplay.structure;
+        // 1. 獲取單獨模型的表達分 (只要其中一個 >= 7)
+        // scoresA 是 Gemini, scoresB 是 Llama3 (可能為 null)
+        const exprA = scoresA ? (scoresA.expression || 0) : 0;
+        const exprB = scoresB ? (scoresB.expression || 0) : 0;
+        
+        // 2. 獲取最終計算後的內容與結構分 (只要其中一個 <= 4)
+        const finalCont = scoresForDisplay.content;
+        const finalStru = scoresForDisplay.structure;
 
-        if (currentExpr >= 7 && (currentCont <= 4 || currentStru <= 4)) {
-            console.warn(`🚨 [三評觸發] 偵測到評分異常 (文筆:${currentExpr} / 內容:${currentCont})，啟動試卷主席仲裁...`);
+        // 3. 判斷觸發條件
+        const isExprHigh = (exprA >= 7 || exprB >= 7);       // 條件一：任一模型覺得文筆好
+        const isContentLow = (finalCont <= 4 || finalStru <= 4); // 條件二：最終被評為離題/空洞
+
+        if (isExprHigh && isContentLow) {
+            console.warn(`🚨 [三評觸發] 偵測到評分爭議！`);
+            console.log(`觸發數據 -> Model A表達:${exprA} / Model B表達:${exprB} | 最終內容:${finalCont} / 最終結構:${finalStru}`);
             
             // 顯示載入提示
             showLoading("偵測到評分爭議，試卷主席正在重閱...");
 
-            // 2. 獲取題目
+            // 4. 獲取題目
             const currentTopic = localStorage.getItem("currentTopic") || "無題目";
 
-            // 3. 建構三評 Prompt (主席視角)
+            // 5. 建構三評 Prompt (主席視角)
             const thirdEvalPrompt = `
-你現在是公開試的「試卷主席」(Chief Examiner)。系統偵測到一份異常試卷，文筆極佳（${currentExpr}分），但被初步評為離題或內容貧乏（內容${currentCont}分/結構${currentStru}分）。
+你現在是公開試的「試卷主席」(Chief Examiner)。系統偵測到一份異常試卷。
+閱卷員A給予表達分：${exprA}，閱卷員B給予表達分：${exprB}。
+但該文章最終被評為內容貧乏或離題（內容${finalCont}分/結構${finalStru}分）。
 
-請重新審視這篇文章，你的任務是判斷：這是一篇「文筆好的離題文章」，還是一篇「立意深遠、借事抒情」的佳作？
+請重新審視這篇文章，你的任務是判斷：這是一篇「文筆好的離題文章/背誦文」，還是一篇「立意深遠、借事抒情」的滄海遺珠？
 
 【題目】：${currentTopic}
 【文章】：
@@ -16609,25 +16621,23 @@ ${fullTextContent}
 }`;
 
             try {
-                // 4. 呼叫 API 進行三評 (使用 Reading API/DeepSeek 模型)
-                // 使用 0.7 溫度值以獲得不同的分析視角
+                // 6. 呼叫 API 進行三評 (使用 Reading API/DeepSeek 模型)
                 const thirdEvalRaw = await callReadingAPI(thirdEvalPrompt, 0.7);
                 
-                // 5. 解析 JSON
+                // 7. 解析 JSON
                 const thirdEvalJson = safeJSONParse(thirdEvalRaw);
 
                 if (thirdEvalJson) {
                     console.group("⚖️ [三評報告] 試卷主席仲裁結果");
                     console.log("分析理由:", thirdEvalJson.rationale);
-                    console.log("原始分數:", { C: currentCont, S: currentStru, E: currentExpr });
-                    console.log("修正分數:", { C: thirdEvalJson.adjusted_content, S: thirdEvalJson.adjusted_structure, E: thirdEvalJson.adjusted_expression });
+                    console.log("原始最終分:", { C: finalCont, S: finalStru });
+                    console.log("修正建議分:", { C: thirdEvalJson.adjusted_content, S: thirdEvalJson.adjusted_structure, E: thirdEvalJson.adjusted_expression });
                     console.groupEnd();
 
-                    // 6. 更新最終分數 (只在分數有提升時才更新，防止誤判更低)
+                    // 8. 更新最終分數 (只在分數有提升時才更新，防止誤判更低)
                     // 更新內容分
-                    if (thirdEvalJson.adjusted_content > currentCont) {
+                    if (thirdEvalJson.adjusted_content > finalCont) {
                         scoresForDisplay.content = thirdEvalJson.adjusted_content;
-                        // 同步更新雷達圖
                         if(scoresForDisplay.radar) {
                             scoresForDisplay.radar.取材 = thirdEvalJson.adjusted_content;
                             // 如果判定不再離題，扣題分與立意分也應回升
@@ -16639,7 +16649,7 @@ ${fullTextContent}
                     }
                     
                     // 更新結構分
-                    if (thirdEvalJson.adjusted_structure > currentStru) {
+                    if (thirdEvalJson.adjusted_structure > finalStru) {
                         scoresForDisplay.structure = thirdEvalJson.adjusted_structure;
                         if(scoresForDisplay.radar) {
                             scoresForDisplay.radar.詳略 = thirdEvalJson.adjusted_structure;
@@ -16647,7 +16657,8 @@ ${fullTextContent}
                     }
 
                     // 更新表達分 (通常維持，但若主席認為值得更高也可調整)
-                    if (thirdEvalJson.adjusted_expression > currentExpr) {
+                    // 注意：這裡比較的是「最終顯示的表達分」
+                    if (thirdEvalJson.adjusted_expression > scoresForDisplay.expression) {
                         scoresForDisplay.expression = thirdEvalJson.adjusted_expression;
                     }
 
@@ -16657,9 +16668,6 @@ ${fullTextContent}
 
             } catch (e) {
                 console.error("三評執行失敗:", e);
-                // 失敗則維持原判，不影響流程
-            } finally {
-                // 不需隱藏 Loading，因為後續代碼會繼續處理
             }
         }
     }
