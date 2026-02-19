@@ -388,95 +388,125 @@
 
             // --- 核心邏輯 (Google Apps Script Proxy) ---
 
-            async function runOCR(base64Image) {
-                if (GAS_API_URL.includes("請在此處")) {
-                    throw new Error("請先設定 Google Apps Script URL");
-                }
+           // --- 核心邏輯 (Google Apps Script Proxy) ---
 
-            const promptText = 
-    "你是一個高中的寫作大綱助手。請辨識圖片中的表格內容。\n" +
-    "### 任務指令：\n" +
-    "1. 忽略表格標題（如「結構段重點」、「情節大要」）。\n" +
-    "2. 辨識每一行，將第一欄的標籤（如：起、承、轉、合、結構段一、一線等）作為 key。\n" +
-    "3. 將後面的內容精確提取出來。\n" +
-    "4. 在輸出的最後一行，務必提供以下格式的 JSON（不要包含在 Markdown 代碼塊內）：\n" +
-    "[[DATA_TABLE]]:{\"isTable\":true, \"segments\":[{\"label\":\"起\", \"focus\":\"內容\", \"plot\":\"內容\"}]}\n" +
-    "### 標籤對應規則：\n" +
-    "- 如果是敘事大綱：label 請填寫「起、承、轉、合」或「起、一線、二線、三線、合」。\n" +
-    "- 如果是議論大綱：label 請填寫「起、結構段一、結構段二...、合」。\n" +
-    "請務必保持繁體中文。";
-                
-                const payload = {
-                    image: base64Image,
-                    prompt: promptText
-                };
-                
-                const response = await fetch(GAS_API_URL, {
-                    method: "POST",
-                    body: JSON.stringify(payload)
-                });
+async function runOCR(base64Image) {
+    if (GAS_API_URL.includes("請在此處")) {
+        throw new Error("請先設定 Google Apps Script URL");
+    }
 
-                if (!response.ok) {
-                    throw new Error(`伺服器錯誤 (${response.status})`);
-                }
+    // ★★★ 修改重點：Prompt 改為要求 JSON 格式 ★★★
+    const promptText = 
+        "請分析這張圖片中的表格內容，這是一個中文寫作大綱。請識別每一列的「結構部分」(如：起、承、一線、結構段一、論點等) 以及對應的內容。\n" +
+        "嚴格指令：\n" +
+        "1. 必須輸出為純 JSON 格式，不要包含 Markdown 代碼塊 (```json)。\n" +
+        "2. JSON 結構為一個陣列，每個物件包含三個欄位：\n" +
+        "   - 'part': 該行的標題 (例如：起、承、轉、合、結構段一、一線、二線...)\n" +
+        "   - 'col1': 表格左邊/中間欄位的內容 (通常是：結構段重點、論點、扣題方向)\n" +
+        "   - 'col2': 表格右邊欄位的內容 (通常是：情節大要、論據及論證)\n" +
+        "3. 如果某欄位留空，請填入空字串。\n" +
+        "4. 內容請強制轉為正體中文 (Traditional Chinese)。";
 
-                const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error.message || data.error);
-                }
+    const payload = {
+        image: base64Image,
+        prompt: promptText
+    };
+    
+    const response = await fetch(GAS_API_URL, {
+        method: "POST",
+        body: JSON.stringify(payload)
+    });
 
-                if (!data.choices || !data.choices.length) {
-                    throw new Error("無回傳內容或 API 格式錯誤");
-                }
+    if (!response.ok) {
+        throw new Error(`伺服器錯誤 (${response.status})`);
+    }
 
-                return data.choices[0].message.content;
+    const data = await response.json();
+    
+    if (data.error) {
+        throw new Error(data.error.message || data.error);
+    }
+
+    if (!data.choices || !data.choices.length) {
+        throw new Error("無回傳內容或 API 格式錯誤");
+    }
+
+    return data.choices[0].message.content;
+}
+
+async function startOCR() {
+    const imgs = Array.from(dom.previewBox.querySelectorAll('img'));
+    if(!imgs.length) return;
+
+    dom.btns.recognize.disabled = true;
+    dom.resultBox.classList.remove('visible');
+    dom.loader.classList.add('visible');
+    
+    let combinedResults = []; // 儲存所有頁面的 JSON 陣列
+    fullTextContent = ""; // 用於顯示在下方的純文字預覽
+    
+    for(let i=0; i<imgs.length; i++) {
+        dom.loader.textContent = `正在辨識第 ${i+1} / ${imgs.length} 頁 (智能結構分析)...`;
+        try {
+            let content = await runOCR(imgs[i].src);
+            
+            // 清理 AI 可能輸出的 Markdown 標記
+            content = content.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "");
+            
+            // 嘗試解析 JSON
+            let parsedJSON;
+            try {
+                parsedJSON = JSON.parse(content);
+            } catch (e) {
+                console.warn("JSON 解析失敗，嘗試修復或降級為純文字", content);
+                // 如果 AI 沒給 JSON，就當作純文字處理，模擬一個通用結構
+                parsedJSON = [{ part: "OCR文字", col1: converter(content), col2: "" }];
             }
 
-            async function startOCR() {
-                const imgs = Array.from(dom.previewBox.querySelectorAll('img'));
-                if(!imgs.length) return;
+            // 簡轉繁處理 (針對 JSON 內的數值)
+            parsedJSON = parsedJSON.map(item => ({
+                part: converter(item.part || ""),
+                col1: converter(item.col1 || ""),
+                col2: converter(item.col2 || "")
+            }));
 
-                dom.btns.recognize.disabled = true;
-                dom.resultBox.classList.remove('visible');
-                dom.loader.classList.add('visible');
-                
-                let rawResults = [];
-                fullTextContent = "";
-                
-                for(let i=0; i<imgs.length; i++) {
-                    dom.loader.textContent = `正在辨識第 ${i+1} / ${imgs.length} 頁...`;
-                    try {
-                        let content = await runOCR(imgs[i].src);
-                        // [修改] 使用 OpenCC 進行嚴格簡轉繁
-                        content = converter(content);
-                        rawResults.push(content);
-                    } catch(err) {
-                        rawResults.push(`> [第 ${i+1} 頁錯誤: ${err.message}]`);
-                    }
-                }
-                
-                // 組合結果
-                const combinedMarkdown = rawResults.join('\n\n---\n\n');
-                fullTextContent = combinedMarkdown; 
+            combinedResults = combinedResults.concat(parsedJSON);
 
-                // 渲染 HTML
-                dom.resultText.innerHTML = marked.parse(combinedMarkdown);
-                
-                dom.resultBox.classList.add('visible');
-                dom.loader.classList.remove('visible');
-                dom.btns.recognize.disabled = false;
-                dom.btns.recognize.textContent = "重新辨識";
+            // 生成預覽文字 (Markdown 表格格式)
+            fullTextContent += `\n### 第 ${i+1} 頁\n| 部份 | 重點/論點 | 詳情/論據 |\n|---|---|---|\n`;
+            parsedJSON.forEach(row => {
+                fullTextContent += `| ${row.part} | ${row.col1} | ${row.col2} |\n`;
+            });
 
-                const messageData = { type: 'ocrResult', text: combinedMarkdown };
-                let targetWindow = null;
-                if (window.opener && window.opener !== window) targetWindow = window.opener;
-                else if (window.top && window.top.opener && window.top.opener !== window.top) targetWindow = window.top.opener;
-                else if (window.parent && window.parent !== window) targetWindow = window.parent;
-                if (targetWindow) {
-                    targetWindow.postMessage(messageData, '*');
-                }
-            }
+        } catch(err) {
+            fullTextContent += `> [第 ${i+1} 頁錯誤: ${err.message}]\n`;
+        }
+    }
+    
+    // 渲染 HTML 預覽
+    dom.resultText.innerHTML = marked.parse(fullTextContent);
+    
+    dom.resultBox.classList.add('visible');
+    dom.loader.classList.remove('visible');
+    dom.btns.recognize.disabled = false;
+    dom.btns.recognize.textContent = "重新辨識";
+
+    // ★★★ 關鍵修改：發送結構化數據 (JSON) 回主視窗 ★★★
+    const messageData = { 
+        type: 'ocrJSONResult', // 修改類型名稱以區分舊版
+        data: combinedResults 
+    };
+    
+    let targetWindow = null;
+    if (window.opener && window.opener !== window) targetWindow = window.opener;
+    else if (window.top && window.top.opener && window.top.opener !== window.top) targetWindow = window.top.opener;
+    
+    if (targetWindow) {
+        targetWindow.postMessage(messageData, '*');
+        // 為了相容性，也可以顯示一個提示
+        // alert("辨識完成！已自動填入神思大綱表格。");
+    }
+}
 
             function readFile(file) {
                 return new Promise(r => {
