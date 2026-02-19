@@ -386,6 +386,14 @@
                 return pages;
             }
 
+
+
+               // 1. 獲取網址參數 (補回這段缺失的代碼)
+        function getMode() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('mode') || 'text'; // 預設為 text
+        }
+
             // --- 核心邏輯 (Google Apps Script Proxy) ---
 
            // --- 核心邏輯 (Google Apps Script Proxy) ---
