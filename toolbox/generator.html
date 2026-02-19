@@ -1513,6 +1513,164 @@ textarea.morandi-input:focus {
     color: var(--morandi-text);
     margin-right: 8px;
 }
+
+
+		/* === 莫蘭迪作答區專用樣式 (只影響下方區域) === */
+
+/* 1. 作答區容器：與上方題目區隔，營造「紙張」感 */
+.answer-zone-container {
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 2px dashed #E0E0E0; /* 虛線分隔，像撕下的筆記紙 */
+    position: relative;
+}
+
+/* 2. 標題與分數 */
+.answer-zone-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    font-family: 'Noto Serif TC', serif;
+}
+
+.answer-zone-title {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #6B7280; /* 莫蘭迪深灰 */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.score-indicator {
+    background-color: #F3F4F6;
+    color: #8FA398; /* 莫蘭迪綠文字 */
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* 3. 輸入框：極簡、去框線感 */
+textarea.literary-textarea {
+    width: 100%;
+    min-height: 120px;
+    background-color: #FAFAFA; /* 極淡灰白 */
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 16px;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1rem;
+    color: #4B5563;
+    line-height: 1.8;
+    transition: all 0.3s ease;
+    resize: vertical;
+    outline: none;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+textarea.literary-textarea:focus {
+    background-color: #FFFFFF;
+    border-color: #8FA398; /* 聚焦時變為莫蘭迪綠 */
+    box-shadow: 0 4px 12px rgba(143, 163, 152, 0.15);
+}
+
+/* 4. 操作按鈕列 */
+.answer-actions {
+    display: flex;
+    justify-content: flex-end; /* 按鈕靠右 */
+    margin-top: 15px;
+    gap: 15px;
+}
+
+.btn-ai-grade {
+    background: linear-gradient(135deg, #8FA398 0%, #748B7F 100%); /* 莫蘭迪綠漸變 */
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px; /* 微圓角矩形，比膠囊更穩重 */
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(116, 139, 127, 0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-ai-grade:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(116, 139, 127, 0.4);
+}
+
+/* 5. 評分結果卡片：這是重點，要好看且層次分明 */
+.grading-report-card {
+    margin-top: 25px;
+    background-color: #FDFCF8; /* 暖杏白，像信紙 */
+    border: 1px solid #E6E2D8;
+    border-left: 4px solid #C59F99; /* 莫蘭迪粉重音 */
+    border-radius: 8px;
+    padding: 24px;
+    animation: fadeIn 0.5s ease;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+}
+
+/* 評分頭部：分數與標題 */
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px dashed #D8D2C8;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+
+.report-title {
+    font-family: 'Noto Serif TC', serif;
+    font-weight: bold;
+    color: #8D817B; /* 暖褐灰 */
+    font-size: 1.1rem;
+}
+
+.report-score-box {
+    font-family: 'Georgia', serif;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #C59F99; /* 粉色分數 */
+}
+
+.report-score-suffix {
+    font-size: 0.9rem;
+    color: #999;
+    font-weight: normal;
+}
+
+/* 評語內容排版 */
+.report-section {
+    margin-bottom: 16px;
+}
+
+.report-label {
+    display: inline-block;
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: #FFFFFF;
+    background-color: #B0B7B3; /* 灰綠標籤 */
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+    margin-bottom: 4px;
+}
+
+.report-text {
+    color: #555;
+    line-height: 1.8;
+    font-size: 1rem;
+    text-align: justify;
+}
 		
     </style>
 
@@ -4416,19 +4574,17 @@ function displayPracticalQuestions(allQuestions) {
 function createQuestionCard(title, content, answer = null, steps = null, type = 'default') {
     const card = document.createElement('div');
     card.className = 'question-card p-10 shadow-2xl slide-up mb-12';
-    
-    // --- 邏輯修正：自動偵測題目分數 ---
-    let maxScore = 10; // 預設值
-    // 嘗試從 content 或 title 中尋找如 (4分), [5分], 4分 等字眼
+
+    // --- 1. 自動抓分邏輯 ---
+    let maxScore = 10; 
     const scoreMatch = content.match(/[（(\[]\s*(\d+)\s*分\s*[)\]）]/) || content.match(/(\d+)\s*分/);
     if (scoreMatch && scoreMatch[1]) {
         maxScore = parseInt(scoreMatch[1]);
     }
 
-    // 處理選擇題與一般題目格式
+    // --- 2. 格式化內容 (保留您原本的邏輯) ---
     let formattedContent = content;
     let isMultipleChoice = type === '選擇';
-
     if (isMultipleChoice) {
         formattedContent = content.replace(/\n/g, '<br>');
         formattedContent = formattedContent.replace(/選項：<br>/g, '<div class="choice-options-container"><h4 class="choice-options-title">選項：</h4>');
@@ -4438,14 +4594,14 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
         }
     }
 
-    // 題型顏色 (維持原本邏輯)
+    // 設定題型顏色 (保留您原本的顏色)
     const typeColors = {
         'reading': 'var(--primary-teal)', 'essay': 'var(--primary-blue)', 'practical': 'var(--primary-green)',
         '複述': '#D4909F', '分析': '#B496EB', '印證': '#722F3E', '闡明': '#EA928F', '意見': '#8B6455', '比較': '#3EE1C2', '選擇': '#55A193'
     };
     const typeColor = typeColors[type] || 'var(--primary-teal)';
-    
-    // 1. 卡片頭部
+
+    // --- 3. 題目卡片上半部 (完全保留您滿意的原設計) ---
     let cardHTML = `
         <div class="flex items-center justify-between mb-8">
             <div class="question-title" style="background: linear-gradient(135deg, ${typeColor} 0%, ${typeColor}80 100%);">
@@ -4456,14 +4612,12 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
         </div>
     `;
 
-    // 2. 題目內容
     if (isMultipleChoice) {
         cardHTML += `
             <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 mb-8 border-2 border-gray-100">
                 <div class="text-gray-800 leading-relaxed text-lg font-medium">${formattedContent}</div>
             </div>
             <style>
-                /* 保留原有的選擇題 CSS */
                 .choice-options-container { margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 15px; border-left: 5px solid ${typeColor}; }
                 .choice-options-title { font-weight: bold; color: ${typeColor}; margin-bottom: 15px; font-size: 18px; }
                 .choice-option { padding: 10px 15px; margin: 8px 0; background: white; border-radius: 8px; border-left: 3px solid #dee2e6; font-weight: 500; transition: all 0.3s ease; }
@@ -4478,63 +4632,62 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
         `;
     }
 
-    // 3. 【莫蘭迪風格】作答區域
-    if (answer) { 
+    // --- 4. 新版作答區 (只修改這裡) ---
+    if (answer) {
         const safeQuestion = encodeURIComponent(content);
         const safeRefAnswer = encodeURIComponent(answer);
 
         cardHTML += `
-            <div class="morandi-interaction-area">
-                <label class="morandi-label">
-                    <i class="fas fa-feather-alt mr-2" style="color: var(--morandi-green);"></i>
-                    學生作答 <span style="font-size: 0.9rem; font-weight: normal; margin-left: auto; color: #999;">本題佔分：${maxScore}分</span>
-                </label>
+            <div class="answer-zone-container">
+                <!-- 標題與分數 -->
+                <div class="answer-zone-header">
+                    <span class="answer-zone-title">
+                        <i class="fas fa-pen-nib"></i> 作答區
+                    </span>
+                    <span class="score-indicator">本題佔分：${maxScore}分</span>
+                </div>
+
+                <!-- 輸入框：加上 no-modal-editor 確保不彈窗 -->
+                <textarea class="literary-textarea no-modal-editor" 
+                    placeholder="請在此輸入您的作答... (系統將根據參考答案與題目分數進行評析)"></textarea>
                 
-                <!-- 重要：加入 no-modal-editor class 以防止觸發懸浮視窗 -->
-                <textarea class="morandi-input no-modal-editor" 
-                    placeholder="請在此輸入您的見解..."></textarea>
-                
-                <div class="flex justify-end mt-4">
+                <!-- 按鈕區 -->
+                <div class="answer-actions">
+                    <!-- 原本的參考答案按鈕 (樣式稍微配合一下，但功能不變) -->
+                    <button onclick="toggleAnswer(this, '${typeColor}')" 
+                        style="color: #9CA3AF; background:none; border:none; cursor:pointer; font-size:0.9rem; margin-right:auto;">
+                        <i class="fas fa-eye"></i> 顯示參考答案
+                    </button>
+
+                    <!-- 新的評分按鈕 -->
                     <button onclick="submitForGrading(this, '${safeQuestion}', '${safeRefAnswer}', ${maxScore})" 
-                        class="morandi-btn">
+                        class="btn-ai-grade">
                         <i class="fas fa-magic"></i> AI 智能評改
                     </button>
                 </div>
 
-                <!-- 評分結果 (莫蘭迪風格) -->
-                <div class="grading-result-container hidden morandi-result-card">
-                    <div class="grading-content"></div>
+                <!-- 評分結果容器 (預設隱藏) -->
+                <div class="grading-result-container hidden">
+                    <!-- 內容將由 JS 填充 -->
                 </div>
             </div>
-        `;
 
-        // 4. 參考答案按鈕
-        cardHTML += `
-            <div class="border-t-4 pt-8" style="border-color: var(--divider-color);">
-                <button onclick="toggleAnswer(this, '${typeColor}')" class="flex items-center font-bold mb-6 transition-colors duration-300 text-xl hover:transform hover:scale-105" style="color: ${typeColor};">
-                    <i class="fas fa-eye mr-4"></i>顯示參考答案
-                </button>
-                <div class="answer-content hidden">
-                    <div class="answer-section mb-6">
-                        <h4 class="font-bold mb-6 flex items-center text-xl" style="color: var(--primary-green);">
-                            <i class="fas fa-lightbulb mr-4"></i>參考答案
-                        </h4>
-                        <div class="leading-relaxed whitespace-pre-wrap text-gray-700 text-lg">${answer}</div>
-                    </div>
+            <!-- 原本的參考答案隱藏區 (保留邏輯) -->
+            <div class="answer-content hidden" style="margin-top: 15px;">
+                <div class="answer-section mb-6">
+                    <h4 class="font-bold mb-6 flex items-center text-xl" style="color: var(--primary-green);">
+                        <i class="fas fa-lightbulb mr-4"></i>參考答案
+                    </h4>
+                    <div class="leading-relaxed whitespace-pre-wrap text-gray-700 text-lg">${answer}</div>
+                </div>
+                ${steps ? `<div class="steps-section">
+                    <h4 class="font-bold mb-6 flex items-center text-xl" style="color: #7fb3d5;">
+                        <i class="fas fa-list-ol mr-4"></i>答題步驟
+                    </h4>
+                    <div class="leading-relaxed whitespace-pre-wrap text-gray-700 text-lg">${steps}</div>
+                </div>` : ''}
+            </div>
         `;
-        
-        if (steps) {
-            cardHTML += `
-                    <div class="steps-section">
-                        <h4 class="font-bold mb-6 flex items-center text-xl" style="color: #7fb3d5;">
-                            <i class="fas fa-list-ol mr-4"></i>答題步驟
-                        </h4>
-                        <div class="leading-relaxed whitespace-pre-wrap text-gray-700 text-lg">${steps}</div>
-                    </div>
-            `;
-        }
-        
-        cardHTML += `</div></div>`;
     }
 
     card.innerHTML = cardHTML;
@@ -4543,62 +4696,60 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
 
       // 新增：處理 AI 評分
 async function submitForGrading(btn, encodedQuestion, encodedRefAnswer, maxScore) {
-    const container = btn.closest('.morandi-interaction-area');
+    // 1. 抓取元素 (根據新的 DOM 結構調整)
+    const container = btn.closest('.answer-zone-container');
     const inputArea = container.querySelector('textarea');
     const resultContainer = container.querySelector('.grading-result-container');
-    const resultContent = container.querySelector('.grading-content');
     
     const userAnswer = inputArea.value.trim();
     const question = decodeURIComponent(encodedQuestion);
     const refAnswer = decodeURIComponent(encodedRefAnswer);
 
     if (!userAnswer) {
-        alert("請先輸入作答內容，方可進行評析。");
+        alert("請輸入作答內容");
         return;
     }
 
-    // UI 狀態更新
+    // 2. UI 狀態更新
     const originalBtnContent = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>評析中...';
-    btn.style.opacity = "0.7";
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 評析中...';
+    btn.style.opacity = "0.8";
     btn.disabled = true;
     inputArea.disabled = true;
     resultContainer.classList.add('hidden'); 
 
     try {
-        // --- 修改 1：優化提示詞，明確禁止 Markdown ---
+        // 3. Prompt (要求輸出符合新 CSS 的結構)
         const promptMessages = [
-            { role: "system", content: "你是一位客觀且專業的中文科老師。請根據題目分數進行精確評分，語氣要文雅。請直接輸出 HTML 格式。" },
+            { role: "system", content: "你是一位客觀且專業的高中DSE中文科老師。請根據題目分數評分。請直接輸出 HTML。" },
             { role: "user", content: `
-                【評改任務】
-                請針對以下學生作答進行評分。
+                【任務】評改學生作答。
                 
-                題目資訊：
-                - 題目：${question}
-                - 滿分：${maxScore} 分 (請嚴格以此為分母)
-                - 參考答案：${refAnswer}
-                
-                學生作答：
-                ${userAnswer}
+                題目：${question}
+                滿分：${maxScore}
+                參考答案：${refAnswer}
+                學生作答：${userAnswer}
                 
                 【輸出要求】
-                1. 嚴禁使用 markdown 格式 (如 **粗體**, ##標題 等)。
-                2. 重點強調的文字，請直接使用 <b>重點文字</b> 標籤包裹。
-                3. 請直接輸出以下 HTML 結構 (不要輸出 ```html 標記)：
-                
-                <div class="morandi-result-header">
-                    <span><i class="fas fa-feather-alt mr-2"></i>評析報告</span>
-                    <span class="score-badge">得分：X / ${maxScore}</span>
-                </div>
-                
-                <div class="morandi-feedback-content">
-                    <div class="morandi-feedback-section">
-                        <span class="morandi-feedback-label">【評語】</span>
-                        這裡寫具體的評語。
+                1. 不要使用 Markdown。
+                2. 請嚴格輸出以下 HTML 結構 (僅輸出 div 內容)：
+
+                <div class="grading-report-card">
+                    <div class="report-header">
+                        <span class="report-title"><i class="fas fa-feather-alt mr-2"></i>評析報告</span>
+                        <div class="report-score-box">
+                            X <span class="report-score-suffix">/ ${maxScore}</span>
+                        </div>
                     </div>
-                    <div class="morandi-feedback-section">
-                        <span class="morandi-feedback-label">【建議】</span>
-                        這裡寫具體的建議。
+                    
+                    <div class="report-section">
+                        <span class="report-label">評語</span>
+                        <div class="report-text">這裡寫溫和、具體的評語...</div>
+                    </div>
+                    
+                    <div class="report-section">
+                        <span class="report-label">建議</span>
+                        <div class="report-text">這裡寫改進建議...</div>
                     </div>
                 </div>
             ` }
@@ -4611,30 +4762,20 @@ async function submitForGrading(btn, encodedQuestion, encodedRefAnswer, maxScore
 
         const gradingResult = await callAPI(requestBody, 'gemini-search');
 
-        // --- 修改 2：後處理，強制清除/轉換 Markdown ---
-        let cleanResult = gradingResult;
-
-        // 步驟 A: 移除代碼塊標記 (```html)
-        cleanResult = cleanResult.replace(/```html/g, '').replace(/```/g, '').trim();
-
-        // 步驟 B: 將 markdown 的粗體 **文字** 轉換為 html 的 <b>文字</b>
-        // 這樣既保留了強調效果，又去除了醜陋的星號
+        // 4. 後處理 (清除 Markdown)
+        let cleanResult = gradingResult.replace(/```html/g, '').replace(/```/g, '').trim();
         cleanResult = cleanResult.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
 
-        // 步驟 C: 移除其他可能出現的 markdown 符號 (如 #, *, - ) 避免殘留
-        // 這裡只針對行首的列表符號或標題符號，避免誤刪文字中的符號
-        cleanResult = cleanResult.replace(/^#+\s/gm, '').replace(/^\*\s/gm, '• ');
-
-        // 顯示結果
-        resultContent.innerHTML = cleanResult;
+        // 5. 顯示結果
+        resultContainer.innerHTML = cleanResult;
         resultContainer.classList.remove('hidden');
         
-        // 平滑滾動
+        // 滾動到結果
         resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     } catch (error) {
-        console.error("評分失敗:", error);
-        alert("評析服務暫時繁忙，請稍歇再試。");
+        console.error(error);
+        alert("評分服務暫時繁忙，請稍後重試。");
     } finally {
         btn.innerHTML = originalBtnContent;
         btn.style.opacity = "1";
@@ -4642,7 +4783,6 @@ async function submitForGrading(btn, encodedQuestion, encodedRefAnswer, maxScore
         inputArea.disabled = false;
     }
 }
-
        function showResult() {
     const selectedType = document.querySelector('input[name="generatorType"]:checked').value;
     
