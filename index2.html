@@ -16907,14 +16907,6 @@ function smartUpdateInput(elementId, newValue) {
 	
 // ▼▼▼▼▼ 貼上這段新代碼 ▼▼▼▼▼
 
-// ==========================================
-// === OCR 通用接收與處理邏輯 (神思適配最終版) ===
-// ==========================================
-
-// 1. 重新綁定監聽器 (防止重複綁定)
-window.removeEventListener('message', handleOCRMessage);
-window.addEventListener('message', handleOCRMessage);
-
 // 2. 主處理函式
 function handleOCRMessage(event) {
     // 安全檢查
@@ -17147,6 +17139,13 @@ function fillArgumentOutlineUniversal(ocrRows) {
     
     alert(`議論大綱已填入！`);
 }
+
+	// 重新綁定監聽器 (確保不會重複)
+window.removeEventListener('message', handleOCRMessage);
+window.addEventListener('message', handleOCRMessage);
+
+// ▲▲▲▲▲ 貼上結束 ▲▲▲▲▲
+});
 
 /**
  * 【最終把關規則修訂 v3】
