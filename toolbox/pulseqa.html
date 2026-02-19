@@ -2236,27 +2236,19 @@ function closeFullscreenCountdown() {
 // Host UI Toggle Logic
 function toggleMode() {
   const mode = document.querySelector('input[name="questionMode"]:checked').value;
-  const outlineConfig = document.getElementById('outlineConfig');
+  // const outlineConfig = document.getElementById('outlineConfig'); // 移除此行
   const wordCountDisplay = document.getElementById('wordCountDisplay');
   const studentAnswer = document.getElementById('studentAnswer');
   
-  if (mode === 'outline') {
-    outlineConfig.classList.remove('hidden');
-    if (wordCountDisplay) wordCountDisplay.classList.add('hidden');
-  } else {
-    outlineConfig.classList.add('hidden');
-  }
+  // 移除關於 outlineConfig 的顯示/隱藏邏輯
   
   // 拓展模式特殊處理
   if (mode === 'extended') {
-    // 關鍵修訂：確保字數計數器可見
     if (wordCountDisplay) {
       wordCountDisplay.classList.remove('hidden');
-      // 重置字數顯示
       const remainingWordsElement = document.getElementById('remainingWords');
       if (remainingWordsElement) remainingWordsElement.textContent = '180';
     }
-    // 設置輸入框屬性
     if (studentAnswer) {
       studentAnswer.maxLength = 180;
       studentAnswer.placeholder = '請在此輸入您的回答 (最多180字)...';
@@ -3311,10 +3303,10 @@ async function startSession() {
     const newQuestionId = Date.now();
     currentQuestionId = newQuestionId;
     const mode = document.querySelector('input[name="questionMode"]:checked').value;
-    let outlineConfig = null;
+     let outlineConfig = null;
     if (mode === 'outline') {
-      const outlineType = document.querySelector('input[name="outlineType"]:checked').value;
-      outlineConfig = { type: outlineType };
+      // 預設為一般大綱，具體結構交由學生端自行選擇
+      outlineConfig = { type: 'general' }; 
     }
     try {
       // 先更新 session
