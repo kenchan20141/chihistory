@@ -1584,9 +1584,6 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 </div>
 <script>
-
-
-	
 const firebaseConfig = {
 apiKey: "AIzaSyB17JKsoCf-H66g13EphV9H7GfR3MreFOo",
 authDomain: "collect-358e3.firebaseapp.com",
@@ -1626,96 +1623,7 @@ let hasSubmitted = false;
 let currentQuestionId = null;
   // 全局變量
 let isSharingScreen = false;
-
-
-
-// === 新增：Session 管理與防重整機制 ===
-
-// 1. 儲存當前會話狀態
-function saveSession(role, room, name) {
-  const sessionData = {
-    role: role,
-    room: room,
-    name: name,
-    timestamp: Date.now()
-  };
-  localStorage.setItem('pulse_session', JSON.stringify(sessionData));
-}
-
-// 2. 清除會話狀態 (登出時呼叫)
-function clearSessionData() {
-  localStorage.removeItem('pulse_session');
-  localStorage.removeItem('pulse_student_draft'); // 清除草稿
-}
-
-// 3. 儲存學生草稿 (打字時呼叫)
-function saveStudentDraft(text) {
-  localStorage.setItem('pulse_student_draft', text);
-}
-
-// 4. 讀取學生草稿
-function getStudentDraft() {
-  return localStorage.getItem('pulse_student_draft') || "";
-}
-
-// 5. 恢復學生狀態的輔助函式 (用於 joinAsStudent 內部)
-function restoreStudentState(roomData) {
-  const myAnswer = roomData.answers ? roomData.answers[currentUser] : null;
-  const studentTextArea = document.getElementById('studentAnswer');
-  const submitBtn = document.getElementById('submitBtn');
-  const downloadBtn = document.getElementById('downloadMyAnswerBtn');
-  const submissionStatus = document.getElementById('submissionStatus');
-  const answerInputArea = document.getElementById('answerInputArea');
-
-  // 1. 檢查是否有已提交的答案
-  if (myAnswer) {
-    // 如果已提交，從 Firebase 恢復內容並鎖定
-    studentTextArea.value = myAnswer.text || ""; 
-    
-    hasSubmitted = true;
-    submissionStatus.classList.remove('hidden');
-    if(downloadBtn) downloadBtn.classList.remove('hidden');
-    
-    // 鎖定介面
-    studentTextArea.disabled = true;
-    submitBtn.classList.add('hidden');
-    submitBtn.disabled = true;
-    answerInputArea.classList.add('submitted');
-    
-    if (myAnswer.late) {
-      answerInputArea.classList.add('late');
-      submissionStatus.innerHTML = '<i class="fas fa-clock text-red-500 mr-2"></i>已超時提交';
-    } else {
-      submissionStatus.innerHTML = '<i class="fas fa-check-circle text-moss-green mr-2"></i>已提交回答';
-    }
-  } else {
-    // 2. 如果未提交，嘗試恢復本地草稿
-    const draft = getStudentDraft();
-    // 只有當草稿有內容且輸入框目前為空時才恢復，避免覆蓋
-    if (draft && !studentTextArea.value) {
-      studentTextArea.value = draft;
-    }
-    
-    // 確保介面是可編輯狀態
-    hasSubmitted = false;
-    studentTextArea.disabled = false;
-    submitBtn.classList.remove('hidden');
-    submitBtn.disabled = false;
-    submissionStatus.classList.add('hidden');
-    answerInputArea.classList.remove('submitted');
-  }
-}
-
-
-
-
-
-	
 // 切換畫面同步功能
-
-
-
-	
 async function toggleScreenSharing() {
   if (!isHost || !currentRoom || !sessionActive) return;
  
@@ -2025,131 +1933,77 @@ link.href = canvas.toDataURL();
 link.click();
 }
 async function createRoom() {
-  try {
-    // 如果是重新整理後恢復，currentRoom 已經有值 (從 localStorage 恢復的)
-    // 如果沒有值，則生成新的
-    let roomCode = currentRoom; 
-    if (!roomCode) {
-         roomCode = generateRoomCode();
-    }
-    
-    const hostName = "主持人";
-    
-    // 檢查 Firebase 是否已有此房間 (避免重整時覆蓋掉現有數據)
-    const snapshot = await database.ref('class_rooms/' + roomCode).once('value');
-    
-    if (!snapshot.exists()) {
-      // 只有房間不存在時才建立新資料
-      const roomData = {
-        code: roomCode,
-        host: hostName,
-        created: firebase.database.ServerValue.TIMESTAMP,
-        participants: {},
-        session: {
-          active: false,
-          question: "",
-          questionId: Date.now(),
-          timeLimit: 600,
-          startTime: null,
-          endTime: null
-        },
-        answers: {}
-      };
-      await database.ref('class_rooms/' + roomCode).set(roomData);
-    } else {
-        // 如果房間已存在（恢復連線），嘗試同步當前的題目狀態到本地界面
-        const existingData = snapshot.val();
-        if (existingData.session) {
-            // 恢復輸入框的題目
-            document.getElementById('questionInput').value = existingData.session.question || "";
-            // 恢復時間設定 (如果有)
-            if (existingData.session.timeLimit) {
-                const m = Math.floor(existingData.session.timeLimit / 60);
-                const s = existingData.session.timeLimit % 60;
-                document.getElementById('minutesInput').value = m;
-                document.getElementById('secondsInput').value = s;
-            }
-        }
-    }
-
-    currentRoom = roomCode;
-    currentUser = hostName;
-    isHost = true;
-    
-    // ★★★ 關鍵：儲存會話狀態 ★★★
-    saveSession('host', roomCode, hostName);
-
-    document.getElementById('hostRoomCode').textContent = roomCode;
-    generateQRCode(roomCode);
-    setupRoomListener();
-    
-  } catch (error) {
-    console.error('創建/恢復房間失敗:', error);
-    alert('創建/恢復房間失敗,請重試');
-  }
+try {
+const roomCode = generateRoomCode();
+const hostName = "主持人";
+const roomData = {
+code: roomCode,
+host: hostName,
+created: firebase.database.ServerValue.TIMESTAMP,
+participants: {},
+session: {
+active: false,
+question: "",
+questionId: Date.now(),
+timeLimit: 600,
+startTime: null,
+endTime: null
+},
+answers: {}
+};
+await database.ref('class_rooms/' + roomCode).set(roomData);
+currentRoom = roomCode;
+currentUser = hostName;
+isHost = true;
+currentQuestionId = roomData.session.questionId;
+document.getElementById('hostRoomCode').textContent = roomCode;
+generateQRCode(roomCode);
+setupRoomListener();
+} catch (error) {
+console.error('創建房間失敗:', error);
+alert('創建房間失敗,請重試');
 }
-async function joinAsStudent(autoRoom = null, autoName = null) {
-  // 如果有傳入參數(自動恢復)，就用參數；否則讀取輸入框
-  const studentName = autoName || document.getElementById('studentName').value.trim();
-  const roomCode = autoRoom || document.getElementById('joinRoomCode').value.trim();
-
-  if (!studentName || !roomCode) {
-    alert('請輸入姓名和房間代碼');
-    return;
-  }
-  if (roomCode.length !== 6) {
-    alert('房間代碼必須是6位數');
-    return;
-  }
-
-  try {
-    const roomSnapshot = await database.ref('class_rooms/' + roomCode).once('value');
-    if (!roomSnapshot.exists()) {
-      alert('房間不存在');
-      // 如果房間已經沒了，清除本地無效的 session
-      clearSessionData();
-      showMainMenu();
-      return;
-    }
-    
-    const roomData = roomSnapshot.val();
-    
-    // 檢查名稱重複 (如果是自動重連 autoName 有值，則允許重複，因為是同一個人)
-    if (!autoName && roomData.participants && roomData.participants[studentName]) {
-      alert('此名稱已被使用,請選擇其他名稱');
-      return;
-    }
-    
-    // 更新 Firebase 狀態 (加入 lastActive)
-    await database.ref('class_rooms/' + roomCode + '/participants/' + studentName).update({
-      name: studentName,
-      // 如果是新加入，寫入 joined；如果是重連，保留原 joined
-      joined: roomData.participants && roomData.participants[studentName] ? roomData.participants[studentName].joined : firebase.database.ServerValue.TIMESTAMP,
-      submitted: roomData.participants && roomData.participants[studentName] ? roomData.participants[studentName].submitted : false,
-      late: roomData.participants && roomData.participants[studentName] ? roomData.participants[studentName].late : false,
-      lastQuestionId: roomData.participants && roomData.participants[studentName] ? roomData.participants[studentName].lastQuestionId : (roomData.session.questionId || null)
-    });
-
-    currentRoom = roomCode;
-    currentUser = studentName;
-    isHost = false;
-
-    // ★★★ 關鍵：儲存會話狀態 ★★★
-    saveSession('student', roomCode, studentName);
-
-    document.getElementById('studentRoomCode').textContent = roomCode;
-    document.getElementById('studentDisplayName').textContent = studentName;
-    
-    setupRoomListener();
-    showStudentSection();
-
-    // ★★★ 關鍵：恢復作答狀態與草稿 ★★★
-    restoreStudentState(roomData);
-
-  } catch (error) {
-    console.error('加入房間失敗:', error);
-    alert('加入房間失敗,請重試');
-  }
+}
+async function joinAsStudent() {
+const studentName = document.getElementById('studentName').value.trim();
+const roomCode = document.getElementById('joinRoomCode').value.trim();
+if (!studentName || !roomCode) {
+alert('請輸入姓名和房間代碼');
+return;
+}
+if (roomCode.length !== 6) {
+alert('房間代碼必須是6位數');
+return;
+}
+try {
+const roomSnapshot = await database.ref('class_rooms/' + roomCode).once('value');
+if (!roomSnapshot.exists()) {
+alert('房間不存在');
+return;
+}
+const roomData = roomSnapshot.val();
+if (roomData.participants && roomData.participants[studentName]) {
+alert('此名稱已被使用,請選擇其他名稱');
+return;
+}
+await database.ref('class_rooms/' + roomCode + '/participants/' + studentName).set({
+name: studentName,
+joined: firebase.database.ServerValue.TIMESTAMP,
+submitted: false,
+late: false,
+lastQuestionId: roomData.session.questionId || null
+});
+currentRoom = roomCode;
+currentUser = studentName;
+isHost = false;
+document.getElementById('studentRoomCode').textContent = roomCode;
+document.getElementById('studentDisplayName').textContent = studentName;
+setupRoomListener();
+showStudentSection();
+} catch (error) {
+console.error('加入房間失敗:', error);
+alert('加入房間失敗,請重試');
+}
 }
 function setupRoomListener() {
   if (roomRef) {
@@ -4647,48 +4501,15 @@ async function leaveHost() {
  
   sessionActive = false;
   
+  // ★★★ 修訂處：先檢查元素是否存在，再執行 classList 操作 ★★★
   const hostCountdownContainer = document.getElementById('hostCountdownContainer');
   if (hostCountdownContainer) {
     hostCountdownContainer.classList.add('hidden');
   }
 
-  // ★★★ 新增：清除會話 ★★★
-  clearSessionData();
-
   currentRoom = null;
   currentUser = null;
   isHost = false;
-  showMainMenu();
-}
-
-async function leaveStudent() {
-  // 關閉全屏倒計時
-  if (fullscreenTimer) {
-    clearInterval(fullscreenTimer);
-    fullscreenTimer = null;
-    closeFullscreenCountdown();
-  }
- 
-  if (roomRef) {
-    roomRef.off();
-    roomRef = null;
-  }
-  if (currentRoom && currentUser) {
-    // 學生離開只移除自己的記錄
-    await database.ref('class_rooms/' + currentRoom + '/participants/' + currentUser).remove();
-  }
-  
-  clearInterval(timer);
-  timer = null;
-  sessionActive = false;
-  
-  // ★★★ 新增：清除會話 ★★★
-  clearSessionData();
-
-  currentRoom = null;
-  currentUser = null;
-  isHost = false;
-  hasSubmitted = false;
   showMainMenu();
 }
  
@@ -4769,103 +4590,26 @@ window.addEventListener('beforeunload', () => {
   }
 });
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. 初始化全屏倒計時按鈕
-  const remainingTimeDisplay = document.getElementById('remainingTimeDisplay');
-  if (remainingTimeDisplay) {
-    remainingTimeDisplay.style.cursor = 'pointer';
-    remainingTimeDisplay.title = '點擊放大顯示';
-   
-    remainingTimeDisplay.addEventListener('click', function(e) {
-      e.stopPropagation();
-      if (!sessionActive || !isHost) return;
-      openFullscreenCountdown();
-    });
-  }
-  
-  const closeFullscreenCountdownBtn = document.getElementById('closeFullscreenCountdown');
-  if (closeFullscreenCountdownBtn) {
-    closeFullscreenCountdownBtn.addEventListener('click', closeFullscreenCountdown);
-  }
-  
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && !document.getElementById('fullscreenCountdown').classList.contains('hidden')) {
-      closeFullscreenCountdown();
-    }
-  });
- 
-  // 2. 初始化字體大小
-  const savedFontSize = localStorage.getItem('answerFontSize');
-  if (savedFontSize) {
-    currentFontSize = parseFloat(savedFontSize);
-  }
-  initializeFontControls();
-  
-  // 3. 初始化繪圖工具與全屏回答
   timer = null;
   setupFullscreenAnswers();
   initDrawingTools();
-  
-  // 4. 初始化學生輸入框高度自動調整與草稿保存
   const studentAnswer = document.getElementById('studentAnswer');
   if (studentAnswer) {
     studentAnswer.addEventListener('input', function() {
       this.style.height = 'auto';
       this.style.height = this.scrollHeight + 'px';
-      
-      // ★★★ 新增：打字時自動儲存草稿 ★★★
-      saveStudentDraft(this.value);
     });
-    // 初始化高度
     studentAnswer.style.height = 'auto';
     studentAnswer.style.height = studentAnswer.scrollHeight + 'px';
   }
-
-  // 5. ★★★ 核心邏輯：檢查 Session 並自動恢復 ★★★
-  const savedSession = localStorage.getItem('pulse_session');
   const urlParams = new URLSearchParams(window.location.search);
-  const roomCodeParam = urlParams.get('room');
-
-  // 如果網址有帶 room 參數，且與 savedSession 不同，則優先使用網址參數(視為新加入)，忽略 session
-  // 如果網址沒參數，或者參數與 session 相同，則嘗試恢復
-  let shouldRestore = false;
-  if (savedSession) {
-      try {
-          const session = JSON.parse(savedSession);
-          if (!roomCodeParam || roomCodeParam === session.room) {
-              shouldRestore = true;
-              console.log("偵測到中斷的會話，正在恢復...", session);
-              
-              if (session.role === 'host') {
-                  // 恢復主持人
-                  document.getElementById('mainMenu').classList.add('hidden');
-                  document.getElementById('hostSection').classList.remove('hidden');
-                  currentRoom = session.room;
-                  // 呼叫 createRoom，內部邏輯會檢測到 currentRoom 已存在而變成恢復模式
-                  createRoom(); 
-              } else if (session.role === 'student') {
-                  // 恢復學生
-                  document.getElementById('mainMenu').classList.add('hidden');
-                  // 傳入參數以觸發自動登入
-                  joinAsStudent(session.room, session.name);
-              }
-          }
-      } catch (e) {
-          console.error("會話恢復失敗", e);
-          clearSessionData();
-      }
+  const roomCode = urlParams.get('room');
+  if (roomCode && roomCode.length === 6) {
+    document.getElementById('joinRoomCode').value = roomCode;
+    showJoinSection();
+  } else {
+    showMainMenu();
   }
-
-  // 如果不需要恢復 (是新使用者或點擊了分享連結)
-  if (!shouldRestore) {
-      if (roomCodeParam && roomCodeParam.length === 6) {
-        document.getElementById('joinRoomCode').value = roomCodeParam;
-        showJoinSection();
-      } else {
-        showMainMenu();
-      }
-  }
-  
-  setTimeout(applyFontSize, 100);
 });
 document.getElementById('fullscreenToggle').addEventListener('click', function() {
   if (!currentRoom) return;
