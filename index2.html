@@ -16857,6 +16857,35 @@ if (ocrBtn) {
     });
 }
 
+
+// === 智能更新函式：同時更新表格與懸浮視窗 ===
+function smartUpdateInput(elementId, newValue) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    // 1. 更新背後的表格內容
+    el.value = newValue;
+    el.dispatchEvent(new Event('input', { bubbles: true })); // 觸發自動存檔
+
+    // 2. ★★★ 關鍵修復：檢查是否正好是懸浮視窗正在編輯的那一格 ★★★
+    // 如果是，就同步更新懸浮視窗，防止視窗關閉時用舊資料覆蓋
+    if (typeof currentEditingElement !== 'undefined' && 
+        currentEditingElement && 
+        currentEditingElement.id === elementId) {
+        
+        const modalTextarea = document.getElementById('modal-textarea');
+        const modal = document.getElementById('outline-editor-modal');
+        
+        if (modal && modal.style.display !== 'none' && modalTextarea) {
+            console.log(`[同步更新] 偵測到懸浮視窗正在編輯 ${elementId}，同步更新視窗內容。`);
+            modalTextarea.value = newValue;
+        }
+    }
+}
+
+
+
+	
 // ▼▼▼▼▼ 貼上這段新代碼 ▼▼▼▼▼
 
 // === OCR 智能分配接收器 (表格專用版) ===
@@ -16922,9 +16951,9 @@ function insertTextToActiveElement(text) {
     }
 }
 
-// === 核心邏輯 1: 填入敘事大綱 (修復版：防吃字邏輯) ===
+// === 核心邏輯 1: 填入敘事大綱 (V2 終極修復版) ===
 function fillNarrativeOutline(ocrRows) {
-    const structure = document.getElementById("structure").value; // "fourPart" or "threeLine"
+    const structure = document.getElementById("structure").value;
     
     let mapping = [];
     if (structure === "fourPart") {
@@ -16945,28 +16974,22 @@ function fillNarrativeOutline(ocrRows) {
     }
 
     ocrRows.forEach(row => {
-        // 清理數據：移除換行符，避免干擾比對
         let rawPartName = row.part ? row.part.replace(/\n/g, " ").trim() : "";
         
-        // 在 mapping 中尋找最匹配的關鍵字 (例如 "結構段(起)" 包含 "起")
         const match = mapping.find(m => rawPartName.includes(m.key));
         
         if (match) {
             const focusId = `${structure}Focus${match.idIndex}`;
             const plotId = `${structure}Plot${match.idIndex}`;
-            const focusEl = document.getElementById(focusId);
-            const plotEl = document.getElementById(plotId);
-            
-            // --- ★★★ 關鍵修復：救援被合併的內容 ★★★ ---
-            // 情況：OCR 回傳 part: "起 TEST", col1: "", col2: "TEST2"
-            // 我們需要把 "TEST" 從 part 裡面救出來，填進 col1
             
             let finalCol1 = row.col1;
-            
-            // 如果 col1 是空的，但 part 裡面除了關鍵字(如"起")還有其他文字
+            const finalCol2 = row.col2;
+
+            // --- ★★★ 內容救援邏輯 (針對「起 TEST」被合併的情況) ★★★ ---
+            // 如果中間欄(col1)是空的，但標題(part)比關鍵字長很多，代表內容被吃到標題裡了
             if ((!finalCol1 || finalCol1.trim() === "") && rawPartName.length > match.key.length) {
-                // 移除關鍵字，剩下的就是內容
-                // 例如 "起 TEST" -> 移除 "起" -> 剩下 " TEST" -> trim -> "TEST"
+                // 移除關鍵字 (例如 "起") 和常見標點，剩下的就是內容
+                // 例如 "起 TEST" -> 移除 "起" -> " TEST" -> trim -> "TEST"
                 let rescuedContent = rawPartName.replace(match.key, "").replace(/[:：]/g, "").trim();
                 
                 if (rescuedContent.length > 0) {
@@ -16974,104 +16997,86 @@ function fillNarrativeOutline(ocrRows) {
                     finalCol1 = rescuedContent;
                 }
             }
-            // ---------------------------------------------
+            // -------------------------------------------------------
 
-            if (focusEl) {
-                focusEl.value = finalCol1 || ""; 
-                focusEl.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-            if (plotEl) {
-                plotEl.value = row.col2 || "";
-                plotEl.dispatchEvent(new Event('input', { bubbles: true }));
-            }
+            // 使用智能更新函式 (解決點擊該格失效的問題)
+            smartUpdateInput(focusId, finalCol1 || "");
+            smartUpdateInput(plotId, finalCol2 || "");
         }
     });
-    alert("敘事大綱已自動填入！");
+    alert("敘事大綱已填入！");
 }
 
-// === 核心邏輯 2: 填入議論大綱 (含自動新增表格) ===
+// === 核心邏輯 2: 填入議論大綱 (V2 終極修復版) ===
 function fillArgumentOutline(ocrRows) {
     const table = document.getElementById("argumentOutlineTable");
     if (!table) return;
 
-    // 1. 先處理固定的「起」和「合」
-    // 2. 處理中間的「結構段」
-    // 3. 如果 OCR 的結構段數量 > 當前表格行數，自動按按鈕新增
-
-    // 分離出 OCR 數據中的結構段
     const startRow = ocrRows.find(r => r.part.includes("起"));
     const endRow = ocrRows.find(r => r.part.includes("合"));
     
-    // 找出所有中間段落 (過濾掉起、合，且名稱包含"段"或"論點"或"結構")
     const bodyRows = ocrRows.filter(r => 
         !r.part.includes("起") && 
         !r.part.includes("合") && 
-        (r.part.includes("段") || r.part.includes("一") || r.part.includes("二") || r.part.includes("三") || r.part.includes("四"))
+        (r.part.includes("段") || r.part.includes("一") || r.part.includes("二") || r.part.includes("三") || r.part.includes("四") || r.part.includes("論點"))
     );
 
     // --- 填寫「起」---
     if (startRow) {
-        // 議論表格第一行通常是 Header，第二行是「起」(index 0)
-        document.getElementById("argumentPoint0").value = startRow.col1;
-        document.getElementById("argumentEvidence0").value = startRow.col2;
+        smartUpdateInput("argumentPoint0", startRow.col1);
+        smartUpdateInput("argumentEvidence0", startRow.col2);
     }
 
-    // --- 填寫「結構段」 (動態新增邏輯) ---
-    // 計算當前表格有多少個結構段 (排除起、合)
-    // 假設 ID 規律是 argumentPoint1, argumentPoint2... 
-    // argumentPoint0 是起, 最後一個是合.
-    
-    // 我們先檢查需要多少個結構段
+    // --- 動態新增結構段 ---
     const neededBodyCount = bodyRows.length;
-    
-    // 獲取當前 DOM 中已有的結構段數量
-    // 計算方式：計算 table rows 數量，扣除 header, 起, 合
     let currentRows = table.rows.length;
-    let currentBodyCount = currentRows - 3; // header + 起 + 合
+    let currentBodyCount = currentRows - 3; 
     if (currentBodyCount < 0) currentBodyCount = 0;
 
-    // 如果需要的比現有的多，自動點擊「新增」按鈕
     if (neededBodyCount > currentBodyCount) {
         const addBtn = document.querySelector('button[onclick="addArgumentStructureSegment()"]');
         if (addBtn) {
             for (let i = 0; i < (neededBodyCount - currentBodyCount); i++) {
-                addArgumentStructureSegment(); // 呼叫你原本的新增函式
+                addArgumentStructureSegment();
             }
         }
     }
 
-    // 開始填寫結構段 (從 ID index 1 開始)
+    // --- 填寫「結構段」---
     bodyRows.forEach((row, i) => {
-        const targetIndex = i + 1; // 0是起，所以結構段從1開始
-        const pointEl = document.getElementById(`argumentPoint${targetIndex}`);
-        const evEl = document.getElementById(`argumentEvidence${targetIndex}`);
+        const targetIndex = i + 1; 
         
-        if (pointEl) pointEl.value = row.col1;
-        if (evEl) evEl.value = row.col2;
+        // 嘗試救援邏輯 (避免議論大綱也發生吃字)
+        let finalCol1 = row.col1;
+        if ((!finalCol1 || finalCol1.trim() === "") && row.part.length > 5) { // 假設標題大於5字可能有鬼
+             // 簡單過濾：移除 "結構段"、"一" 等字眼
+             let rescued = row.part.replace(/結構段|論點|[一二三四五六七八九十]/g, "").replace(/[:：]/g, "").trim();
+             if (rescued.length > 0) finalCol1 = rescued;
+        }
+
+        smartUpdateInput(`argumentPoint${targetIndex}`, finalCol1 || "");
+        smartUpdateInput(`argumentEvidence${targetIndex}`, row.col2 || "");
     });
 
     // --- 填寫「合」---
     if (endRow) {
-        // 合的 ID 總是最後一個。我們需要重新計算最新的 ID
-        // 由於 addArgumentStructureSegment 會插入在「合」之前，
-        // 所以「合」的 ID 應該是 table.rows.length - 2 (因為 row index 從0開始，且有header)
-        // 但你的 `addArgumentStructureSegment` 邏輯看起來沒有動態更新「合」的 ID?
-        // 讓我們重新檢視你的 `generateArgumentOutlineTable`：
-        // 它預設生成 Point0(起), Point1(一), Point2(二), Point3(三), Point4(合)
-        // 你的 `addArgumentStructureSegment` 插入新列時，ID 是基於 newRowIndex - 1。
-        // 所以如果插入了新行，「合」的輸入框 ID 其實沒有變（除非你重繪了表格）。
-        // **修正策略**：通常「合」是表格的最後一列。我們直接抓最後一列的 textarea。
-        
-        const lastRow = table.rows[table.rows.length - 1];
+        // 重新獲取最新的表格狀態
+        const updatedTable = document.getElementById("argumentOutlineTable");
+        const lastRow = updatedTable.rows[updatedTable.rows.length - 1];
         const inputs = lastRow.querySelectorAll('textarea');
+        
         if (inputs.length >= 2) {
-            inputs[0].value = endRow.col1; // 論點
-            inputs[1].value = endRow.col2; // 論據
+            // 直接操作 DOM (因為合的 ID 比較難算)，但也嘗試同步 Modal
+            inputs[0].value = endRow.col1;
+            inputs[1].value = endRow.col2;
+            inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+            inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+            
+            // 如果剛好點擊的是合的格子，手動檢查同步
+            if (currentEditingElement === inputs[0]) document.getElementById('modal-textarea').value = endRow.col1;
+            if (currentEditingElement === inputs[1]) document.getElementById('modal-textarea').value = endRow.col2;
         }
     }
-    
-    // 觸發事件以保存
-    table.querySelectorAll('textarea').forEach(el => el.dispatchEvent(new Event('input', { bubbles: true })));
     
     alert(`議論大綱已填入！(自動新增了 ${Math.max(0, neededBodyCount - currentBodyCount)} 個結構段)`);
 }
