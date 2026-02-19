@@ -16844,7 +16844,7 @@ const ocrBtn = document.getElementById('modal-ocr-btn');
 let ocrWindow = null;
 // 原本的 VERCEL_OCR_URL 替換為本地路徑
 // const VERCEL_OCR_URL = 'https://gemini-ocr-proxy.vercel.app/'; // 舊的
-const OCR_TOOL_PATH = 'toolbox/ocr.html'; // 新的路徑
+const OCR_TOOL_PATH = 'toolbox/ocr2.html'; // 新的路徑
 
 if (ocrBtn) {
     ocrBtn.addEventListener('click', function() {
@@ -16863,52 +16863,77 @@ if (ocrBtn) {
 // 定義一個處理函式，而不是匿名函式，這樣比較好管理
 // === OCR 訊息接收監聽器 (修訂版：優先更新懸浮視窗) ===
 function handleOCRMessage(event) {
-    // 1. 安全檢查
     if (!event.data || event.data.type !== 'ocrResult') return;
-
-    console.log("收到 OCR 文字:", event.data.text);
-    const newText = event.data.text;
-
-    // 2. 定義目標輸入框
-    let targetEl = null;
-
-    // --- 關鍵修正開始 ---
-    // 判斷懸浮視窗 (Modal) 是否正在顯示
-    const modal = document.getElementById('outline-editor-modal');
-    const modalTextarea = document.getElementById('modal-textarea');
+    const rawText = event.data.text;
     
-    // 如果懸浮視窗存在且正在顯示 (display !== 'none')
-    if (modal && modal.style.display !== 'none' && modalTextarea) {
-        // ★ 強制鎖定：目標就是眼前這個懸浮框
-        targetEl = modalTextarea;
-    } else {
-        // 如果懸浮視窗沒開，才去讀取上一次點擊的 ID
-        const savedId = sessionStorage.getItem('sansi_current_editing_id');
-        if (savedId) {
-            targetEl = document.getElementById(savedId);
+    // 1. 嘗試提取 JSON 數據
+    const tableMarker = "[[DATA_TABLE]]:";
+    if (rawText.includes(tableMarker)) {
+        try {
+            const jsonPart = rawText.split(tableMarker)[1].trim();
+            const tableData = JSON.parse(jsonPart);
+
+            if (tableData.isTable && tableData.rows) {
+                fillOutlineTable(tableData.rows); // 呼叫填表函式
+                // 關閉 OCR 視窗
+                if (typeof ocrWindow !== 'undefined' && ocrWindow && !ocrWindow.closed) ocrWindow.close();
+                return; // 跳過普通文字處理
+            }
+        } catch (e) {
+            console.error("解析 OCR 表格 JSON 失敗", e);
         }
     }
-    // --- 關鍵修正結束 ---
+
+    // 2. 原有的普通文字處理邏輯 (填入當前編輯框)
+    const modal = document.getElementById('outline-editor-modal');
+    const modalTextarea = document.getElementById('modal-textarea');
+    let targetEl = (modal && modal.style.display !== 'none') ? modalTextarea : document.getElementById(sessionStorage.getItem('sansi_current_editing_id'));
 
     if (targetEl) {
-        // 3. 插入文字 (自動補換行)
-        const currentVal = targetEl.value;
-        const prefix = (currentVal && !currentVal.endsWith('\n')) ? '\n' : '';
-        
-        targetEl.value += prefix + newText;
-
-        // 4. ★ 重要：觸發 input 事件
-        // 這會讓瀏覽器知道內容變了，也會觸發 sessionStorage 的自動存檔
+        const prefix = (targetEl.value && !targetEl.value.endsWith('\n')) ? '\n' : '';
+        targetEl.value += prefix + rawText.split(tableMarker)[0]; // 移除 JSON 標記後再填入
         targetEl.dispatchEvent(new Event('input', { bubbles: true }));
-
-        // 5. 視覺回饋：聚焦並捲動到底部
-        targetEl.focus();
-        targetEl.scrollTop = targetEl.scrollHeight;
     }
+}
 
-    // 6. 關閉 OCR 彈出視窗 (確保變數 ocrWindow 存在)
-    if (typeof ocrWindow !== 'undefined' && ocrWindow && !ocrWindow.closed) {
-        ocrWindow.close();
+// 新增：專門處理填寫大綱表格的函式
+function fillOutlineTable(rows) {
+    // A. 判斷目前是「敘事抒情」還是「議論」模式
+    const writingType = document.getElementById("writingType").value;
+    const argumentArea = document.getElementById("argumentOutlineArea");
+
+    if (argumentArea && argumentArea.style.display !== "none") {
+        // --- 議論模式 (動態表格) ---
+        // 1. 獲取現有行數（扣除標題行）
+        const table = document.getElementById("argumentOutlineTable");
+        
+        // 2. 如果 OCR 的行數比現有的多 ( rows.length 是 OCR 到的行數 )
+        // 議論預設 5 行 (起, 段1, 段2, 段3, 合)
+        while (table.rows.length - 1 < rows.length) {
+            addArgumentStructureSegment(); // 呼叫你原本的增加結構段函式
+        }
+
+        // 3. 填入數據
+        rows.forEach((rowData, index) => {
+            const pointEl = document.getElementById(`argumentPoint${index}`);
+            const evidenceEl = document.getElementById(`argumentEvidence${index}`);
+            if (pointEl) pointEl.value = rowData.col1 || "";
+            if (evidenceEl) evidenceEl.value = rowData.col2 || "";
+        });
+        alert("✅ 議論文大綱已自動按位置填入");
+
+    } else if (writingType === "大綱") {
+        // --- 敘事抒情模式 (固定結構) ---
+        const structure = document.getElementById("structure").value; // fourPart 或 threeLine
+        
+        rows.forEach((rowData, index) => {
+            const i = index + 1; // 敘事 ID 是從 1 開始的
+            const focusEl = document.getElementById(structure + "Focus" + i);
+            const plotEl = document.getElementById(structure + "Plot" + i);
+            if (focusEl) focusEl.value = rowData.col1 || "";
+            if (plotEl) plotEl.value = rowData.col2 || "";
+        });
+        alert("✅ 敘事大綱已自動填入");
     }
 }
 
