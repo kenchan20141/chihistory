@@ -1383,135 +1383,158 @@ input[type="text"]:not(.no-modal-editor):hover {
     filter: brightness(110%);
 }
 
-		/* --- 莫蘭迪風格評分系統 CSS --- */
+		/* --- 莫蘭迪風格評分系統 CSS (去膠囊化、增強層次) --- */
 :root {
     --morandi-bg: #F7F5F2;       /* 暖杏白背景 */
     --morandi-border: #D8D2C8;   /* 淺灰褐邊框 */
     --morandi-green: #8FA398;    /* 莫蘭迪綠 (按鈕/高亮) */
     --morandi-green-hover: #7D9186;
-    --morandi-blue: #94A7AE;     /* 莫蘭迪藍 (輸入框焦點) */
+    --morandi-blue: #94A7AE;     /* 莫蘭迪藍 (焦點) */
     --morandi-text: #5D5654;     /* 深灰褐文字 */
-    --morandi-accent: #C59F99;   /* 莫蘭迪粉 (分數顯示) */
+    --morandi-accent: #C59F99;   /* 莫蘭迪粉 (分數) */
 }
 
-/* 作答區容器 */
+/* 1. 作答區容器：去除外框與背景，改用頂部虛線分隔，融入卡片 */
 .morandi-interaction-area {
-    background-color: var(--morandi-bg);
-    border: 1px solid var(--morandi-border);
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 20px rgba(100, 90, 85, 0.05);
+    background-color: transparent;
+    border: none;
+    border-top: 1px dashed var(--morandi-border);
+    padding: 24px 0 0 0;
+    margin-top: 24px;
+    margin-bottom: 8px;
 }
 
-/* 標籤 */
+/* 2. 標籤區域：左右分明，左側加入強調線 */
 .morandi-label {
-    display: block;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     font-family: 'Noto Serif TC', serif;
-    font-weight: 700;
-    color: var(--morandi-text);
-    margin-bottom: 12px;
-    font-size: 1.1rem;
+    margin-bottom: 16px;
+}
+
+.morandi-label-title {
     display: flex;
     align-items: center;
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--morandi-text);
+    border-left: 4px solid var(--morandi-green);
+    padding-left: 12px;
 }
 
-/* 輸入框 (加上 no-modal-editor 防止彈窗) */
+.morandi-score-hint {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #888;
+    background: #f4f4f4;
+    padding: 4px 10px;
+    border-radius: 6px; /* 微圓角取代膠囊 */
+}
+
+/* 3. 輸入框：加深沉浸感，統一 8px 微圓角 */
 textarea.morandi-input {
     width: 100%;
-    background-color: #fff;
-    border: 1px solid var(--morandi-border);
-    border-radius: 12px;
-    padding: 16px;
-    font-family: 'Noto Serif TC', serif; /* 保持文藝字體 */
+    background-color: var(--morandi-bg);
+    border: 1px solid transparent;
+    border-radius: 8px; 
+    padding: 20px;
+    font-family: 'Noto Serif TC', serif;
     font-size: 1.05rem;
     color: #4a4a4a;
     line-height: 1.8;
     transition: all 0.3s ease;
     resize: vertical;
     outline: none;
-    min-height: 120px;
+    min-height: 140px;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.02);
 }
 
 textarea.morandi-input:focus {
     border-color: var(--morandi-blue);
-    box-shadow: 0 0 0 4px rgba(148, 167, 174, 0.15);
+    background-color: #fff;
+    box-shadow: 0 4px 12px rgba(148, 167, 174, 0.1);
 }
 
-/* 評分按鈕 */
+/* 4. 評分按鈕：捨棄50px圓角，改為專業俐落的方正微圓角 */
 .morandi-btn {
     background-color: var(--morandi-green);
     color: white;
     font-family: 'Noto Serif TC', serif;
     font-weight: 600;
     padding: 10px 24px;
-    border-radius: 50px; /* 圓角更文藝 */
+    border-radius: 8px; /* 去膠囊化 */
     border: none;
     cursor: pointer;
     transition: all 0.3s ease;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
-    letter-spacing: 1px;
-    box-shadow: 0 4px 10px rgba(143, 163, 152, 0.3);
+    font-size: 1rem;
+    box-shadow: 0 4px 10px rgba(143, 163, 152, 0.2);
 }
 
 .morandi-btn:hover {
     background-color: var(--morandi-green-hover);
     transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(143, 163, 152, 0.4);
+    box-shadow: 0 6px 15px rgba(143, 163, 152, 0.3);
 }
 
-/* 評分結果卡片 */
+/* 5. 評分結果卡片：改為簡約的內縮區塊，去除花俏左邊線 */
 .morandi-result-card {
     margin-top: 24px;
-    background: #fff;
-    border-left: 4px solid var(--morandi-accent); /* 左側粉色線條 */
-    padding: 20px 24px;
-    border-radius: 4px 12px 12px 4px;
-    box-shadow: 0 2px 15px rgba(0,0,0,0.03);
-    animation: fadeIn 0.5s ease;
+    background: #FAFAFA;
+    border: 1px solid #EAEAEA;
+    padding: 24px;
+    border-radius: 8px;
+    animation: fadeIn 0.4s ease;
 }
 
-/* 結果標題 */
 .morandi-result-header {
     font-family: 'Noto Serif TC', serif;
-    color: var(--morandi-accent);
+    color: var(--morandi-text);
     font-weight: bold;
-    font-size: 1.1rem;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px dashed var(--morandi-border);
+    font-size: 1.2rem;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--morandi-bg);
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-/* 分數顯示 */
+/* 6. 分數顯示：改為精緻的標籤，而非大圓角膠囊 */
 .score-badge {
-    background-color: var(--morandi-accent);
-    color: white;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.9rem;
-    font-weight: bold;
+    background-color: rgba(197, 159, 153, 0.1);
+    color: var(--morandi-accent);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 800;
+    border: 1px solid rgba(197, 159, 153, 0.2);
 }
 
-/* 評語內容 */
 .morandi-feedback-content {
     font-family: 'Noto Serif TC', serif;
-    color: #666;
+    color: #555;
     line-height: 1.8;
-    font-size: 1rem;
+    font-size: 1.05rem;
 }
 
 .morandi-feedback-section {
-    margin-bottom: 12px;
+    margin-bottom: 16px;
 }
+
+/* 7. 評語/建議前綴：增加底色區塊建立層次 */
 .morandi-feedback-label {
+    display: inline-block;
     font-weight: bold;
     color: var(--morandi-text);
-    margin-right: 8px;
+    background: var(--morandi-bg);
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-right: 12px;
+    font-size: 0.95rem;
 }
 		
     </style>
@@ -4412,17 +4435,17 @@ function displayPracticalQuestions(allQuestions) {
     showResult();
 }
 
-  // 修改後的 createQuestionCard 函數
+// 修改後的 createQuestionCard 函數 (去膠囊化、增強排版層次)
 function createQuestionCard(title, content, answer = null, steps = null, type = 'default') {
     const card = document.createElement('div');
     card.className = 'question-card p-10 shadow-2xl slide-up mb-12';
     
     // --- 邏輯修正：自動偵測題目分數 ---
     let maxScore = 10; // 預設值
-    // 嘗試從 content 或 title 中尋找如 (4分), [5分], 4分 等字眼
-    const scoreMatch = content.match(/[（(\[]\s*(\d+)\s*分\s*[)\]）]/) || content.match(/(\d+)\s*分/);
-    if (scoreMatch && scoreMatch[1]) {
-        maxScore = parseInt(scoreMatch[1]);
+    // 嘗試從 content 或 title 中尋找如 (4分),, 4分 等字眼
+    const scoreMatch = content.match(/\s*(\d+)\s*分\s*）]/) || content.match(/(\d+)\s*分/);
+    if (scoreMatch && scoreMatch) {
+        maxScore = parseInt(scoreMatch);
     }
 
     // 處理選擇題與一般題目格式
@@ -4432,7 +4455,7 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
     if (isMultipleChoice) {
         formattedContent = content.replace(/\n/g, '<br>');
         formattedContent = formattedContent.replace(/選項：<br>/g, '<div class="choice-options-container"><h4 class="choice-options-title">選項：</h4>');
-        formattedContent = formattedContent.replace(/([A-D]\.\s[^<]+?)(?=<br>|$)/g, '<div class="choice-option">$1</div>');
+        formattedContent = formattedContent.replace(/(\.\s+?)(?=<br>|$)/g, '<div class="choice-option">$1</div>');
         if (formattedContent.includes('choice-options-container')) {
             formattedContent += '</div>';
         }
@@ -4443,7 +4466,7 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
         'reading': 'var(--primary-teal)', 'essay': 'var(--primary-blue)', 'practical': 'var(--primary-green)',
         '複述': '#D4909F', '分析': '#B496EB', '印證': '#722F3E', '闡明': '#EA928F', '意見': '#8B6455', '比較': '#3EE1C2', '選擇': '#55A193'
     };
-    const typeColor = typeColors[type] || 'var(--primary-teal)';
+    const typeColor = typeColors || 'var(--primary-teal)';
     
     // 1. 卡片頭部
     let cardHTML = `
@@ -4478,26 +4501,29 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
         `;
     }
 
-    // 3. 【莫蘭迪風格】作答區域
+    // 3. 【莫蘭迪風格】作答區域 (優化版：去除盒中盒，增加專業排版與留白)
     if (answer) { 
         const safeQuestion = encodeURIComponent(content);
         const safeRefAnswer = encodeURIComponent(answer);
 
         cardHTML += `
             <div class="morandi-interaction-area">
-                <label class="morandi-label">
-                    <i class="fas fa-feather-alt mr-2" style="color: var(--morandi-green);"></i>
-                    學生作答 <span style="font-size: 0.9rem; font-weight: normal; margin-left: auto; color: #999;">本題佔分：${maxScore}分</span>
-                </label>
+                <div class="morandi-label">
+                    <div class="morandi-label-title">
+                        <i class="fas fa-pen-nib mr-3" style="color: var(--morandi-green);"></i>
+                        <span>學生作答</span>
+                    </div>
+                    <span class="morandi-score-hint">配分：${maxScore} 分</span>
+                </div>
                 
                 <!-- 重要：加入 no-modal-editor class 以防止觸發懸浮視窗 -->
                 <textarea class="morandi-input no-modal-editor" 
-                    placeholder="請在此輸入您的見解..."></textarea>
+                    placeholder="請在此輸入您的見解與分析..."></textarea>
                 
-                <div class="flex justify-end mt-4">
+                <div class="flex justify-end mt-5">
                     <button onclick="submitForGrading(this, '${safeQuestion}', '${safeRefAnswer}', ${maxScore})" 
                         class="morandi-btn">
-                        <i class="fas fa-magic"></i> AI 智能評改
+                        <i class="fas fa-magic"></i> 交卷並進行 AI 評析
                     </button>
                 </div>
 
@@ -4510,7 +4536,7 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
 
         // 4. 參考答案按鈕
         cardHTML += `
-            <div class="border-t-4 pt-8" style="border-color: var(--divider-color);">
+            <div class="border-t-4 pt-8 mt-6" style="border-color: var(--divider-color);">
                 <button onclick="toggleAnswer(this, '${typeColor}')" class="flex items-center font-bold mb-6 transition-colors duration-300 text-xl hover:transform hover:scale-105" style="color: ${typeColor};">
                     <i class="fas fa-eye mr-4"></i>顯示參考答案
                 </button>
