@@ -4566,9 +4566,9 @@ async function submitForGrading(btn, encodedQuestion, encodedRefAnswer, maxScore
     resultContainer.classList.add('hidden'); 
 
     try {
-        // 優化提示詞：要求 AI 輸出特定 HTML 結構
+        // --- 修改 1：優化提示詞，明確禁止 Markdown ---
         const promptMessages = [
-            { role: "system", content: "你是一位溫柔且專業的中文科老師。請根據題目分數進行精確評分，語氣要文雅、鼓勵性強。" },
+            { role: "system", content: "你是一位客觀且專業的中文科老師。請根據題目分數進行精確評分，語氣要文雅。請直接輸出 HTML 格式。" },
             { role: "user", content: `
                 【評改任務】
                 請針對以下學生作答進行評分。
@@ -4582,7 +4582,9 @@ async function submitForGrading(btn, encodedQuestion, encodedRefAnswer, maxScore
                 ${userAnswer}
                 
                 【輸出要求】
-                請不要輸出 markdown，請直接輸出以下 HTML 結構 (僅輸出 div 內容)：
+                1. 嚴禁使用 markdown 格式 (如 **粗體**, ##標題 等)。
+                2. 重點強調的文字，請直接使用 <b>重點文字</b> 標籤包裹。
+                3. 請直接輸出以下 HTML 結構 (不要輸出 ```html 標記)：
                 
                 <div class="morandi-result-header">
                     <span><i class="fas fa-feather-alt mr-2"></i>評析報告</span>
@@ -4592,27 +4594,38 @@ async function submitForGrading(btn, encodedQuestion, encodedRefAnswer, maxScore
                 <div class="morandi-feedback-content">
                     <div class="morandi-feedback-section">
                         <span class="morandi-feedback-label">【評語】</span>
-                        這裡寫具體的評語，分析優缺點，語氣要溫和文藝。
+                        這裡寫具體的評語。
                     </div>
                     <div class="morandi-feedback-section">
                         <span class="morandi-feedback-label">【建議】</span>
-                        這裡寫改進建議，如何能拿更高分。
+                        這裡寫具體的建議。
                     </div>
                 </div>
             ` }
         ];
 
-        // 呼叫 API
         const requestBody = {
             messages: promptMessages,
-            action: 'free_chat' // 或您的通用 action
+            action: 'free_chat' 
         };
 
         const gradingResult = await callAPI(requestBody, 'gemini-search');
 
-        // 清理可能包含的 markdown 代碼塊標記 (如果 AI 還是輸出了 ```html)
-        let cleanResult = gradingResult.replace(/```html/g, '').replace(/```/g, '').trim();
+        // --- 修改 2：後處理，強制清除/轉換 Markdown ---
+        let cleanResult = gradingResult;
 
+        // 步驟 A: 移除代碼塊標記 (```html)
+        cleanResult = cleanResult.replace(/```html/g, '').replace(/```/g, '').trim();
+
+        // 步驟 B: 將 markdown 的粗體 **文字** 轉換為 html 的 <b>文字</b>
+        // 這樣既保留了強調效果，又去除了醜陋的星號
+        cleanResult = cleanResult.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+        // 步驟 C: 移除其他可能出現的 markdown 符號 (如 #, *, - ) 避免殘留
+        // 這裡只針對行首的列表符號或標題符號，避免誤刪文字中的符號
+        cleanResult = cleanResult.replace(/^#+\s/gm, '').replace(/^\*\s/gm, '• ');
+
+        // 顯示結果
         resultContent.innerHTML = cleanResult;
         resultContainer.classList.remove('hidden');
         
