@@ -562,7 +562,7 @@ async function startOCR() {
                     messageData = { type: 'ocrResult', text: textResults.join('\n\n') };
                 }
                 
-                // 尋找父視窗並發送訊息
+              // 尋找父視窗並發送訊息
                 let targetWindow = null;
                 if (window.opener && window.opener !== window) targetWindow = window.opener;
                 else if (window.top && window.top.opener) targetWindow = window.top.opener;
@@ -570,6 +570,9 @@ async function startOCR() {
                 if (targetWindow) {
                     console.log("傳送 OCR 結果至父視窗:", messageData);
                     targetWindow.postMessage(messageData, '*');
+                    
+                    // [新增] 傳送後自動關閉視窗
+                    window.close();
                 }
             }
 
