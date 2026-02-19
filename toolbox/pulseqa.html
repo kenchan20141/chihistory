@@ -5282,58 +5282,99 @@ function fillNarrativeFromOCR(data, table) {
     }
 }
 
-// 4. 填入議論大綱 (3欄模式：部份 | 論點 | 論據)
+// 4. 填入議論大綱 (3欄模式：部份 | 論點 | 論據) - [修正版：精準控制段落數量]
 function fillArgumentFromOCR(data, table) {
     const tbody = table.querySelector('tbody');
     
-    // 檢查是否需要動態新增「結構段」
-    // 計算 OCR 數據中有多少個「結構段」
-    let ocrStructCount = 0;
+    // --- 第一步：計算 OCR 資料中「結構段」的最大編號 ---
+    let maxSegmentIndex = 0;
+    const chineseNums = {'一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '十':10};
+
     data.forEach(item => {
-        if (item.part && (item.part.includes("結構段") || item.part.match(/[一二三四五]/))) {
-            if (!item.part.includes("起") && !item.part.includes("合")) {
-                ocrStructCount++;
+        const p = item.part ? item.part.replace(/\s+/g, '') : "";
+        
+        // 忽略 起/合
+        if(p.includes("起") || p.includes("合")) return;
+
+        // 嘗試找出數字
+        let num = 0;
+        
+        // 1. 檢查中文數字 (例如：結構段四 -> 4)
+        for (let k in chineseNums) {
+            if (p.includes(k)) {
+                num = chineseNums[k];
+                break;
             }
+        }
+        
+        // 2. 如果沒中文，檢查阿拉伯數字 (例如：結構段4 -> 4)
+        if (num === 0) {
+            const match = p.match(/\d+/);
+            if (match) num = parseInt(match[0]);
+        }
+
+        // 更新最大值
+        if (num > maxSegmentIndex) {
+            maxSegmentIndex = num;
         }
     });
 
-    // 計算現有表格有多少結構段 (總行數 - 起 - 合)
-    // 假設現有行數是 rows.length，減去頭尾就是結構段數
-    // 簡單解法：直接檢查最後一個結構段的編號
+    // --- 第二步：計算當前表格有多少結構段，並補足差額 ---
+    // 目前表格結構：[起, 結構段一, 結構段二, 結構段三, ..., 合]
+    // 結構段數量 = 總列數 - 2 (扣掉 起 和 合)
+    const currentRows = tbody.querySelectorAll('tr');
+    let currentSegmentCount = 0;
     
-    const controlDiv = document.querySelector('.arg-controls');
-    // 如果 OCR 結構段多於預設 (3段)，自動點擊新增按鈕
-    // 這裡做個簡單判斷：如果 OCR 有超過3個中間段落，就嘗試新增
-    if (ocrStructCount > 3 && controlDiv) {
-        const addBtn = controlDiv.querySelector('button');
+    // 嚴謹計算：遍歷現有表格，計算含有 "結構段" 的列數
+    currentRows.forEach(tr => {
+        if (tr.cells[0].innerText.includes("結構段")) {
+            currentSegmentCount++;
+        }
+    });
+
+    // 如果預設只有 3 段，但 OCR 發現有 4 段 -> 新增 (4-3) = 1 段
+    // 如果 OCR 只有 2 段 -> 不動作 (不刪減，保留預設 3 段)
+    if (maxSegmentIndex > currentSegmentCount) {
+        const controlDiv = document.querySelector('.arg-controls');
+        const addBtn = controlDiv ? controlDiv.querySelector('button') : null;
+        
         if (addBtn) {
-            for(let i=0; i < (ocrStructCount - 3); i++) {
+            const rowsToAdd = maxSegmentIndex - currentSegmentCount;
+            console.log(`[OCR] 偵測到 ${maxSegmentIndex} 個結構段，當前 ${currentSegmentCount} 個，正在新增 ${rowsToAdd} 行...`);
+            
+            for(let i=0; i < rowsToAdd; i++) {
                 addBtn.click();
             }
         }
     }
 
-    // 重新獲取行 (因為可能剛新增過)
-    const trs = tbody.querySelectorAll('tr');
+    // --- 第三步：重新獲取表格列，並填入資料 ---
+    const updatedTrs = tbody.querySelectorAll('tr');
 
     data.forEach(item => {
         const ocrPart = item.part ? item.part.replace(/\s+/g, '') : "";
         
-        for (let tr of trs) {
+        for (let tr of updatedTrs) {
             const rowLabel = tr.cells[0].innerText.replace(/\s+/g, '');
-            
-            // 匹配邏輯：
-            // 1. 完全包含 "起", "合"
-            // 2. 結構段匹配 "結構段一" vs "結構段1" 或 "一"
             let isMatch = false;
             
             if (rowLabel === '起' || rowLabel === '合') {
                 isMatch = ocrPart.includes(rowLabel);
             } else if (rowLabel.includes('結構段')) {
-                // 取出中文數字 (一、二...)
-                const numChar = rowLabel.replace('結構段', '');
+                // 比對邏輯：
+                // 1. 完整包含 (OCR="結構段四" vs Table="結構段四")
+                // 2. 數字包含 (OCR="四" vs Table="結構段四")
+                
+                // 取出表格該列的中文數字 (例如 "四")
+                const tableNumChar = rowLabel.replace('結構段', '');
+                
                 // 檢查 OCR 是否包含該數字
-                isMatch = ocrPart.includes(numChar) || ocrPart.includes(rowLabel);
+                if (ocrPart.includes(tableNumChar) || ocrPart.includes(rowLabel)) {
+                    isMatch = true;
+                }
+                
+                // 額外檢查：防止 "結構段一" 誤匹配到 "結構段十一" (雖然大綱很少寫到十一)
+                // 但為了保險，如果 OCR 很短 (例如只寫 "一")，則上述邏輯已足夠
             }
 
             if (isMatch) {
@@ -5344,7 +5385,9 @@ function fillArgumentFromOCR(data, table) {
                 
                 if (inputs[0]) updateTextarea(inputs[0], item.col1);
                 if (inputs[1]) updateTextarea(inputs[1], item.col2);
-                break;
+                
+                // 找到後跳出內層迴圈，避免同一筆資料填入多行
+                break; 
             }
         }
     });
