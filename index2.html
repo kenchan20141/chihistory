@@ -16922,15 +16922,11 @@ function insertTextToActiveElement(text) {
     }
 }
 
-// === 核心邏輯 1: 填入敘事大綱 ===
+// === 核心邏輯 1: 填入敘事大綱 (修復版：防吃字邏輯) ===
 function fillNarrativeOutline(ocrRows) {
-    // 獲取當前結構類型 (起承轉合 / 三線)
     const structure = document.getElementById("structure").value; // "fourPart" or "threeLine"
     
-    // 定義該結構下，所有可能的 Row ID 前綴與預期的中文標題關鍵字
-    // 這裡我們建立一個對照表，用來模糊比對 OCR 結果
     let mapping = [];
-    
     if (structure === "fourPart") {
         mapping = [
             { key: "起", idIndex: 1 },
@@ -16948,29 +16944,44 @@ function fillNarrativeOutline(ocrRows) {
         ];
     }
 
-    // 遍歷 OCR 掃描到的每一行
     ocrRows.forEach(row => {
-        const partName = row.part.trim(); // 例如 "起", "結構段一"
+        // 清理數據：移除換行符，避免干擾比對
+        let rawPartName = row.part ? row.part.replace(/\n/g, " ").trim() : "";
         
-        // 在 mapping 中尋找最匹配的項目
-        // 邏輯：如果 OCR 的 part 包含 mapping 的 key (例如 "結構段(起)" 包含 "起")
-        const match = mapping.find(m => partName.includes(m.key));
+        // 在 mapping 中尋找最匹配的關鍵字 (例如 "結構段(起)" 包含 "起")
+        const match = mapping.find(m => rawPartName.includes(m.key));
         
         if (match) {
-            // 組裝目標 ID
             const focusId = `${structure}Focus${match.idIndex}`;
             const plotId = `${structure}Plot${match.idIndex}`;
-            
             const focusEl = document.getElementById(focusId);
             const plotEl = document.getElementById(plotId);
             
-            // 填入內容 (col1 -> 重點, col2 -> 情節)
+            // --- ★★★ 關鍵修復：救援被合併的內容 ★★★ ---
+            // 情況：OCR 回傳 part: "起 TEST", col1: "", col2: "TEST2"
+            // 我們需要把 "TEST" 從 part 裡面救出來，填進 col1
+            
+            let finalCol1 = row.col1;
+            
+            // 如果 col1 是空的，但 part 裡面除了關鍵字(如"起")還有其他文字
+            if ((!finalCol1 || finalCol1.trim() === "") && rawPartName.length > match.key.length) {
+                // 移除關鍵字，剩下的就是內容
+                // 例如 "起 TEST" -> 移除 "起" -> 剩下 " TEST" -> trim -> "TEST"
+                let rescuedContent = rawPartName.replace(match.key, "").replace(/[:：]/g, "").trim();
+                
+                if (rescuedContent.length > 0) {
+                    console.log(`[OCR修復] 從標題 "${rawPartName}" 中救回內容: "${rescuedContent}"`);
+                    finalCol1 = rescuedContent;
+                }
+            }
+            // ---------------------------------------------
+
             if (focusEl) {
-                focusEl.value = row.col1;
-                focusEl.dispatchEvent(new Event('input', { bubbles: true })); // 觸發自動存檔
+                focusEl.value = finalCol1 || ""; 
+                focusEl.dispatchEvent(new Event('input', { bubbles: true }));
             }
             if (plotEl) {
-                plotEl.value = row.col2;
+                plotEl.value = row.col2 || "";
                 plotEl.dispatchEvent(new Event('input', { bubbles: true }));
             }
         }
