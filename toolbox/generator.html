@@ -113,211 +113,18 @@ body {
         padding: 20px !important;
     }
 
-   /* --- 現代化題目卡片設計 (Modern Structured UI) --- */
-:root {
-    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --card-border: #e2e8f0;
-    --bg-paper: #ffffff;
-    --bg-input: #f8fafc;
-    --text-primary: #1e293b;
-    --text-secondary: #64748b;
-    --accent-color: #0d9488; /* 專業的深青色 */
-}
-
-/* 題目卡片本體 */
-.question-card {
-    background: var(--bg-paper);
-    border: 1px solid var(--card-border);
-    border-radius: 12px; /* 微圓角，不再是膠囊 */
-    box-shadow: var(--card-shadow);
-    margin-bottom: 3rem;
-    overflow: hidden; /* 確保內部元素不溢出 */
-    transition: all 0.3s ease;
-    padding: 0 !important; /* 清除舊的 padding */
-}
-
-.question-card:hover {
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    transform: translateY(-2px);
-}
-
-/* 1. 題目頭部 (Header) */
-.qc-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1.25rem 1.5rem;
-    background: #fff;
-    border-bottom: 1px solid var(--card-border);
-    position: relative;
-}
-
-/* 左側強調色條 - 取代原本的背景色塊 */
-.qc-header::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 6px;
-    background-color: var(--type-color, var(--accent-color));
-}
-
-.qc-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-}
-
-.qc-tag {
-    font-size: 0.85rem;
-    padding: 4px 12px;
-    border-radius: 6px;
-    font-weight: 600;
-    background-color: #f1f5f9;
-    color: var(--text-secondary);
-    border: 1px solid var(--card-border);
-}
-
-/* 2. 題目內容區 (Content) */
-.qc-content {
-    padding: 1.5rem 1.75rem;
-    color: #334155;
-    font-size: 1.05rem;
-    line-height: 1.8;
-    background-color: #fff;
-}
-
-/* 3. 作答區 (Interaction Area) - 重點改造 */
-.qc-interaction {
-    background-color: var(--bg-input);
-    padding: 1.5rem 1.75rem;
-    border-top: 1px solid var(--card-border);
-}
-
-.qc-label {
-    display: block;
-    margin-bottom: 0.75rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    display: flex;
-    justify-content: space-between;
-}
-
-.qc-textarea {
-    width: 100%;
-    min-height: 120px;
-    padding: 1rem;
-    background-color: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px; /* 標準圓角 */
-    font-size: 1rem;
-    line-height: 1.6;
-    color: var(--text-primary);
-    transition: border-color 0.2s, box-shadow 0.2s;
-    resize: vertical;
-}
-
-.qc-textarea:focus {
-    outline: none;
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
-}
-
-/* 4. 底部功能列 (Footer) */
-.qc-footer {
-    padding: 1rem 1.75rem;
-    background-color: #fff;
-    border-top: 1px solid var(--card-border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-/* 按鈕樣式優化 */
-.qc-btn-ghost {
-    background: transparent;
-    color: var(--text-secondary);
-    font-weight: 600;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 0.95rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.qc-btn-ghost:hover {
-    background-color: #f1f5f9;
-    color: var(--text-primary);
-}
-
-.qc-btn-primary {
-    background-color: var(--type-color, var(--accent-color));
-    color: white;
-    padding: 8px 20px;
-    border-radius: 6px;
-    font-weight: 600;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.qc-btn-primary:hover {
-    filter: brightness(1.1);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.15);
-}
-
-/* 參考答案隱藏區 */
-.qc-answer-zone {
-    background-color: #fff;
-    border-top: 1px dashed var(--card-border);
-    padding: 0;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s ease-out;
-}
-
-.qc-answer-content {
-    padding: 1.5rem 1.75rem;
-}
-
-.qc-answer-block {
-    margin-bottom: 1.5rem;
-}
-
-.qc-answer-title {
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-secondary);
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-/* 評分結果卡片優化 */
-.qc-grade-result {
-    margin-top: 1rem;
-    background: #fff;
-    border: 1px solid var(--card-border);
-    border-left: 4px solid #f43f5e; /* 評分強調色 */
-    padding: 1.25rem;
-    border-radius: 6px;
-    animation: fadeIn 0.3s ease;
-}
+    /* 問題卡片樣式 */
+    .question-card {
+        width: 754px !important;
+        height: auto !important;
+        margin: 20px auto !important;
+        padding: 20px !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        page-break-inside: avoid !important; /* 避免跨頁 */
+        box-sizing: border-box !important;
+        border: 1px solid #000000 !important; /* 深色邊框 */
+    }
 
     /* 強制文字與背景高對比 */
     .question-title, .answer-section, .steps-section, 
@@ -4605,140 +4412,133 @@ function displayPracticalQuestions(allQuestions) {
     showResult();
 }
 
-// 修改後的 createQuestionCard 函數：使用結構化紙張設計 (Structured Paper UI)
+  // 修改後的 createQuestionCard 函數
 function createQuestionCard(title, content, answer = null, steps = null, type = 'default') {
     const card = document.createElement('div');
-    card.className = 'question-card slide-up'; // 移除舊的 p-10 shadow-2xl class，樣式由 CSS 控制
+    card.className = 'question-card p-10 shadow-2xl slide-up mb-12';
     
-    // --- 自動偵測題目分數 ---
-    let maxScore = 10;
+    // --- 邏輯修正：自動偵測題目分數 ---
+    let maxScore = 10; // 預設值
+    // 嘗試從 content 或 title 中尋找如 (4分), [5分], 4分 等字眼
     const scoreMatch = content.match(/[（(\[]\s*(\d+)\s*分\s*[)\]）]/) || content.match(/(\d+)\s*分/);
     if (scoreMatch && scoreMatch[1]) {
         maxScore = parseInt(scoreMatch[1]);
     }
 
-    // --- 題型顏色定義 (保持您原有的顏色邏輯，但用於 CSS 變數) ---
-    const typeColors = {
-        'reading': '#0d9488', 'essay': '#1F2937', 'practical': '#059669',
-        '複述': '#be185d', '分析': '#7c3aed', '印證': '#b91c1c', '闡明': '#d97706', 
-        '意見': '#a16207', '比較': '#4f46e5', '選擇': '#0891b2'
-    };
-    const typeColor = typeColors[type] || '#0d9488';
-    
-    // 設定 CSS 變數供此卡片使用
-    card.style.setProperty('--type-color', typeColor);
-
-    // 處理選擇題格式
+    // 處理選擇題與一般題目格式
     let formattedContent = content;
-    const isMultipleChoice = type === '選擇';
+    let isMultipleChoice = type === '選擇';
 
     if (isMultipleChoice) {
         formattedContent = content.replace(/\n/g, '<br>');
-        // 優化選項顯示
-        formattedContent = formattedContent.replace(/選項：<br>/g, '<div class="mt-4 mb-2 font-bold text-gray-700">選項：</div>');
-        formattedContent = formattedContent.replace(/([A-D]\.\s[^<]+?)(?=<br>|$)/g, 
-            '<div class="p-3 my-2 bg-gray-50 border border-gray-200 rounded-md hover:bg-blue-50 hover:border-blue-200 transition-colors cursor-pointer">$1</div>');
-    } else {
-        // 一般題目保持換行
-        formattedContent = content.replace(/\n/g, '<br>');
+        formattedContent = formattedContent.replace(/選項：<br>/g, '<div class="choice-options-container"><h4 class="choice-options-title">選項：</h4>');
+        formattedContent = formattedContent.replace(/([A-D]\.\s[^<]+?)(?=<br>|$)/g, '<div class="choice-option">$1</div>');
+        if (formattedContent.includes('choice-options-container')) {
+            formattedContent += '</div>';
+        }
     }
 
-    // --- 構建 HTML 結構 ---
+    // 題型顏色 (維持原本邏輯)
+    const typeColors = {
+        'reading': 'var(--primary-teal)', 'essay': 'var(--primary-blue)', 'practical': 'var(--primary-green)',
+        '複述': '#D4909F', '分析': '#B496EB', '印證': '#722F3E', '闡明': '#EA928F', '意見': '#8B6455', '比較': '#3EE1C2', '選擇': '#55A193'
+    };
+    const typeColor = typeColors[type] || 'var(--primary-teal)';
+    
+    // 1. 卡片頭部
     let cardHTML = `
-        <!-- 1. Header: 標題與標籤 -->
-        <div class="qc-header">
-            <div class="qc-title">
+        <div class="flex items-center justify-between mb-8">
+            <div class="question-title" style="background: linear-gradient(135deg, ${typeColor} 0%, ${typeColor}80 100%);">
+                <i class="fas fa-question-circle mr-4"></i>
                 ${title}
             </div>
-            <span class="qc-tag">${type}</span>
-        </div>
-
-        <!-- 2. Content: 題目內容 -->
-        <div class="qc-content">
-            ${formattedContent}
+            <span class="px-6 py-3 rounded-full text-base font-bold text-white" style="background: linear-gradient(135deg, ${typeColor} 0%, ${typeColor}CC 100%);">${type}</span>
         </div>
     `;
 
-    // --- 3. Interaction: 作答與評分 (如果有答案) ---
-    if (answer) {
-        const safeQuestion = encodeURIComponent(content);
-        const safeRefAnswer = encodeURIComponent(answer);
-
+    // 2. 題目內容
+    if (isMultipleChoice) {
         cardHTML += `
-            <div class="qc-interaction morandi-interaction-area"> <!-- 保留 morandi class 用於 JS 選擇器，但樣式已重寫 -->
-                <label class="qc-label">
-                    <span><i class="fas fa-pen-nib mr-2"></i>學生作答</span>
-                    <span>佔分：${maxScore}分</span>
-                </label>
-                
-                <textarea class="qc-textarea no-modal-editor" 
-                    placeholder="請在此輸入您的答案...（支援 AI 評改）"></textarea>
-                
-                <!-- 評分結果容器 -->
-                <div class="grading-result-container hidden qc-grade-result">
-                    <div class="grading-content"></div>
-                </div>
+            <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 mb-8 border-2 border-gray-100">
+                <div class="text-gray-800 leading-relaxed text-lg font-medium">${formattedContent}</div>
             </div>
-
-            <!-- 4. Footer: 功能按鈕 -->
-            <div class="qc-footer">
-                <!-- 左側：顯示答案開關 -->
-                <button onclick="toggleNewAnswer(this)" class="qc-btn-ghost">
-                    <i class="fas fa-eye"></i> 顯示參考答案
-                </button>
-
-                <!-- 右側：AI 評分按鈕 -->
-                <button onclick="submitForGrading(this, '${safeQuestion}', '${safeRefAnswer}', ${maxScore})" 
-                    class="qc-btn-primary">
-                    <i class="fas fa-magic"></i> AI 智能評改
-                </button>
-            </div>
-
-            <!-- 5. Answer Zone: 隱藏的參考答案區 -->
-            <div class="qc-answer-zone">
-                <div class="qc-answer-content">
-                    <div class="qc-answer-block">
-                        <div class="qc-answer-title" style="color: ${typeColor}">
-                            <i class="fas fa-check-circle"></i> 參考答案
-                        </div>
-                        <div class="text-gray-700 leading-relaxed">${answer.replace(/\n/g, '<br>')}</div>
-                    </div>
-                    
-                    ${steps ? `
-                    <div class="qc-answer-block">
-                        <div class="qc-answer-title" style="color: #64748b">
-                            <i class="fas fa-shoe-prints"></i> 答題思路
-                        </div>
-                        <div class="text-gray-600 text-sm leading-relaxed">${steps.replace(/\n/g, '<br>')}</div>
-                    </div>
-                    ` : ''}
-                </div>
+            <style>
+                /* 保留原有的選擇題 CSS */
+                .choice-options-container { margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 15px; border-left: 5px solid ${typeColor}; }
+                .choice-options-title { font-weight: bold; color: ${typeColor}; margin-bottom: 15px; font-size: 18px; }
+                .choice-option { padding: 10px 15px; margin: 8px 0; background: white; border-radius: 8px; border-left: 3px solid #dee2e6; font-weight: 500; transition: all 0.3s ease; }
+                .choice-option:hover { border-left-color: ${typeColor}; transform: translateX(5px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+            </style>
+        `;
+    } else {
+        cardHTML += `
+            <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 mb-8 border-2 border-gray-100">
+                <div class="text-gray-800 leading-relaxed whitespace-pre-wrap text-lg font-medium">${formattedContent}</div>
             </div>
         `;
     }
 
+    // 3. 【莫蘭迪風格】作答區域
+    if (answer) { 
+        const safeQuestion = encodeURIComponent(content);
+        const safeRefAnswer = encodeURIComponent(answer);
+
+        cardHTML += `
+            <div class="morandi-interaction-area">
+                <label class="morandi-label">
+                    <i class="fas fa-feather-alt mr-2" style="color: var(--morandi-green);"></i>
+                    學生作答 <span style="font-size: 0.9rem; font-weight: normal; margin-left: auto; color: #999;">本題佔分：${maxScore}分</span>
+                </label>
+                
+                <!-- 重要：加入 no-modal-editor class 以防止觸發懸浮視窗 -->
+                <textarea class="morandi-input no-modal-editor" 
+                    placeholder="請在此輸入您的見解..."></textarea>
+                
+                <div class="flex justify-end mt-4">
+                    <button onclick="submitForGrading(this, '${safeQuestion}', '${safeRefAnswer}', ${maxScore})" 
+                        class="morandi-btn">
+                        <i class="fas fa-magic"></i> AI 智能評改
+                    </button>
+                </div>
+
+                <!-- 評分結果 (莫蘭迪風格) -->
+                <div class="grading-result-container hidden morandi-result-card">
+                    <div class="grading-content"></div>
+                </div>
+            </div>
+        `;
+
+        // 4. 參考答案按鈕
+        cardHTML += `
+            <div class="border-t-4 pt-8" style="border-color: var(--divider-color);">
+                <button onclick="toggleAnswer(this, '${typeColor}')" class="flex items-center font-bold mb-6 transition-colors duration-300 text-xl hover:transform hover:scale-105" style="color: ${typeColor};">
+                    <i class="fas fa-eye mr-4"></i>顯示參考答案
+                </button>
+                <div class="answer-content hidden">
+                    <div class="answer-section mb-6">
+                        <h4 class="font-bold mb-6 flex items-center text-xl" style="color: var(--primary-green);">
+                            <i class="fas fa-lightbulb mr-4"></i>參考答案
+                        </h4>
+                        <div class="leading-relaxed whitespace-pre-wrap text-gray-700 text-lg">${answer}</div>
+                    </div>
+        `;
+        
+        if (steps) {
+            cardHTML += `
+                    <div class="steps-section">
+                        <h4 class="font-bold mb-6 flex items-center text-xl" style="color: #7fb3d5;">
+                            <i class="fas fa-list-ol mr-4"></i>答題步驟
+                        </h4>
+                        <div class="leading-relaxed whitespace-pre-wrap text-gray-700 text-lg">${steps}</div>
+                    </div>
+            `;
+        }
+        
+        cardHTML += `</div></div>`;
+    }
+
     card.innerHTML = cardHTML;
     return card;
-}
-
-// 新增：切換新版答案顯示的函數
-function toggleNewAnswer(btn) {
-    // 找到該卡片內的答案區
-    const card = btn.closest('.question-card');
-    const answerZone = card.querySelector('.qc-answer-zone');
-    const icon = btn.querySelector('i');
-    
-    if (answerZone.style.maxHeight) {
-        // 隱藏
-        answerZone.style.maxHeight = null;
-        btn.innerHTML = '<i class="fas fa-eye"></i> 顯示參考答案';
-        btn.classList.remove('text-blue-600');
-    } else {
-        // 顯示
-        answerZone.style.maxHeight = answerZone.scrollHeight + "px";
-        btn.innerHTML = '<i class="fas fa-eye-slash"></i> 隱藏參考答案';
-        btn.classList.add('text-blue-600');
-    }
 }
 
       // 新增：處理 AI 評分
