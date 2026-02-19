@@ -5142,8 +5142,9 @@ function openPulseOCR(forceMode = null) {
         mode = 'pulse_narrative'; // 敘事用特製4欄表格模式
     }
     
-    // 請確保 toolbox/ocr2.html 路徑正確
-    const url = `toolbox/ocr2.html?mode=${mode}`;
+    // [修改] 移除 toolbox/ 前綴，因為這兩個檔案在同一個資料夾內
+    const url = `ocr2.html?mode=${mode}`; 
+    
     const w = 900;
     const h = 800;
     const left = (screen.width/2)-(w/2);
