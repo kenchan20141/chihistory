@@ -4282,47 +4282,40 @@ function displayPracticalQuestions(allQuestions) {
 }
 
   // 修改後的 createQuestionCard 函數
+// 修改後的 createQuestionCard 函數
 function createQuestionCard(title, content, answer = null, steps = null, type = 'default') {
     const card = document.createElement('div');
     card.className = 'question-card p-10 shadow-2xl slide-up mb-12';
     
-    // 處理選擇題與一般題目的格式 (保持原邏輯)
     let formattedContent = content;
     let isMultipleChoice = type === '選擇';
 
     if (isMultipleChoice) {
         formattedContent = content.replace(/\n/g, '<br>');
         formattedContent = formattedContent.replace(/選項：<br>/g, '<div class="choice-options-container"><h4 class="choice-options-title">選項：</h4>');
-        formattedContent = formattedContent.replace(/([A-D]\.\s[^<]+?)(?=<br>|$)/g, '<div class="choice-option">$1</div>');
+        formattedContent = formattedContent.replace(/(\.\s+?)(?=<br>|$)/g, '<div class="choice-option">$1</div>');
         if (formattedContent.includes('choice-options-container')) {
             formattedContent += '</div>';
         }
     }
 
-    // 設定題型顏色 (保持原邏輯)
     const typeColors = {
-        'reading': 'var(--primary-teal)',
-        'essay': 'var(--primary-blue)',
-        'practical': 'var(--primary-green)',
-        '複述': '#D4909F', '分析': '#B496EB', '印證': '#722F3E',
-        '闡明': '#EA928F', '意見': '#8B6455', '比較': '#3EE1C2',
-        '選擇': '#55A193'
+        'reading': 'var(--primary-teal)', 'essay': 'var(--primary-blue)', 'practical': 'var(--primary-green)',
+        '複述': '#D4909F', '分析': '#B496EB', '印證': '#722F3E', '闡明': '#EA928F', '意見': '#8B6455', '比較': '#3EE1C2', '選擇': '#55A193'
     };
+    const typeColor = typeColors || 'var(--primary-teal)';
     
-    const typeColor = typeColors[type] || 'var(--primary-teal)';
-    
-    // 1. 卡片頭部 (保持不變)
+    // 1. 卡片頭部
     let cardHTML = `
         <div class="flex items-center justify-between mb-8">
             <div class="question-title" style="background: linear-gradient(135deg, ${typeColor} 0%, ${typeColor}80 100%);">
-                <i class="fas fa-question-circle mr-4"></i>
-                ${title}
+                <i class="fas fa-question-circle mr-4"></i>${title}
             </div>
             <span class="px-6 py-3 rounded-full text-base font-bold text-white" style="background: linear-gradient(135deg, ${typeColor} 0%, ${typeColor}CC 100%);">${type}</span>
         </div>
     `;
 
-    // 2. 題目內容區 (保持不變，包含選擇題樣式)
+    // 2. 題目內容區
     if (isMultipleChoice) {
         cardHTML += `
             <div class="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 mb-8 border-2 border-gray-100">
@@ -4343,40 +4336,46 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
         `;
     }
 
-    // 3. 【新增】作答區域 (僅針對閱讀理解的非選擇題，或者全部開放)
-    // 這裡我們排除純展示用的類型，主要針對需要寫字的題型
-    if (answer) { // 只要有答案，就代表是可以作答的題目
-        const safeQuestion = encodeURIComponent(content); // 編碼以便傳遞
-        const safeRefAnswer = encodeURIComponent(answer); // 編碼以便傳遞
+    // 3. 【修訂】莫蘭迪色系作答區域與滿分自動擷取
+    if (answer) {
+        const safeQuestion = encodeURIComponent(content);
+        const safeRefAnswer = encodeURIComponent(answer);
+        
+        // 自動從題目中擷取滿分 (例如：尋找 "5分"、"（2分）" 等字眼)，若無則預設為 10
+        let maxScore = 10; 
+        const scoreMatch = content.match(/?\s*(\d+(?:\.\d+)?)\s*分\s*]?/);
+        if (scoreMatch && scoreMatch) {
+            maxScore = parseFloat(scoreMatch);
+        }
 
         cardHTML += `
-            <div class="answer-interaction-area mb-8 p-6 bg-blue-50 rounded-2xl border-2 border-blue-100">
-                <label class="block text-lg font-bold text-gray-700 mb-3">
-                    <i class="fas fa-pen-alt mr-2 text-blue-500"></i>你的作答：
+            <div class="answer-interaction-area mb-8 p-8 rounded-2xl" style="background-color: #fcfbf9; border: 1px solid #e8e5df; box-shadow: inset 0 2px 10px rgba(0,0,0,0.01);">
+                <label class="block text-lg font-bold mb-4 flex items-center" style="color: #6b635e;">
+                    <i class="fas fa-pen-fancy mr-3" style="color: #a39e99;"></i>我的作答
                 </label>
-                <textarea class="user-answer-input w-full p-4 border-2 border-blue-200 rounded-xl focus:border-blue-400 focus:ring-0 transition-colors duration-300 resize-vertical bg-white text-lg" 
-                    rows="4" 
-                    placeholder="請在此輸入你的答案..."></textarea>
+                <!-- 加入 no-modal-editor 阻擋懸浮視窗 -->
+                <textarea class="user-answer-input no-modal-editor w-full p-5 rounded-xl transition-all duration-300 resize-vertical text-lg font-medium" 
+                    style="background-color: #ffffff; border: 1px solid #dcd7d1; color: #4a4542; outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); min-height: 120px;"
+                    onfocus="this.style.borderColor='#a8a09a'; this.style.boxShadow='0 0 0 3px rgba(168,160,154,0.1)'"
+                    onblur="this.style.borderColor='#dcd7d1'; this.style.boxShadow='inset 0 2px 4px rgba(0,0,0,0.02)'"
+                    placeholder="請於此處書寫你的見解..."></textarea>
                 
-                <div class="flex justify-end mt-4">
-                    <button onclick="submitForGrading(this, '${safeQuestion}', '${safeRefAnswer}')" 
-                        class="btn-grading px-6 py-3 rounded-xl font-bold text-white transition-all duration-300 shadow-lg flex items-center transform hover:-translate-y-1"
-                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                        <i class="fas fa-magic mr-2"></i>AI 評分
+                <div class="flex justify-end mt-5">
+                    <button onclick="submitForGrading(this, '${safeQuestion}', '${safeRefAnswer}', ${maxScore})" 
+                        class="btn-grading px-8 py-3 rounded-full font-bold text-white transition-all duration-300 flex items-center shadow-sm hover:shadow-md transform hover:-translate-y-1"
+                        style="background: linear-gradient(135deg, #9caaa2 0%, #829288 100%); letter-spacing: 1px;">
+                        <i class="fas fa-seedling mr-2"></i>智能評閱
                     </button>
                 </div>
 
-                <!-- 評分結果顯示區 (預設隱藏) -->
-                <div class="grading-result-container hidden mt-6 p-6 bg-white rounded-xl border-l-4 border-purple-500 shadow-inner">
-                    <h4 class="font-bold text-xl text-purple-700 mb-3 flex items-center">
-                        <i class="fas fa-clipboard-check mr-3"></i>評分結果
-                    </h4>
-                    <div class="grading-content text-gray-700 leading-relaxed whitespace-pre-wrap"></div>
+                <!-- 評分結果顯示區 (預設隱藏，由 JS 填入文藝排版) -->
+                <div class="grading-result-container hidden mt-8 pt-8" style="border-top: 1px dashed #dcd7d1;">
+                    <div class="grading-content"></div>
                 </div>
             </div>
         `;
 
-        // 4. 參考答案按鈕 (保持不變，但在作答區下方)
+        // 4. 參考答案按鈕
         cardHTML += `
             <div class="border-t-4 pt-8" style="border-color: var(--divider-color);">
                 <button onclick="toggleAnswer(this, '${typeColor}')" class="flex items-center font-bold mb-6 transition-colors duration-300 text-xl hover:transform hover:scale-105" style="color: ${typeColor};">
@@ -4401,20 +4400,16 @@ function createQuestionCard(title, content, answer = null, steps = null, type = 
                     </div>
             `;
         }
-        
-        cardHTML += `
-                </div>
-            </div>
-        `;
+        cardHTML += `</div></div>`;
     }
 
     card.innerHTML = cardHTML;
     return card;
 }
 
-
       // 新增：處理 AI 評分
-async function submitForGrading(btn, encodedQuestion, encodedRefAnswer) {
+// 新增/修改：處理 AI 評分 (莫蘭迪文藝排版 + 滿分同步)
+async function submitForGrading(btn, encodedQuestion, encodedRefAnswer, maxScore) {
     const container = btn.closest('.answer-interaction-area');
     const inputArea = container.querySelector('.user-answer-input');
     const resultContainer = container.querySelector('.grading-result-container');
@@ -4425,73 +4420,91 @@ async function submitForGrading(btn, encodedQuestion, encodedRefAnswer) {
     const refAnswer = decodeURIComponent(encodedRefAnswer);
 
     if (!userAnswer) {
-        alert("請先輸入你的答案！");
+        alert("請先輸入你的作答內容。");
         return;
     }
 
     // UI 狀態更新：評分中
     const originalBtnContent = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>評分中...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>披閱中...';
     btn.disabled = true;
     inputArea.disabled = true;
-    resultContainer.classList.add('hidden'); // 先隱藏舊結果
+    resultContainer.classList.add('hidden');
 
     try {
-        // 準備 Prompt (提示詞)
-        // 這裡我們不使用新的 action，而是利用現有的機制 (透過 callAPI 傳送 prompt)
-        // 如果你的後端支援直接傳送 prompt 最好，否則我們可以使用 'generate_reading' 的 action 但透過 hack 方式
-        // 這裡假設我們可以直接呼叫 callAPI (基於你原本代碼中的 callAPI 邏輯)
-        
-        const promptMessages = [
-            { role: "system", content: "你是一位專業的語文老師。請根據題目、學生答案及參考答案進行評分。" },
-            { role: "user", content: `
-                任務：評改學生作答。
-                
-                題目：
-                ${question}
-                
-                參考答案：
-                ${refAnswer}
-                
-                學生作答：
-                ${userAnswer}
-                
-                請輸出以下資訊：
-                1. 分數 (1-10分，10分為滿分)
-                2. 評語 (簡短分析學生答案的優缺點)
-                3. 改進建議 (如果沒有滿分，請說明如何改善)
-                
-                格式要求：請使用 HTML 標籤 (如 <b>, <br>, <span style="color:red">) 來讓輸出結果清晰易讀。
-                分數請用明顯的樣式標示。
-            ` }
-        ];
+        // 嚴格規範 AI 輸出格式，確保排版穩定
+        const promptMessages =;
 
-        // 呼叫 API
-        // 注意：這裡直接使用 callAPI，假設它能處理 messages 參數
-        // 如果你的 callAPI 只接受特定 action，你可能需要根據你的後端調整
-        // 這裡模擬一個標準的 API 請求結構
         const requestBody = {
             messages: promptMessages,
-            // 如果你的後端需要 action，可以用一個通用的，或者直接傳 messages
-            action: 'free_chat' // 假設後端有這個 action 或能處理 raw messages
+            action: 'free_chat' 
         };
 
-        // 如果你的後端只接受特定的 generate_reading action，我們可以把 prompt 包裝進去
-        // 但通常最好有一個通用的對話接口。以下使用你的 callAPI 函數：
-        const gradingResult = await callAPI(requestBody, 'gemini-search'); // 使用 gemini 或其他模型
+        // 呼叫 API
+        let gradingResult = await callAPI(requestBody, 'gemini-search'); 
+        gradingResult = gradingResult.replace(/<think>*?<\/think>/gi, '').trim();
 
-        // 顯示結果
-        resultContent.innerHTML = gradingResult;
+        // 擷取 AI 的回覆區塊
+        let awardedScore = "-";
+        let commentary = "未能解析評語，請參考原始回覆。";
+        let suggestion = "無特別建議。";
+
+        const scoreMatch = gradingResult.match(/【分數】\s*(+)/);
+        const commentaryMatch = gradingResult.match(/【評語】(*?)(?=【建議】|$)/);
+        const suggestionMatch = gradingResult.match(/【建議】(*)/);
+
+        if (scoreMatch) awardedScore = scoreMatch.trim();
+        if (commentaryMatch) commentary = commentaryMatch.trim().replace(/\n/g, '<br>');
+        if (suggestionMatch) suggestion = suggestionMatch.trim().replace(/\n/g, '<br>');
+
+        // 如果完全解析失敗，就當作一般文字顯示
+        if (!scoreMatch && !commentaryMatch) {
+            commentary = gradingResult.replace(/\n/g, '<br>');
+            suggestion = "無";
+        }
+
+        // 組合文藝風、莫蘭迪色系的排版 HTML
+        resultContent.innerHTML = `
+            <div class="flex flex-col md:flex-row gap-6 items-stretch">
+                <!-- 左側：分數展示區塊 -->
+                <div class="flex-shrink-0 flex flex-col items-center justify-center p-6 rounded-2xl" 
+                     style="background-color: #f2f0ec; border: 1px solid #e3e0d8; min-width: 140px;">
+                    <span style="font-size: 0.95rem; color: #8c847d; font-weight: bold; letter-spacing: 2px; margin-bottom: 8px;">得分</span>
+                    <div style="color: #6b635e; font-size: 3rem; font-weight: 700; line-height: 1; font-family: serif;">${awardedScore}</div>
+                    <div style="width: 30px; height: 2px; background-color: #d1cbc3; margin: 10px 0;"></div>
+                    <span style="font-size: 0.85rem; color: #9a8f88;">滿分 ${maxScore} 分</span>
+                </div>
+                
+                <!-- 右側：評語與建議區塊 -->
+                <div class="flex-1 space-y-4">
+                    <div class="p-6 rounded-2xl" style="background-color: rgba(255,255,255,0.7); border: 1px solid #eceadd;">
+                        <h5 class="font-bold flex items-center mb-3 text-lg" style="color: #7d756f;">
+                            <i class="fas fa-quote-left mr-3" style="color: #b3aca4; font-size: 0.9rem;"></i>教師評語
+                        </h5>
+                        <p style="color: #5c544f; line-height: 1.8; font-size: 1.05rem;">${commentary}</p>
+                    </div>
+                    
+                    <div class="p-6 rounded-2xl" style="background-color: rgba(255,255,255,0.7); border: 1px solid #eceadd;">
+                        <h5 class="font-bold flex items-center mb-3 text-lg" style="color: #7d756f;">
+                            <i class="fas fa-compass mr-3" style="color: #b3aca4; font-size: 0.9rem;"></i>改進建議
+                        </h5>
+                        <p style="color: #5c544f; line-height: 1.8; font-size: 1.05rem;">${suggestion}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
         resultContainer.classList.remove('hidden');
         
-        // 滑動到結果
-        resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // 平滑滾動至結果
+        setTimeout(() => {
+            resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
 
     } catch (error) {
         console.error("評分失敗:", error);
-        alert("評分服務暫時無法使用，請稍後再試。");
+        alert("評閱服務暫時無法使用，請稍後再試。");
     } finally {
-        // 還原按鈕狀態
         btn.innerHTML = originalBtnContent;
         btn.disabled = false;
         inputArea.disabled = false;
