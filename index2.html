@@ -16859,82 +16859,112 @@ if (ocrBtn) {
 
 // ▼▼▼▼▼ 貼上這段新代碼 ▼▼▼▼▼
 
-// === OCR 訊息接收監聽器 (防重複版) ===
-// 定義一個處理函式，而不是匿名函式，這樣比較好管理
-// === OCR 訊息接收監聽器 (修訂版：優先更新懸浮視窗) ===
 function handleOCRMessage(event) {
     if (!event.data || event.data.type !== 'ocrResult') return;
     const rawText = event.data.text;
     
-    // 1. 嘗試提取 JSON 數據
-    const tableMarker = "[[DATA_TABLE]]:";
-    if (rawText.includes(tableMarker)) {
-        try {
-            const jsonPart = rawText.split(tableMarker)[1].trim();
-            const tableData = JSON.parse(jsonPart);
+    // 1. 偵測並提取 JSON 區塊 (包含處理 Markdown 的 ```json 包裹)
+    let jsonContent = "";
+    if (rawText.includes("[[DATA_TABLE]]:")) {
+        const parts = rawText.split("[[DATA_TABLE]]:");
+        jsonContent = parts[1].trim().replace(/```json|```/g, "").trim();
+    }
 
-            if (tableData.isTable && tableData.rows) {
-                fillOutlineTable(tableData.rows); // 呼叫填表函式
-                // 關閉 OCR 視窗
-                if (typeof ocrWindow !== 'undefined' && ocrWindow && !ocrWindow.closed) ocrWindow.close();
-                return; // 跳過普通文字處理
+    if (jsonContent) {
+        try {
+            const tableData = JSON.parse(jsonContent);
+            if (tableData.isTable && tableData.segments) {
+                // 執行「智能填表」
+                fillSmartTable(tableData.segments);
+                
+                // 成功後關閉 OCR 視窗
+                if (window.ocrWindow && !window.ocrWindow.closed) {
+                    window.ocrWindow.close();
+                }
+                return; // 結束，不再執行後續的文字填入
             }
         } catch (e) {
-            console.error("解析 OCR 表格 JSON 失敗", e);
+            console.error("JSON 解析失敗，回退至普通文字模式", e);
         }
     }
 
-    // 2. 原有的普通文字處理邏輯 (填入當前編輯框)
+    // 2. 普通文字回退模式 (如果沒偵測到表格)
     const modal = document.getElementById('outline-editor-modal');
     const modalTextarea = document.getElementById('modal-textarea');
     let targetEl = (modal && modal.style.display !== 'none') ? modalTextarea : document.getElementById(sessionStorage.getItem('sansi_current_editing_id'));
 
     if (targetEl) {
         const prefix = (targetEl.value && !targetEl.value.endsWith('\n')) ? '\n' : '';
-        targetEl.value += prefix + rawText.split(tableMarker)[0]; // 移除 JSON 標記後再填入
+        // 移除 JSON 標記後再填入
+        const cleanText = rawText.split("[[DATA_TABLE]]:")[0].trim();
+        targetEl.value += prefix + cleanText;
         targetEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
 }
 
-// 新增：專門處理填寫大綱表格的函式
-function fillOutlineTable(rows) {
-    // A. 判斷目前是「敘事抒情」還是「議論」模式
-    const writingType = document.getElementById("writingType").value;
-    const argumentArea = document.getElementById("argumentOutlineArea");
+// 智能填表核心邏輯
+function fillSmartTable(segments) {
+    const writingType = document.getElementById("writingType").value; // 敘事模式
+    const isArgument = document.getElementById("argumentOutlineArea").style.display !== "none"; // 議論模式
+    const structure = document.getElementById("structure") ? document.getElementById("structure").value : "fourPart";
 
-    if (argumentArea && argumentArea.style.display !== "none") {
-        // --- 議論模式 (動態表格) ---
-        // 1. 獲取現有行數（扣除標題行）
-        const table = document.getElementById("argumentOutlineTable");
+    segments.forEach(seg => {
+        const label = seg.label; // 例如 "起", "承", "結構段一"
         
-        // 2. 如果 OCR 的行數比現有的多 ( rows.length 是 OCR 到的行數 )
-        // 議論預設 5 行 (起, 段1, 段2, 段3, 合)
-        while (table.rows.length - 1 < rows.length) {
-            addArgumentStructureSegment(); // 呼叫你原本的增加結構段函式
+        if (isArgument) {
+            // --- 議論大綱填寫 ---
+            const table = document.getElementById("argumentOutlineTable");
+            if (!table) return;
+
+            // 尋找現有行，比對「部份」那一欄的文字
+            let found = false;
+            for (let i = 1; i < table.rows.length; i++) {
+                if (table.rows[i].cells[0].innerText.includes(label)) {
+                    const pointBox = table.rows[i].cells[1].querySelector("textarea");
+                    const evidenceBox = table.rows[i].cells[2].querySelector("textarea");
+                    if (pointBox) pointBox.value = seg.focus || "";
+                    if (evidenceBox) evidenceBox.value = seg.plot || "";
+                    found = true;
+                }
+            }
+            // 如果沒找到對應標籤（例如手寫了 5 段但網頁只有 3 段），自動新增
+            if (!found && label.includes("結構段")) {
+                addArgumentStructureSegment(); // 呼叫原本的增加行函式
+                // 再次執行填寫（最後一行）
+                const lastRow = table.rows[table.rows.length - 2]; // 合之前的一行
+                const pBox = lastRow.cells[1].querySelector("textarea");
+                const eBox = lastRow.cells[2].querySelector("textarea");
+                if (pBox) pBox.value = seg.focus || "";
+                if (eBox) eBox.value = seg.plot || "";
+            }
+
+        } else {
+            // --- 敘事大綱填寫 ---
+            // 建立對應 Map
+            const labelMap = {
+                "起": 1, "承": 2, "轉": 3, "合": 4,
+                "一線": 2, "二線": 3, "三線": 4 // 針對三線結構
+            };
+            
+            // 處理標籤帶數字的情況，例如 "結構段一"
+            let index = labelMap[label];
+            if (!index && label.includes("線")) {
+                const numMap = {"一":2, "二":3, "三":4};
+                index = numMap[label[0]];
+            }
+
+            if (index) {
+                const fEl = document.getElementById(structure + "Focus" + index);
+                const pEl = document.getElementById(structure + "Plot" + index);
+                if (fEl) fEl.value = seg.focus || "";
+                if (pEl) pEl.value = seg.plot || "";
+            }
         }
+    });
 
-        // 3. 填入數據
-        rows.forEach((rowData, index) => {
-            const pointEl = document.getElementById(`argumentPoint${index}`);
-            const evidenceEl = document.getElementById(`argumentEvidence${index}`);
-            if (pointEl) pointEl.value = rowData.col1 || "";
-            if (evidenceEl) evidenceEl.value = rowData.col2 || "";
-        });
-        alert("✅ 議論文大綱已自動按位置填入");
-
-    } else if (writingType === "大綱") {
-        // --- 敘事抒情模式 (固定結構) ---
-        const structure = document.getElementById("structure").value; // fourPart 或 threeLine
-        
-        rows.forEach((rowData, index) => {
-            const i = index + 1; // 敘事 ID 是從 1 開始的
-            const focusEl = document.getElementById(structure + "Focus" + i);
-            const plotEl = document.getElementById(structure + "Plot" + i);
-            if (focusEl) focusEl.value = rowData.col1 || "";
-            if (plotEl) plotEl.value = rowData.col2 || "";
-        });
-        alert("✅ 敘事大綱已自動填入");
-    }
+    // 最後統一觸發一次儲存事件，確保 sessionStorage 更新
+    document.querySelectorAll('textarea').forEach(t => t.dispatchEvent(new Event('input', { bubbles: true })));
+    alert("✅ 辨識完成：已自動根據標籤分配大綱內容。");
 }
 
 // 重新綁定監聽器 (確保不會重複)
