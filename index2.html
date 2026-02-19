@@ -16859,120 +16859,211 @@ if (ocrBtn) {
 
 // ▼▼▼▼▼ 貼上這段新代碼 ▼▼▼▼▼
 
+// === OCR 智能分配接收器 (表格專用版) ===
 function handleOCRMessage(event) {
-    if (!event.data || event.data.type !== 'ocrResult') return;
-    const rawText = event.data.text;
-    
-    // 1. 偵測並提取 JSON 區塊 (包含處理 Markdown 的 ```json 包裹)
-    let jsonContent = "";
-    if (rawText.includes("[[DATA_TABLE]]:")) {
-        const parts = rawText.split("[[DATA_TABLE]]:");
-        jsonContent = parts[1].trim().replace(/```json|```/g, "").trim();
+    // 1. 安全檢查
+    if (!event.data) return;
+
+    // --- 情況 A: 舊版純文字 OCR (fallback) ---
+    if (event.data.type === 'ocrResult') {
+        const newText = event.data.text;
+        // ... (保留您原本處理純文字插入游標處的代碼，或直接使用下方的通用插入邏輯) ...
+        insertTextToActiveElement(newText);
+        return;
     }
 
-    if (jsonContent) {
-        try {
-            const tableData = JSON.parse(jsonContent);
-            if (tableData.isTable && tableData.segments) {
-                // 執行「智能填表」
-                fillSmartTable(tableData.segments);
-                
-                // 成功後關閉 OCR 視窗
-                if (window.ocrWindow && !window.ocrWindow.closed) {
-                    window.ocrWindow.close();
-                }
-                return; // 結束，不再執行後續的文字填入
-            }
-        } catch (e) {
-            console.error("JSON 解析失敗，回退至普通文字模式", e);
+    // --- 情況 B: 新版結構化 JSON OCR ---
+    if (event.data.type === 'ocrJSONResult') {
+        const rows = event.data.data; // 這是 [{part, col1, col2}, ...] 陣列
+        console.log("收到結構化大綱數據:", rows);
+
+        // 判斷當前是在「敘事」還是「議論」模式
+        const writingContainer = document.getElementById('writingContainer');
+        const argumentContainer = document.getElementById('argumentContainer');
+        
+        let isNarrative = writingContainer && writingContainer.style.display !== 'none';
+        let isArgument = argumentContainer && argumentContainer.style.display !== 'none';
+
+        if (isNarrative) {
+            fillNarrativeOutline(rows);
+        } else if (isArgument) {
+            fillArgumentOutline(rows);
+        } else {
+            // 如果不在大綱介面，則將所有內容合併成文字插入當前游標
+            const rawText = rows.map(r => `${r.part}：${r.col1}\n${r.col2}`).join('\n\n');
+            insertTextToActiveElement(rawText);
+        }
+
+        // 關閉 OCR 視窗
+        if (typeof ocrWindow !== 'undefined' && ocrWindow && !ocrWindow.closed) {
+            ocrWindow.close();
         }
     }
+}
 
-    // 2. 普通文字回退模式 (如果沒偵測到表格)
+// 輔助：插入文字到當前鎖定的輸入框 (相容舊功能)
+function insertTextToActiveElement(text) {
+    let targetEl = null;
     const modal = document.getElementById('outline-editor-modal');
     const modalTextarea = document.getElementById('modal-textarea');
-    let targetEl = (modal && modal.style.display !== 'none') ? modalTextarea : document.getElementById(sessionStorage.getItem('sansi_current_editing_id'));
+    
+    if (modal && modal.style.display !== 'none' && modalTextarea) {
+        targetEl = modalTextarea;
+    } else {
+        const savedId = sessionStorage.getItem('sansi_current_editing_id');
+        if (savedId) targetEl = document.getElementById(savedId);
+    }
 
     if (targetEl) {
-        const prefix = (targetEl.value && !targetEl.value.endsWith('\n')) ? '\n' : '';
-        // 移除 JSON 標記後再填入
-        const cleanText = rawText.split("[[DATA_TABLE]]:")[0].trim();
-        targetEl.value += prefix + cleanText;
+        const currentVal = targetEl.value;
+        const prefix = (currentVal && !currentVal.endsWith('\n')) ? '\n' : '';
+        targetEl.value += prefix + text;
         targetEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
 }
 
-// 智能填表核心邏輯
-function fillSmartTable(segments) {
-    const writingType = document.getElementById("writingType").value; // 敘事模式
-    const isArgument = document.getElementById("argumentOutlineArea").style.display !== "none"; // 議論模式
-    const structure = document.getElementById("structure") ? document.getElementById("structure").value : "fourPart";
+// === 核心邏輯 1: 填入敘事大綱 ===
+function fillNarrativeOutline(ocrRows) {
+    // 獲取當前結構類型 (起承轉合 / 三線)
+    const structure = document.getElementById("structure").value; // "fourPart" or "threeLine"
+    
+    // 定義該結構下，所有可能的 Row ID 前綴與預期的中文標題關鍵字
+    // 這裡我們建立一個對照表，用來模糊比對 OCR 結果
+    let mapping = [];
+    
+    if (structure === "fourPart") {
+        mapping = [
+            { key: "起", idIndex: 1 },
+            { key: "承", idIndex: 2 },
+            { key: "轉", idIndex: 3 },
+            { key: "合", idIndex: 4 }
+        ];
+    } else {
+        mapping = [
+            { key: "起", idIndex: 1 },
+            { key: "一線", idIndex: 2 },
+            { key: "二線", idIndex: 3 },
+            { key: "三線", idIndex: 4 },
+            { key: "合", idIndex: 5 }
+        ];
+    }
 
-    segments.forEach(seg => {
-        const label = seg.label; // 例如 "起", "承", "結構段一"
+    // 遍歷 OCR 掃描到的每一行
+    ocrRows.forEach(row => {
+        const partName = row.part.trim(); // 例如 "起", "結構段一"
         
-        if (isArgument) {
-            // --- 議論大綱填寫 ---
-            const table = document.getElementById("argumentOutlineTable");
-            if (!table) return;
-
-            // 尋找現有行，比對「部份」那一欄的文字
-            let found = false;
-            for (let i = 1; i < table.rows.length; i++) {
-                if (table.rows[i].cells[0].innerText.includes(label)) {
-                    const pointBox = table.rows[i].cells[1].querySelector("textarea");
-                    const evidenceBox = table.rows[i].cells[2].querySelector("textarea");
-                    if (pointBox) pointBox.value = seg.focus || "";
-                    if (evidenceBox) evidenceBox.value = seg.plot || "";
-                    found = true;
-                }
-            }
-            // 如果沒找到對應標籤（例如手寫了 5 段但網頁只有 3 段），自動新增
-            if (!found && label.includes("結構段")) {
-                addArgumentStructureSegment(); // 呼叫原本的增加行函式
-                // 再次執行填寫（最後一行）
-                const lastRow = table.rows[table.rows.length - 2]; // 合之前的一行
-                const pBox = lastRow.cells[1].querySelector("textarea");
-                const eBox = lastRow.cells[2].querySelector("textarea");
-                if (pBox) pBox.value = seg.focus || "";
-                if (eBox) eBox.value = seg.plot || "";
-            }
-
-        } else {
-            // --- 敘事大綱填寫 ---
-            // 建立對應 Map
-            const labelMap = {
-                "起": 1, "承": 2, "轉": 3, "合": 4,
-                "一線": 2, "二線": 3, "三線": 4 // 針對三線結構
-            };
+        // 在 mapping 中尋找最匹配的項目
+        // 邏輯：如果 OCR 的 part 包含 mapping 的 key (例如 "結構段(起)" 包含 "起")
+        const match = mapping.find(m => partName.includes(m.key));
+        
+        if (match) {
+            // 組裝目標 ID
+            const focusId = `${structure}Focus${match.idIndex}`;
+            const plotId = `${structure}Plot${match.idIndex}`;
             
-            // 處理標籤帶數字的情況，例如 "結構段一"
-            let index = labelMap[label];
-            if (!index && label.includes("線")) {
-                const numMap = {"一":2, "二":3, "三":4};
-                index = numMap[label[0]];
+            const focusEl = document.getElementById(focusId);
+            const plotEl = document.getElementById(plotId);
+            
+            // 填入內容 (col1 -> 重點, col2 -> 情節)
+            if (focusEl) {
+                focusEl.value = row.col1;
+                focusEl.dispatchEvent(new Event('input', { bubbles: true })); // 觸發自動存檔
             }
-
-            if (index) {
-                const fEl = document.getElementById(structure + "Focus" + index);
-                const pEl = document.getElementById(structure + "Plot" + index);
-                if (fEl) fEl.value = seg.focus || "";
-                if (pEl) pEl.value = seg.plot || "";
+            if (plotEl) {
+                plotEl.value = row.col2;
+                plotEl.dispatchEvent(new Event('input', { bubbles: true }));
             }
         }
     });
-
-    // 最後統一觸發一次儲存事件，確保 sessionStorage 更新
-    document.querySelectorAll('textarea').forEach(t => t.dispatchEvent(new Event('input', { bubbles: true })));
-    alert("✅ 辨識完成：已自動根據標籤分配大綱內容。");
+    alert("敘事大綱已自動填入！");
 }
 
-// 重新綁定監聽器 (確保不會重複)
-window.removeEventListener('message', handleOCRMessage);
-window.addEventListener('message', handleOCRMessage);
+// === 核心邏輯 2: 填入議論大綱 (含自動新增表格) ===
+function fillArgumentOutline(ocrRows) {
+    const table = document.getElementById("argumentOutlineTable");
+    if (!table) return;
 
-// ▲▲▲▲▲ 貼上結束 ▲▲▲▲▲
-});
+    // 1. 先處理固定的「起」和「合」
+    // 2. 處理中間的「結構段」
+    // 3. 如果 OCR 的結構段數量 > 當前表格行數，自動按按鈕新增
+
+    // 分離出 OCR 數據中的結構段
+    const startRow = ocrRows.find(r => r.part.includes("起"));
+    const endRow = ocrRows.find(r => r.part.includes("合"));
+    
+    // 找出所有中間段落 (過濾掉起、合，且名稱包含"段"或"論點"或"結構")
+    const bodyRows = ocrRows.filter(r => 
+        !r.part.includes("起") && 
+        !r.part.includes("合") && 
+        (r.part.includes("段") || r.part.includes("一") || r.part.includes("二") || r.part.includes("三") || r.part.includes("四"))
+    );
+
+    // --- 填寫「起」---
+    if (startRow) {
+        // 議論表格第一行通常是 Header，第二行是「起」(index 0)
+        document.getElementById("argumentPoint0").value = startRow.col1;
+        document.getElementById("argumentEvidence0").value = startRow.col2;
+    }
+
+    // --- 填寫「結構段」 (動態新增邏輯) ---
+    // 計算當前表格有多少個結構段 (排除起、合)
+    // 假設 ID 規律是 argumentPoint1, argumentPoint2... 
+    // argumentPoint0 是起, 最後一個是合.
+    
+    // 我們先檢查需要多少個結構段
+    const neededBodyCount = bodyRows.length;
+    
+    // 獲取當前 DOM 中已有的結構段數量
+    // 計算方式：計算 table rows 數量，扣除 header, 起, 合
+    let currentRows = table.rows.length;
+    let currentBodyCount = currentRows - 3; // header + 起 + 合
+    if (currentBodyCount < 0) currentBodyCount = 0;
+
+    // 如果需要的比現有的多，自動點擊「新增」按鈕
+    if (neededBodyCount > currentBodyCount) {
+        const addBtn = document.querySelector('button[onclick="addArgumentStructureSegment()"]');
+        if (addBtn) {
+            for (let i = 0; i < (neededBodyCount - currentBodyCount); i++) {
+                addArgumentStructureSegment(); // 呼叫你原本的新增函式
+            }
+        }
+    }
+
+    // 開始填寫結構段 (從 ID index 1 開始)
+    bodyRows.forEach((row, i) => {
+        const targetIndex = i + 1; // 0是起，所以結構段從1開始
+        const pointEl = document.getElementById(`argumentPoint${targetIndex}`);
+        const evEl = document.getElementById(`argumentEvidence${targetIndex}`);
+        
+        if (pointEl) pointEl.value = row.col1;
+        if (evEl) evEl.value = row.col2;
+    });
+
+    // --- 填寫「合」---
+    if (endRow) {
+        // 合的 ID 總是最後一個。我們需要重新計算最新的 ID
+        // 由於 addArgumentStructureSegment 會插入在「合」之前，
+        // 所以「合」的 ID 應該是 table.rows.length - 2 (因為 row index 從0開始，且有header)
+        // 但你的 `addArgumentStructureSegment` 邏輯看起來沒有動態更新「合」的 ID?
+        // 讓我們重新檢視你的 `generateArgumentOutlineTable`：
+        // 它預設生成 Point0(起), Point1(一), Point2(二), Point3(三), Point4(合)
+        // 你的 `addArgumentStructureSegment` 插入新列時，ID 是基於 newRowIndex - 1。
+        // 所以如果插入了新行，「合」的輸入框 ID 其實沒有變（除非你重繪了表格）。
+        // **修正策略**：通常「合」是表格的最後一列。我們直接抓最後一列的 textarea。
+        
+        const lastRow = table.rows[table.rows.length - 1];
+        const inputs = lastRow.querySelectorAll('textarea');
+        if (inputs.length >= 2) {
+            inputs[0].value = endRow.col1; // 論點
+            inputs[1].value = endRow.col2; // 論據
+        }
+    }
+    
+    // 觸發事件以保存
+    table.querySelectorAll('textarea').forEach(el => el.dispatchEvent(new Event('input', { bubbles: true })));
+    
+    alert(`議論大綱已填入！(自動新增了 ${Math.max(0, neededBodyCount - currentBodyCount)} 個結構段)`);
+}
 
 /**
  * 【最終把關規則修訂 v3】
