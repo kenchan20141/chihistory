@@ -5194,52 +5194,173 @@ window.addEventListener('message', function(event) {
     }
 });
 
-// 輔助：填入敘事 (4欄)
+// --- OCR 資料接收與處理核心 ---
+
+// 1. 輔助函式：更新輸入框並觸發事件 (確保資料被保存/UI更新)
+function updateTextarea(element, value) {
+    if (!element || !value) return;
+    element.value = value;
+    // 觸發 input 事件，讓 auto-save 或 auto-resize 生效
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    // 視覺回饋：閃爍一下背景
+    element.style.transition = 'background-color 0.3s';
+    element.style.backgroundColor = '#e6fffa';
+    setTimeout(() => {
+        element.style.backgroundColor = '';
+    }, 500);
+}
+
+// 2. 監聽 OCR 回傳訊息
+window.addEventListener('message', function(event) {
+    // 安全檢查
+    if (!event.data) return;
+
+    // A. 處理表格數據 (ocrJSONResult)
+    if (event.data.type === 'ocrJSONResult') {
+        const rows = event.data.data;
+        const container = document.getElementById('studentInputContainer');
+        const table = container.querySelector('table');
+        
+        if (!table) {
+            console.warn("找不到目標表格");
+            return;
+        }
+        
+        console.log("收到 OCR 表格數據:", rows);
+
+        if (studentNarrativeStructure === 'argument') {
+            fillArgumentFromOCR(rows, table);
+        } else {
+            fillNarrativeFromOCR(rows, table);
+        }
+    } 
+    // B. 處理純文字數據 (ocrResult - 用於 QA 模式)
+    else if (event.data.type === 'ocrResult') {
+        const text = event.data.text;
+        const textarea = document.getElementById('studentAnswer');
+        if (textarea) {
+            const originalVal = textarea.value;
+            const newVal = originalVal ? (originalVal + '\n\n' + text) : text;
+            updateTextarea(textarea, newVal);
+            textarea.disabled = false; // 確保解鎖
+            textarea.focus();
+        }
+    }
+});
+
+// 3. 填入敘事大綱 (4欄模式：部份 | 重點 | 情節 | 物象)
 function fillNarrativeFromOCR(data, table) {
-    // data 結構: [{part, col1, col2, col3}, ...]
-    // 目標: 匹配 part (起/一線...)，填入 col1->重點, col2->情節, col3->物象
     const tbody = table.querySelector('tbody');
     const trs = tbody.querySelectorAll('tr');
     
+    let matchCount = 0;
+
     data.forEach(item => {
-        // 簡單模糊匹配：如果 OCR 的 part 包含表格的 part 文字
+        // 清理 OCR 回傳的標題，移除換行符
+        const ocrPart = item.part ? item.part.replace(/\s+/g, '') : "";
+        
         for (let tr of trs) {
-            const rowLabel = tr.cells[0].innerText.trim();
-            if (item.part.includes(rowLabel) || (rowLabel === '一線' && item.part.includes('一')) || (rowLabel === '結構段一' && item.part.includes('一'))) {
+            // 獲取表格該列的標題 (第一格)
+            const rowLabel = tr.cells[0].innerText.replace(/\s+/g, '');
+            
+            // 模糊匹配邏輯：
+            // 1. 完全包含 (例如 OCR="起段" vs Table="起")
+            // 2. 特殊處理 "一線/二線/三線"
+            let isMatch = ocrPart.includes(rowLabel);
+            
+            // 針對三線結構的特殊處理
+            if (!isMatch && rowLabel.includes('線') && ocrPart.includes(rowLabel[0])) { 
+                // e.g. rowLabel="一線", ocrPart="一" -> 匹配
+                isMatch = true;
+            }
+
+            if (isMatch) {
                 const inputs = tr.querySelectorAll('textarea');
-                if (inputs[0] && item.col1) inputs[0].value = item.col1; // 重點
-                if (inputs[1] && item.col2) inputs[1].value = item.col2; // 情節
-                if (inputs[2] && item.col3) inputs[2].value = item.col3; // 物象
-                break;
+                // PulseQA 敘事表格結構：
+                // inputs[0] = 結構段重點 (col1)
+                // inputs[1] = 情節大要 (col2)
+                // inputs[2] = 物象 (col3)
+                
+                if (inputs[0]) updateTextarea(inputs[0], item.col1);
+                if (inputs[1]) updateTextarea(inputs[1], item.col2);
+                if (inputs[2]) updateTextarea(inputs[2], item.col3); // 這裡填入物象
+                
+                matchCount++;
+                break; // 找到對應行後，跳出內層迴圈，處理下一筆 OCR 資料
             }
         }
     });
+    
+    if (matchCount > 0) {
+        // alert(`成功識別並填入 ${matchCount} 個段落`);
+    }
 }
 
-// 輔助：填入議論 (3欄)
+// 4. 填入議論大綱 (3欄模式：部份 | 論點 | 論據)
 function fillArgumentFromOCR(data, table) {
-    // data 結構: [{part, col1, col2}, ...] (col3 空)
     const tbody = table.querySelector('tbody');
-    let trs = tbody.querySelectorAll('tr');
     
-    // 先檢查是否需要動態新增行 (如果 OCR 掃描出結構段四、五...)
-    // 這裡做個簡單處理：如果 OCR 資料列多於現有表格列，嘗試按順序填入
-    
+    // 檢查是否需要動態新增「結構段」
+    // 計算 OCR 數據中有多少個「結構段」
+    let ocrStructCount = 0;
     data.forEach(item => {
-        let matched = false;
-        // 1. 嘗試匹配標題
+        if (item.part && (item.part.includes("結構段") || item.part.match(/[一二三四五]/))) {
+            if (!item.part.includes("起") && !item.part.includes("合")) {
+                ocrStructCount++;
+            }
+        }
+    });
+
+    // 計算現有表格有多少結構段 (總行數 - 起 - 合)
+    // 假設現有行數是 rows.length，減去頭尾就是結構段數
+    // 簡單解法：直接檢查最後一個結構段的編號
+    
+    const controlDiv = document.querySelector('.arg-controls');
+    // 如果 OCR 結構段多於預設 (3段)，自動點擊新增按鈕
+    // 這裡做個簡單判斷：如果 OCR 有超過3個中間段落，就嘗試新增
+    if (ocrStructCount > 3 && controlDiv) {
+        const addBtn = controlDiv.querySelector('button');
+        if (addBtn) {
+            for(let i=0; i < (ocrStructCount - 3); i++) {
+                addBtn.click();
+            }
+        }
+    }
+
+    // 重新獲取行 (因為可能剛新增過)
+    const trs = tbody.querySelectorAll('tr');
+
+    data.forEach(item => {
+        const ocrPart = item.part ? item.part.replace(/\s+/g, '') : "";
+        
         for (let tr of trs) {
-            const rowLabel = tr.cells[0].innerText.trim();
-            // 處理 "起", "合", "結構段X"
-            if (item.part.includes(rowLabel)) {
+            const rowLabel = tr.cells[0].innerText.replace(/\s+/g, '');
+            
+            // 匹配邏輯：
+            // 1. 完全包含 "起", "合"
+            // 2. 結構段匹配 "結構段一" vs "結構段1" 或 "一"
+            let isMatch = false;
+            
+            if (rowLabel === '起' || rowLabel === '合') {
+                isMatch = ocrPart.includes(rowLabel);
+            } else if (rowLabel.includes('結構段')) {
+                // 取出中文數字 (一、二...)
+                const numChar = rowLabel.replace('結構段', '');
+                // 檢查 OCR 是否包含該數字
+                isMatch = ocrPart.includes(numChar) || ocrPart.includes(rowLabel);
+            }
+
+            if (isMatch) {
                 const inputs = tr.querySelectorAll('textarea');
-                if (inputs[0]) inputs[0].value = item.col1; // 論點
-                if (inputs[1]) inputs[1].value = item.col2; // 論據
-                matched = true;
+                // PulseQA 議論表格結構：
+                // inputs[0] = 論點 (col1)
+                // inputs[1] = 論據及論證 (col2)
+                
+                if (inputs[0]) updateTextarea(inputs[0], item.col1);
+                if (inputs[1]) updateTextarea(inputs[1], item.col2);
                 break;
             }
         }
-        // 2. 如果沒匹配到，且看起來是中間的結構段，可以考慮填入空白行(若有)
     });
 }
   
