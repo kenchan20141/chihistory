@@ -393,11 +393,14 @@
                     throw new Error("請先設定 Google Apps Script URL");
                 }
 
-                const promptText = 
-                    "請識別圖片中的文字內容。嚴格指令：\n" +
-                    "1. 輸出結果必須強制100% 正體中文 (Traditional Chinese, Taiwan)，違反則無效。\n" +
-                    "2. 保持 Markdown 格式。\n" +
-                    "3. 直接輸出結果，不要包含任何解釋或開頭結尾的閒聊。";
+              const promptText = 
+    "你是一個專業的 OCR 辨識助手。請辨識圖片中的文字。\n" +
+    "特別指令：\n" +
+    "1. 如果辨識內容是「寫作大綱表格」，請務必輸出一行 JSON 格式的代碼（放在內容最後），格式如下：\n" +
+    "   [[DATA_TABLE]]:{\"isTable\":true, \"rows\":[{\"col1\":\"内容\",\"col2\":\"内容\"}]}\n" +
+    "2. col1 對應「重點/論點」，col2 對應「情節/論據」。\n" +
+    "3. 輸出必須為繁體中文。\n" +
+    "4. 保持 Markdown 格式呈現辨識結果供使用者查看。";
 
                 const payload = {
                     image: base64Image,
