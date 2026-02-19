@@ -17065,6 +17065,13 @@ function fillArgumentOutline(ocrRows) {
     alert(`議論大綱已填入！(自動新增了 ${Math.max(0, neededBodyCount - currentBodyCount)} 個結構段)`);
 }
 
+	// 重新綁定監聽器 (確保不會重複)
+window.removeEventListener('message', handleOCRMessage);
+window.addEventListener('message', handleOCRMessage);
+
+// ▲▲▲▲▲ 貼上結束 ▲▲▲▲▲
+});
+
 /**
  * 【最終把關規則修訂 v3】
  * 當「扣題」分數為 4 分或以下時，強制將多個核心項目分數的上限限制在 4 分。
