@@ -8134,40 +8134,31 @@ function isNoticeActive(startDateStr, endDateStr) {
 function parseNoticeContent(rawText) {
     if (!rawText) return "";
     
-    // 如果老師直接貼上了純 HTML iframe (且沒有換行)，不予破壞
     if (rawText.includes('<iframe') && !rawText.includes('\n')) {
         return rawText;
     }
 
-    // 1. 統一換行符號
     let text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    
-    // 2. 將文本按空白字符分割 (保留換行符號作為獨立標記)
-    // 使用正則表達式，既能拆出網址，又能保留換行 \n
     let tokens = text.split(/([ \t]+|\n)/);
     let processedHtml = "";
 
-    // 遍歷所有片段
     for (let i = 0; i < tokens.length; i++) {
         let token = tokens[i];
 
-        // 處理換行：轉換為 <br>
         if (token === '\n') {
             processedHtml += '<br>';
             continue;
         }
         
-        // 處理空白格：保留
         if (token.trim() === '') {
             processedHtml += token;
             continue;
         }
 
-        // 檢查是否為網址
         if (token.startsWith('http://') || token.startsWith('https://')) {
             let url = token;
             
-            // 情況 A：YouTube 影片
+            // YouTube 影片
             let ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
             if (ytMatch) {
                 let videoId = ytMatch[1];
@@ -8178,67 +8169,38 @@ function parseNoticeContent(rawText) {
                 continue;
             }
 
-            // 情況 B：圖片連結
+            // 圖片連結
             if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
                 processedHtml += `<img src="${url}" alt="圖片預覽" style="max-width:100%; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.1); margin:15px 0; display:block;">`;
                 continue;
             }
 
-            // 情況 C：一般網址 (轉換為 iframe 預覽 + 備用連結)
+            // 一般網址 (修改為莫蘭迪綠)
             processedHtml += `
             <div class="notice-iframe-container">
                 <iframe src="${url}" credentialless loading="lazy"></iframe>
                 <div class="notice-link-fallback">
-                    <a href="${url}" target="_blank"><i class="fas fa-external-link-alt"></i> 若無法預覽，請點此在新分頁開啟</a>
+                    <a href="${url}" target="_blank" style="color: #8fa398; text-decoration: none; font-weight: bold; transition: color 0.3s;"><i class="fas fa-external-link-alt"></i> 若無法預覽，請點此在新分頁開啟</a>
                 </div>
             </div>`;
             continue;
         }
 
-        // 如果不是網址，就是普通文字，直接加入
         processedHtml += token;
     }
 
-    // 3. 【清理多餘的換行】
-    // 為了防止影片/預覽框上下有巨大的空白間距，清除與 container 連接的 <br>
+    // 清理多餘的換行
     processedHtml = processedHtml.replace(/(?:<br>\s*)+<div class="notice-iframe-container">/gi, '<div class="notice-iframe-container">');
     processedHtml = processedHtml.replace(/<\/div>\s*(?:<br>\s*)+/gi, '</div>');
     processedHtml = processedHtml.replace(/(?:<br>\s*)+<img/gi, '<img');
-    processedHtml = processedHtml.replace(/>\s*(?:<br>\s*)+/gi, '>'); // 處理尾部的連續換行
+    processedHtml = processedHtml.replace(/>\s*(?:<br>\s*)+/gi, '>');
 
     return processedHtml;
 }
 
-async function fetchAndCheckNotices() {
-    try {
-        const response = await fetch(NOTICE_API_URL);
-        if (!response.ok) throw new Error('連線失敗');
-        const notices = await response.json();
-
-        const readList = getReadNotices();
-        activeNotices = []; 
-
-        for (let i = 0; i < notices.length; i++) {
-            const notice = notices[i];
-            if (!notice.ID) continue;
-            if (!isNoticeActive(notice["發佈日期"], notice["下架日期"])) continue;
-            
-            // ★ 如果不在「已讀」清單中，就加入待顯示陣列
-            if (!readList.includes(notice.ID)) {
-                activeNotices.push(notice);
-            }
-        }
-
-        if (activeNotices.length > 0) {
-            currentNoticeIndex = 0;
-            renderNoticeModal();
-        }
-
-    } catch (error) {
-        console.error("無法載入佈告:", error);
-    }
-}
-
+/**
+ * 渲染並顯示當前索引的佈告 (開啟時隱藏貓咪)
+ */
 function renderNoticeModal() {
     const overlay = document.getElementById('morandiNoticeOverlay');
     const titleEl = document.getElementById('noticeTitle');
@@ -8276,6 +8238,20 @@ function renderNoticeModal() {
 
     if (overlay.style.display === 'none') {
         overlay.style.display = 'flex';
+        
+        // ★★★ 隱藏貓咪與對話氣泡 ★★★
+        const catCanvas = document.getElementById('live2d-canvas');
+        const catBubble = document.getElementById('catSpeechBubble');
+        if (catCanvas) {
+            catCanvas.style.transition = 'opacity 0.3s ease';
+            catCanvas.style.opacity = '0';
+            catCanvas.style.pointerEvents = 'none';
+        }
+        if (catBubble) {
+            catBubble.classList.remove('show');
+            catBubble.style.opacity = '0';
+        }
+
         if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
         void overlay.offsetWidth; 
         overlay.classList.add('show');
@@ -8285,28 +8261,24 @@ function renderNoticeModal() {
     bodyEl.scrollTop = 0;
 }
 
-function prevNotice() {
-    if (currentNoticeIndex > 0) {
-        currentNoticeIndex--;
-        renderNoticeModal();
-    }
-}
-
-function nextNotice() {
-    if (currentNoticeIndex < activeNotices.length - 1) {
-        currentNoticeIndex++;
-        renderNoticeModal();
-    }
-}
-
 /**
- * 動作 1：稍後再看 (暫時關閉)
- * 不寫入 DB，下次重新載入網頁時，剛剛沒按「不再顯示」的都會再彈出來。
+ * 動作 1：暫時關閉 (關閉時恢復貓咪顯示)
  */
 function closeNoticeTemporary() {
     const overlay = document.getElementById('morandiNoticeOverlay');
     if (overlay) {
         overlay.classList.remove('show');
+        
+        // ★★★ 恢復貓咪顯示 ★★★
+        const catCanvas = document.getElementById('live2d-canvas');
+        if (catCanvas) {
+            // 只有當使用者設定不是 'none' 時才顯示
+            if (localStorage.getItem('sansi_cat_mode') !== 'none') {
+                catCanvas.style.opacity = '1';
+                // 恢復 Live2D 原本的 pointer-events 設定 (通常是 none，互動靠全域監聽)
+            }
+        }
+
         setTimeout(() => {
             overlay.style.display = 'none';
             document.getElementById('noticeBody').innerHTML = ''; 
@@ -8314,7 +8286,6 @@ function closeNoticeTemporary() {
         }, 400); 
     }
 }
-
 /**
  * 動作 2：不再顯示 (標記已讀)
  * 寫入 DB。然後自動切換到下一則，如果沒了就關閉。
@@ -8351,7 +8322,7 @@ function markCurrentNoticeRead() {
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         fetchAndCheckNotices();
-    }, 2500); 
+    }, 2000); 
 });
 	
 // ==========================================
