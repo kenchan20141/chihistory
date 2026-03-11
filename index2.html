@@ -8053,15 +8053,11 @@ button, .btn, .anime-card, .side-menu-item {
 
 
 // =========================================
-// === 智能佈告板系統 (日期排程 + 已讀過濾) ===
+// === 智能佈告板系統 (完整版：含內容解析、多通告切換、選擇性儲存) ===
 // =========================================
 
 // ★ 請替換成你第一步發佈的 Apps Script 網址
 const NOTICE_API_URL = "https://script.google.com/macros/s/AKfycbyC0fIhN8juwOtGy-WLm9hqgrDN817JnyroLnMkapMvf4hzLEF7LEp06sjXDdX246_0/exec"; 
-
-// =========================================
-// === 智能佈告板系統 (多通告切換 + 選擇性儲存版) ===
-// =========================================
 
 // 存放所有符合條件（日期內且未讀）的通告
 let activeNotices = []; 
@@ -8081,7 +8077,7 @@ function getReadNotices() {
  */
 function isNoticeActive(startDateStr, endDateStr) {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); 
+    today.setHours(0, 0, 0, 0); // 歸零時間，只比對日期
 
     let isAfterStart = true;
     let isBeforeEnd = true;
@@ -8094,11 +8090,53 @@ function isNoticeActive(startDateStr, endDateStr) {
 
     if (endDateStr) {
         const endDate = new Date(endDateStr);
-        endDate.setHours(23,59,59,999); 
+        endDate.setHours(23,59,59,999); // 結束日期的最後一刻
         isBeforeEnd = today <= endDate;
     }
 
     return isAfterStart && isBeforeEnd;
+}
+
+/**
+ * 智能內容解析器：自動將貼上的純網址轉換為 IFRAME 或圖片預覽
+ */
+function parseNoticeContent(rawText) {
+    if (!rawText) return "";
+    let content = rawText;
+
+    // 1. 如果內容沒有 HTML 標籤（代表老師是在 Sheet 裡打純文字），自動將換行轉換為 <br>
+    if (!/<[a-z][\s\S]*>/i.test(content)) {
+        content = content.replace(/\n/g, '<br>');
+    }
+
+    // 2. 處理 YouTube 影片連結 (自動轉成 embed 格式，避免遭到封鎖)
+    const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:&\S*)?/gi;
+    content = content.replace(ytRegex, function(match, videoId) {
+        return `
+        <div class="notice-iframe-container">
+            <iframe src="https://www.youtube.com/embed/${videoId}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen credentialless></iframe>
+        </div>`;
+    });
+
+    // 3. 處理一般的網址連結 (轉換為 iframe 預覽)
+    const urlRegex = /(^|\s|<br>)(https?:\/\/(?!www\.youtube\.com\/embed)[^\s<"']+)/gi;
+    content = content.replace(urlRegex, function(match, prefix, url) {
+        // 如果網址是圖片結尾，直接顯示圖片
+        if (url.match(/\.(jpeg|jpg|gif|png|webp)$/i)) {
+            return `${prefix}<img src="${url}" alt="圖片預覽" style="max-width:100%; height:auto; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.06); margin:15px 0; display:block;">`;
+        }
+        
+        // 其他網址顯示為 iframe，並提供 fallback 連結
+        return `${prefix}
+        <div class="notice-iframe-container">
+            <iframe src="${url}" credentialless loading="lazy"></iframe>
+            <div class="notice-link-fallback">
+                <a href="${url}" target="_blank"><i class="fas fa-external-link-alt"></i> 若無法預覽，請點此在新分頁開啟</a>
+            </div>
+        </div>`;
+    });
+
+    return content;
 }
 
 /**
@@ -8164,7 +8202,7 @@ function renderNoticeModal() {
         dateEl.textContent = "";
     }
     
-    // 呼叫原本的解析器，並注入內容
+    // 呼叫解析器，並注入內容
     bodyEl.innerHTML = parseNoticeContent(notice["內容"]);
 
     // 處理多通告導航 UI
@@ -8224,13 +8262,13 @@ function closeNoticeTemporary() {
         setTimeout(() => {
             overlay.style.display = 'none';
             document.getElementById('noticeBody').innerHTML = ''; 
-            document.body.style.overflow = 'auto'; 
+            document.body.style.overflow = 'auto'; // 解鎖背景滾動
         }, 400); 
     }
 }
 
 /**
- * 動作 2：我已了解，不再顯示 (點擊按鈕)
+ * 動作 2：我已了解，不再顯示 (點擊下方按鈕)
  * 寫入 LocalStorage，並切換到下一篇，若全看完則關閉。
  */
 function markCurrentNoticeRead() {
@@ -8239,7 +8277,7 @@ function markCurrentNoticeRead() {
     // 1. 取得當前佈告的 ID
     const currentId = activeNotices[currentNoticeIndex].ID;
     
-    // 2. 寫入 LocalStorage
+    // 2. 寫入 LocalStorage (永遠不再顯示)
     if (currentId) {
         const readList = getReadNotices();
         if (!readList.includes(currentId)) {
@@ -8264,6 +8302,7 @@ function markCurrentNoticeRead() {
         closeNoticeTemporary();
     }
 }
+
 // =========================================
 // === 自動啟動機制 ===
 // 頁面載入完成後延遲 2.5 秒執行，避免阻擋主要資源與動畫
@@ -8273,7 +8312,6 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchAndCheckNotices();
     }, 2500); 
 });
-
 	
 // ==========================================
 // === [核心] 神思音效引擎 (V6 - iOS 持久授權版) ===
