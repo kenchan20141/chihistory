@@ -7869,28 +7869,33 @@ button, .btn, .anime-card, .side-menu-item {
 /* === 練習簿風格佈告板專用樣式 === */
 /* ========================================= */
 
+/* ========================================= */
+/* === 文藝風練習簿佈告板專用樣式 === */
+/* ========================================= */
+
 .notice-overlay {
     position: fixed;
     top: 0; left: 0; width: 100vw; height: 100vh;
-    background-color: rgba(245, 244, 240, 0.85); /* 暖白高模糊遮罩 */
-    backdrop-filter: blur(8px);
+    background-color: rgba(245, 244, 240, 0); /* 初始透明 */
+    backdrop-filter: blur(0px); /* 初始無模糊 */
     z-index: 9999999;
     display: flex;
     justify-content: center;
     align-items: center;
-    opacity: 0;
-    transition: opacity 0.4s ease;
+    pointer-events: none; /* 隱藏時不可點擊 */
+    transition: background-color 0.8s ease, backdrop-filter 0.8s ease; /* 緩慢加深背景 */
 }
 
+/* 背景淡入狀態 */
 .notice-overlay.show {
-    opacity: 1;
+    background-color: rgba(245, 244, 240, 0.85); 
+    backdrop-filter: blur(8px);
+    pointer-events: auto; 
 }
 
 /* 核心：練習簿紙張質感 */
-/* 核心：練習簿紙張質感 (格線大幅調淡) */
 .notice-modal-card {
     background-color: #fffcf6; 
-    /* 紅線透明度降至 0.3，橫格線透明度降至 0.08，呈現淡淡的水印感 */
     background-image: 
         linear-gradient(90deg, transparent 48px, rgba(232, 160, 159, 0.3) 48px, rgba(232, 160, 159, 0.3) 50px, transparent 50px),
         linear-gradient(transparent 39px, rgba(42, 150, 137, 0.08) 39px, rgba(42, 150, 137, 0.08) 40px, transparent 40px);
@@ -7904,15 +7909,46 @@ button, .btn, .anime-card, .side-menu-item {
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), inset 0 0 40px rgba(0,0,0,0.02);
     display: flex;
     flex-direction: column;
-    transform: translateY(30px) scale(0.95);
-    transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
     overflow: hidden;
     padding-left: 65px;
     box-sizing: border-box;
+
+    /* 初始狀態：隱藏並稍微下沉 */
+    opacity: 0;
+    transform: translateY(40px) scale(0.98);
 }
 
+/* 佈告板進場動畫：如紙張般緩慢浮現 */
 .notice-overlay.show .notice-modal-card {
-    transform: translateY(0) scale(1);
+    animation: paper-float-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 退場狀態 (由 JS 添加 class 觸發) */
+.notice-modal-card.hide-anim {
+    animation: paper-float-out 0.5s cubic-bezier(0.5, 0, 0.1, 1) forwards;
+}
+
+/* 定義文藝感動畫 Keyframes */
+@keyframes paper-float-in {
+    0% {
+        opacity: 0;
+        transform: translateY(40px) scale(0.98);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes paper-float-out {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+    }
 }
 
 .notice-header {
@@ -8252,8 +8288,12 @@ async function fetchAndCheckNotices() {
 /**
  * 渲染並顯示當前索引的佈告 (開啟時隱藏貓咪)
  */
+/**
+ * 渲染並顯示當前索引的佈告 (加入翻頁重繪邏輯)
+ */
 function renderNoticeModal() {
     const overlay = document.getElementById('morandiNoticeOverlay');
+    const card = overlay.querySelector('.notice-modal-card');
     const titleEl = document.getElementById('noticeTitle');
     const dateEl = document.getElementById('noticeDate');
     const bodyEl = document.getElementById('noticeBody');
@@ -8265,40 +8305,59 @@ function renderNoticeModal() {
 
     if (!overlay || !titleEl || !bodyEl || activeNotices.length === 0) return;
 
-    // 取得當前的佈告
-    const notice = activeNotices[currentNoticeIndex];
-
-    // 寫入內容
-    titleEl.textContent = notice["標題"] || "一般通知";
-    
-    if (notice["發佈日期"]) {
-        const d = new Date(notice["發佈日期"]);
-        dateEl.textContent = `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`;
-    } else {
-        dateEl.textContent = "";
-    }
-    
-    bodyEl.innerHTML = parseNoticeContent(notice["內容"]);
-
-    // 處理多通告導航 UI
-    if (activeNotices.length > 1) {
-        navGroup.style.display = 'flex';
-        counterEl.textContent = `${currentNoticeIndex + 1} / ${activeNotices.length}`;
-        prevBtn.disabled = (currentNoticeIndex === 0);
-        nextBtn.disabled = (currentNoticeIndex === activeNotices.length - 1);
-    } else {
-        navGroup.style.display = 'none';
-    }
-
-    // 顯示視窗並隱藏貓咪
-    if (overlay.style.display === 'none') {
-        overlay.style.display = 'flex';
+    // 如果是切換通告，先讓卡片快速淡出再換內容
+    if (overlay.classList.contains('show')) {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(10px)';
+        card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
         
-        // ★★★ 隱藏貓咪與對話氣泡 ★★★
+        setTimeout(() => {
+            updateContent();
+            // 換完內容後，再次淡入
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, 300);
+    } else {
+        // 初次開啟，直接更新內容並觸發 CSS 進場動畫
+        updateContent();
+        openWithAnimation();
+    }
+
+    // 內部函式：更新內容
+    function updateContent() {
+        const notice = activeNotices[currentNoticeIndex];
+        titleEl.textContent = notice["標題"] || "一般通知";
+        
+        if (notice["發佈日期"]) {
+            const d = new Date(notice["發佈日期"]);
+            dateEl.textContent = `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`;
+        } else {
+            dateEl.textContent = "";
+        }
+        
+        bodyEl.innerHTML = parseNoticeContent(notice["內容"]);
+
+        if (activeNotices.length > 1) {
+            navGroup.style.display = 'flex';
+            counterEl.textContent = `${currentNoticeIndex + 1} / ${activeNotices.length}`;
+            prevBtn.disabled = (currentNoticeIndex === 0);
+            nextBtn.disabled = (currentNoticeIndex === activeNotices.length - 1);
+        } else {
+            navGroup.style.display = 'none';
+        }
+        bodyEl.scrollTop = 0;
+    }
+
+    // 內部函式：開啟介面
+    function openWithAnimation() {
+        overlay.style.display = 'flex';
+        card.classList.remove('hide-anim'); // 清除可能的退場狀態
+        
+        // 隱藏貓咪
         const catCanvas = document.getElementById('live2d-canvas');
         const catBubble = document.getElementById('catSpeechBubble');
         if (catCanvas) {
-            catCanvas.style.transition = 'opacity 0.3s ease';
+            catCanvas.style.transition = 'opacity 0.8s ease'; // 配合遮罩變慢
             catCanvas.style.opacity = '0';
             catCanvas.style.pointerEvents = 'none';
         }
@@ -8307,68 +8366,52 @@ function renderNoticeModal() {
             catBubble.style.opacity = '0';
         }
 
-        if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+        if (navigator.vibrate) navigator.vibrate([20, 40, 20]); // 震動改輕柔一點
+        
+        // 強制重繪觸發動畫
         void overlay.offsetWidth; 
         overlay.classList.add('show');
         document.body.style.overflow = 'hidden';
     }
-    
-    bodyEl.scrollTop = 0;
 }
 
 /**
- * 導航：上一篇
- */
-function prevNotice() {
-    if (currentNoticeIndex > 0) {
-        currentNoticeIndex--;
-        renderNoticeModal();
-    }
-}
-
-/**
- * 導航：下一篇
- */
-function nextNotice() {
-    if (currentNoticeIndex < activeNotices.length - 1) {
-        currentNoticeIndex++;
-        renderNoticeModal();
-    }
-}
-
-/**
- * 動作 1：稍後再看 (暫時關閉)
- * 不寫入 DB，下次重新載入網頁時，剛剛沒按「不再顯示」的都會再彈出來。
+ * 動作 1：稍後再看 (觸發文藝退場動畫)
  */
 function closeNoticeTemporary() {
     const overlay = document.getElementById('morandiNoticeOverlay');
+    const card = overlay.querySelector('.notice-modal-card');
+    
     if (overlay) {
+        // 1. 卡片播放下沉退場動畫
+        card.classList.add('hide-anim');
+        
+        // 2. 遮罩背景開始變透明
         overlay.classList.remove('show');
         
-        // ★★★ 恢復貓咪顯示 ★★★
+        // 3. 恢復貓咪顯示 (配合動畫時間緩慢浮現)
         const catCanvas = document.getElementById('live2d-canvas');
-        if (catCanvas) {
-            if (localStorage.getItem('sansi_cat_mode') !== 'none') {
-                catCanvas.style.opacity = '1';
-            }
+        if (catCanvas && localStorage.getItem('sansi_cat_mode') !== 'none') {
+            catCanvas.style.transition = 'opacity 0.8s ease';
+            catCanvas.style.opacity = '1';
         }
 
+        // 4. 等待動畫結束後 (0.8s)，真正隱藏 DOM
         setTimeout(() => {
             overlay.style.display = 'none';
+            card.classList.remove('hide-anim'); // 重置卡片狀態
             document.getElementById('noticeBody').innerHTML = ''; 
             document.body.style.overflow = 'auto'; 
-        }, 400); 
+        }, 800); 
     }
 }
 
 /**
- * 動作 2：不再顯示 (標記已讀)
- * 寫入 DB。然後自動切換到下一則，如果沒了就關閉。
+ * 動作 2：不再顯示 (標記已讀並處理下一則)
  */
 function markCurrentNoticeRead() {
     if (activeNotices.length === 0) return;
 
-    // 1. 取得當前佈告的 ID 並寫入 LocalStorage
     const currentId = activeNotices[currentNoticeIndex].ID;
     if (currentId) {
         const readList = getReadNotices();
@@ -8378,17 +8421,14 @@ function markCurrentNoticeRead() {
         }
     }
 
-    // 2. 從待看清單中剔除這一則
     activeNotices.splice(currentNoticeIndex, 1);
 
-    // 3. 判斷後續：還有沒看的嗎？
     if (activeNotices.length > 0) {
         if (currentNoticeIndex >= activeNotices.length) {
             currentNoticeIndex = activeNotices.length - 1;
         }
-        renderNoticeModal();
+        renderNoticeModal(); // renderNoticeModal 內部已寫好平滑切換邏輯
     } else {
-        // 全部都標記為「不再顯示」了，關閉視窗
         closeNoticeTemporary();
     }
 }
