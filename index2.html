@@ -11,7 +11,7 @@ img-src 'self' https: data: blob: https://*.streamable.com https://heapanalytics
 media-src 'self' https://youfulca.com https://*.streamable.com https://assets.mixkit.co https://taira-komori.net;
 connect-src 'self' https://script.google.com https://script.googleusercontent.com https://sansi.vercel.app https://sansi.kenchan20151.workers.dev https://corsproxy.io https://docs.google.com https://*.googleusercontent.com https://v1.hitokoto.cn https://chatapi.akash.network https://text.pollinations.ai https://gen.pollinations.ai https://router.huggingface.co https://api.llm7.io https://*.streamable.com https://cdn.jsdelivr.net https://api-fawn-chi.vercel.app https://heapanalytics.com https://*.firebaseio.com wss://*.firebaseio.com https://www.gstatic.com https://www.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://cdn.onesignal.com https://onesignal.com https://onesignal.com/api/v1/notifications https://api.onesignal.com https://cdnjs.cloudflare.com data: blob: https://huggingface.co https://*.huggingface.co https://*.supabase.co https://cdn-lfs.huggingface.co https://*.hf.co;
 worker-src 'self' blob:;
-frame-src 'self' https://streamable.com https://kenchan20141.pyscriptapps.com https://kenchan20141.github.io https://sansi.vercel.app https://lyricschi.vercel.app https://penpalchi.vercel.app https://litstudy.vercel.app https://621d05f47d591.site123.me https://script.google.com https://www.i2ocr.com https://*.firebaseapp.com https://onesignal.com;
+frame-src 'self' https://streamable.com https://kenchan20141.pyscriptapps.com https://kenchan20141.github.io https://sansi.vercel.app https://lyricschi.vercel.app https://penpalchi.vercel.app https://litstudy.vercel.app https://621d05f47d591.site123.me https://script.google.com https://www.i2ocr.com https://*.firebaseapp.com https://onesignal.com https://kychugo.github.io/eng-writing/;
 object-src 'none';
 base-uri 'self';
 form-action 'self';
@@ -84,6 +84,40 @@ form-action 'self';
 	<script>
 
 
+
+
+
+// === UI 切換函式：登入 vs 註冊 ===
+function switchAuthMode(mode) {
+    const loginDiv = document.getElementById('loginModeContainer');
+    const regDiv = document.getElementById('registerModeContainer');
+    const tabLogin = document.getElementById('tabLogin');
+    const tabRegister = document.getElementById('tabRegister');
+
+    if (mode === 'login') {
+        // 顯示登入，隱藏註冊
+        loginDiv.style.display = 'block';
+        regDiv.style.display = 'none';
+        
+        // 更新 Tab 樣式 (藍灰色系)
+        tabLogin.style.borderBottom = '3px solid #607d8b';
+        tabLogin.style.color = '#455a64';
+        
+        tabRegister.style.borderBottom = '3px solid transparent';
+        tabRegister.style.color = '#aaa';
+    } else {
+        // 顯示註冊，隱藏登入
+        loginDiv.style.display = 'none';
+        regDiv.style.display = 'block';
+        
+        // 更新 Tab 樣式 (綠色系)
+        tabLogin.style.borderBottom = '3px solid transparent';
+        tabLogin.style.color = '#aaa';
+        
+        tabRegister.style.borderBottom = '3px solid #2A9689';
+        tabRegister.style.color = '#2A9689';
+    }
+}
 
 		
 // ==========================================
@@ -7831,7 +7865,172 @@ button, .btn, .anime-card, .side-menu-item {
 
 
 
-	
+	/* ========================================= */
+/* === 莫蘭迪文藝佈告板專用樣式 === */
+/* ========================================= */
+
+.notice-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background-color: rgba(245, 244, 240, 0.85); /* 暖白高模糊遮罩 */
+    backdrop-filter: blur(8px);
+    z-index: 9999999; /* 確保在最頂層 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.notice-overlay.show {
+    opacity: 1;
+}
+
+.notice-modal-card {
+    background-color: #fdfcf8;
+    width: 90%;
+    max-width: 650px; /* 適合閱讀和影片的最佳寬度 */
+    max-height: 85vh; /* 防止過長 */
+    border-radius: 16px;
+    border: 1px solid #e0ddd7;
+    box-shadow: 0 20px 50px rgba(141, 110, 99, 0.15); /* 暖色柔和陰影 */
+    display: flex;
+    flex-direction: column;
+    transform: translateY(30px) scale(0.95);
+    transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    overflow: hidden;
+}
+
+.notice-overlay.show .notice-modal-card {
+    transform: translateY(0) scale(1);
+}
+
+.notice-header {
+    padding: 20px 25px;
+    border-bottom: 2px dashed #e0ddd7;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(to bottom, #ffffff, #fdfcf8);
+}
+
+.notice-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.notice-icon {
+    font-size: 1.4rem;
+    color: #8fa398; /* 莫蘭迪綠 */
+}
+
+.notice-title {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #5d4037; /* 莫蘭迪深褐 */
+    letter-spacing: 2px;
+}
+
+.notice-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 2rem;
+    color: #bcaaa4;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.3s ease;
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.notice-close-btn:hover {
+    color: #d69a92; /* 懸停變莫蘭迪紅 */
+    background-color: rgba(214, 154, 146, 0.1);
+    transform: rotate(90deg);
+}
+
+.notice-body {
+    padding: 25px;
+    overflow-y: auto;
+    flex-grow: 1;
+    font-family: 'Noto Serif TC', serif;
+    color: #4a4a4a;
+    font-size: 1.1rem;
+    line-height: 1.8;
+    text-align: justify;
+}
+
+/* --- 針對混合內容的自動響應式處理 --- */
+.notice-body p { margin-bottom: 15px; }
+
+/* 圖片自適應：不超過視窗，邊角圓潤 */
+.notice-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    margin: 15px 0;
+    display: block;
+}
+
+/* 影片與預覽 iframe 自適應 (強制 16:9 比例) */
+.notice-body iframe {
+    width: 100%;
+    aspect-ratio: 16 / 9; /* 現代瀏覽器原生支援 */
+    border-radius: 8px;
+    border: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    margin: 15px 0;
+    background-color: #f0f0f0;
+}
+
+/* 網頁連結預覽樣式優化 (如果內容提供者寫了 a 標籤) */
+.notice-body a {
+    color: #8fa398;
+    text-decoration: none;
+    border-bottom: 1px solid #8fa398;
+    transition: all 0.2s;
+    font-weight: bold;
+}
+.notice-body a:hover {
+    color: #7d9186;
+    background-color: rgba(143, 163, 152, 0.1);
+}
+
+.notice-footer {
+    padding: 15px 25px;
+    background-color: #f9f8f5;
+    border-top: 1px solid #eee;
+    text-align: right;
+}
+
+.btn-morandi-solid {
+    background-color: #8fa398;
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 50px;
+    font-size: 1rem;
+    font-family: 'Noto Serif TC', serif;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(143, 163, 152, 0.3);
+    transition: all 0.3s ease;
+}
+
+.btn-morandi-solid:hover {
+    background-color: #7d9186;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(143, 163, 152, 0.4);
+}
 	
 	
 	
@@ -7840,6 +8039,157 @@ button, .btn, .anime-card, .side-menu-item {
 <script>
 
 
+// =========================================
+// === 智能佈告板系統 (日期排程 + 已讀過濾) ===
+// =========================================
+
+// ★ 請替換成你第一步發佈的 Apps Script 網址
+const NOTICE_API_URL = "https://script.google.com/macros/s/AKfycbyC0fIhN8juwOtGy-WLm9hqgrDN817JnyroLnMkapMvf4hzLEF7LEp06sjXDdX246_0/exec"; 
+
+// 紀錄當前正在顯示的佈告 ID
+let currentShowingNoticeId = null;
+
+/**
+ * 取得本地已讀清單
+ */
+function getReadNotices() {
+    const stored = localStorage.getItem('sansi_read_notices');
+    return stored ? JSON.parse(stored) :[];
+}
+
+/**
+ * 檢查日期是否在發佈範圍內
+ */
+function isNoticeActive(startDateStr, endDateStr) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // 歸零時間，只比對日期
+
+    // 如果沒有設定日期，預設為無限期有效
+    let isAfterStart = true;
+    let isBeforeEnd = true;
+
+    if (startDateStr) {
+        const startDate = new Date(startDateStr);
+        startDate.setHours(0,0,0,0);
+        isAfterStart = today >= startDate;
+    }
+
+    if (endDateStr) {
+        const endDate = new Date(endDateStr);
+        endDate.setHours(23,59,59,999); // 結束日期的最後一刻
+        isBeforeEnd = today <= endDate;
+    }
+
+    return isAfterStart && isBeforeEnd;
+}
+
+/**
+ * 初始化並抓取佈告資料
+ */
+async function fetchAndCheckNotices() {
+    try {
+        const response = await fetch(NOTICE_API_URL);
+        if (!response.ok) throw new Error('連線失敗');
+        const notices = await response.json();
+
+        const readList = getReadNotices();
+        let noticeToShow = null;
+
+        // 尋找第一筆：(1)在日期內 (2)未讀 的佈告
+        for (let i = 0; i < notices.length; i++) {
+            const notice = notices[i];
+            
+            // 檢查 ID 是否存在
+            if (!notice.ID) continue;
+
+            // 檢查日期
+            if (!isNoticeActive(notice["發佈日期"], notice["下架日期"])) continue;
+
+            // 檢查是否已讀
+            if (readList.includes(notice.ID)) continue;
+
+            // 找到符合條件的，準備顯示（一次只顯示最新或最前面的一筆）
+            noticeToShow = notice;
+            break; 
+        }
+
+        if (noticeToShow) {
+            renderNoticeModal(noticeToShow);
+        }
+
+    } catch (error) {
+        console.error("無法載入佈告:", error);
+    }
+}
+
+/**
+ * 渲染並顯示佈告視窗
+ */
+function renderNoticeModal(notice) {
+    const overlay = document.getElementById('morandiNoticeOverlay');
+    const titleEl = document.getElementById('noticeTitle');
+    const bodyEl = document.getElementById('noticeBody');
+
+    if (!overlay || !titleEl || !bodyEl) return;
+
+    currentShowingNoticeId = notice.ID;
+    titleEl.textContent = notice["標題"] || "系統佈告";
+    
+    // 直接注入內容（因為包含了 HTML、iframe、img 等混合元素）
+    // CSS 已經做了響應式防護
+    bodyEl.innerHTML = notice["內容"];
+
+    // 顯示視窗並觸發動畫
+    overlay.style.display = 'flex';
+    
+    // 手機震動提示 (若支援)
+    if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+
+    // 強制重繪觸發 CSS Transition
+    void overlay.offsetWidth; 
+    overlay.classList.add('show');
+    
+    // 鎖定背景滾動
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * 關閉佈告並標記為已讀
+ */
+function closeAndMarkNoticeRead() {
+    const overlay = document.getElementById('morandiNoticeOverlay');
+    
+    // 寫入 LocalStorage
+    if (currentShowingNoticeId) {
+        const readList = getReadNotices();
+        if (!readList.includes(currentShowingNoticeId)) {
+            readList.push(currentShowingNoticeId);
+            localStorage.setItem('sansi_read_notices', JSON.stringify(readList));
+        }
+    }
+
+    // 關閉動畫
+    if (overlay) {
+        overlay.classList.remove('show');
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            document.getElementById('noticeBody').innerHTML = ''; // 清空內容(避免影片繼續播)
+            document.body.style.overflow = 'auto'; // 解鎖滾動
+        }, 400); // 配合 CSS transition 0.4s
+    }
+}
+
+// =========================================
+// === 自動啟動機制 ===
+// 頁面載入完成後延遲 2.5 秒執行，避免阻擋主要資源與動畫
+// =========================================
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        fetchAndCheckNotices();
+    }, 2500); 
+});
+
+	
 // ==========================================
 // === [核心] 神思音效引擎 (V6 - iOS 持久授權版) ===
 // ==========================================
@@ -11193,6 +11543,13 @@ refreshBtn.addEventListener('click', fetchHitokoto);
 <div class="node level-2"><a href="https://621d05f47d591.site123.me/%E6%9B%B8%E9%96%A3%E8%97%8F%E6%9B%B8%E6%A6%82%E8%A6%BD" data-tool-id="book-overview">書籍概覽</a></div>
 	<div class="sub-group-title">歌詞遊戲</div>
 <div class="node level-2"><a href="https://lyricschi.vercel.app/" data-tool-id="lyrics">詞海拾心</a></div>
+
+<div class="sub-group-title">生活反思</div>
+<div class="node level-2"><a href="toolbox/chiteacher2.html" data-tool-id="chiteacher">中文老師的一生</a></div>
+	<div class="node level-2"><a href="https://kenchan20141.github.io/art/" data-tool-id="art">反思——藝術展覽</a></div>
+
+
+	
 </div>
 </div>
 
@@ -11249,9 +11606,20 @@ refreshBtn.addEventListener('click', fetchHitokoto);
 <div class="node level-2"><a href="toolbox/epub.html" data-tool-id="epub">電子書閱讀器</a></div>
 	<div class="node level-2"><a href="toolbox/decibelmeter.html" data-tool-id="decibelmeter">分貝計</a></div>
 	<div class="node level-2"><a href="https://penpalchi.vercel.app/" data-tool-id="friends">以文會友</a></div>
-</div>
+		
 </div>
 
+
+<div class="sub-group">
+<div class="sub-group-title">推薦</div>
+<div class="node level-2"><a href="https://kychugo.github.io/eng-writing/" data-tool-id="eng">Writer's Desk</a></div>
+</div>
+	
+</div>
+
+
+
+	
 <!-- 5. Support -->
 <div class="category" id="support" data-connect-to="core-ai-node">
 <div class="category-title"><svg class="icon"><use xlink:href="#icon-support"></use></svg>學習支援</div>
@@ -15208,7 +15576,10 @@ const toolDescriptions = {
 'lyrics': '一款結合節奏遊戲與歌詞測驗的中文語文工具，透過音樂互動培養同學的詞彙積累、文學鑑賞及語感能力，並支援線上對戰與排行榜，增添樂趣與競爭的學習體驗。',
 	'friends': '【僅供創作社成員使用】允許用戶建立群組、匿名交友、投稿作品、留言討論，並透過遊戲互動增進語文學習的樂趣，培養同學的表達與社交能力。',
 	'slowreading': '一款專注深度閱讀的工具，使用者可貼上文本並自訂翻頁秒數，系統將自動逐句播放，幫助讀者聚焦內容，提升閱讀的專注力。',
-	'pulseqa': '一個簡潔高效的課堂問答計時工具。主持人可創建房間、設置問題與計時，學生則需要按時作答。'
+	'chiteacher': '一款 3D 教師模擬遊戲，還原中文教學與職場壓力。玩家能透過策略分配心力，探索閱讀與學習效益的關係，並體驗教育行業的現實與辛勞。',
+	'pulseqa': '一個簡潔高效的課堂問答計時工具。主持人可創建房間、設置問題與計時，學生則需要按時作答。',
+		'eng': '一個由人工智能驅動的英語寫作平台，由黃子謙同學開發。它提供互動練習及作文工具等，幫助使用者提高寫作技能。',
+	'art': '一場關於生活與學習認知的數位藝術展覽。透過互動式的視覺藝術裝置與文字賞析，引導同學反思專注力危機、學習態度及人生哲理，培養深度思考與自我覺察的能力。'
 };
 
 
@@ -16907,9 +17278,9 @@ function smartUpdateInput(elementId, newValue) {
 	
 // ▼▼▼▼▼ 貼上這段新代碼 ▼▼▼▼▼
 
-// 2. 主處理函式
+// === OCR 訊息接收與處理 (修復版：確保視窗自動關閉) ===
 function handleOCRMessage(event) {
-    // 安全檢查
+    // 1. 安全檢查
     if (!event.data) return;
 
     let shouldClose = false; // 標記是否成功處理，需要關閉視窗
@@ -16922,30 +17293,25 @@ function handleOCRMessage(event) {
     }
 
     // --- 情況 B: 表格模式 (ocrJSONResult) ---
-    // 這裡接收通用的 {part, col1, col2, col3} 格式
     else if (event.data.type === 'ocrJSONResult') {
         const rows = event.data.data; 
-        console.log("收到 OCR 通用表格數據:", rows);
+        console.log("收到結構化大綱數據:", rows);
 
         // 判斷當前是在「敘事」還是「議論」模式
         const writingContainer = document.getElementById('writingContainer');
         const argumentContainer = document.getElementById('argumentContainer');
         
-        // 獲取當前選單的值
-        const writingType = document.getElementById('writingType') ? document.getElementById('writingType').value : '';
-        const argumentType = document.getElementById('argumentType') ? document.getElementById('argumentType').value : '';
+        // 檢查容器是否顯示中
+        let isNarrative = writingContainer && writingContainer.style.display !== 'none';
+        let isArgument = argumentContainer && argumentContainer.style.display !== 'none';
 
-        // 檢查容器是否顯示中，且功能選單是否選中「大綱」或「outline」
-        let isNarrativeOutline = (writingContainer && writingContainer.style.display !== 'none' && writingType === '大綱');
-        let isArgumentOutline = (argumentContainer && argumentContainer.style.display !== 'none' && argumentType === 'outline');
-
-        if (isNarrativeOutline) {
-            fillNarrativeOutlineUniversal(rows);
-        } else if (isArgumentOutline) {
-            fillArgumentOutlineUniversal(rows);
+        if (isNarrative) {
+            fillNarrativeOutline(rows);
+        } else if (isArgument) {
+            fillArgumentOutline(rows);
         } else {
-            // 如果不在大綱介面，則將所有內容合併成文字插入到當前游標處
-            const rawText = rows.map(r => `【${r.part}】\n重點：${r.col1}\n詳情：${r.col2}`).join('\n\n');
+            // 如果不在大綱介面，則將所有內容合併成文字插入
+            const rawText = rows.map(r => `${r.part}：${r.col1}\n${r.col2}`).join('\n\n');
             insertTextToActiveElement(rawText);
         }
         shouldClose = true;
@@ -16960,17 +17326,15 @@ function handleOCRMessage(event) {
     }
 }
 
-// 3. 輔助函式：插入文字到當前鎖定的輸入框 (相容舊功能)
+// 輔助：插入文字到當前鎖定的輸入框 (相容舊功能)
 function insertTextToActiveElement(text) {
     let targetEl = null;
     const modal = document.getElementById('outline-editor-modal');
     const modalTextarea = document.getElementById('modal-textarea');
     
-    // 如果懸浮視窗開著，優先填入懸浮視窗
     if (modal && modal.style.display !== 'none' && modalTextarea) {
         targetEl = modalTextarea;
     } else {
-        // 否則填入上次點擊的輸入框
         const savedId = sessionStorage.getItem('sansi_current_editing_id');
         if (savedId) targetEl = document.getElementById(savedId);
     }
@@ -16979,40 +17343,14 @@ function insertTextToActiveElement(text) {
         const currentVal = targetEl.value;
         const prefix = (currentVal && !currentVal.endsWith('\n')) ? '\n' : '';
         targetEl.value += prefix + text;
-        targetEl.dispatchEvent(new Event('input', { bubbles: true })); // 觸發自動儲存
+        targetEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
 }
 
-// 4. 輔助函式：智能更新輸入框 (同時更新表格與懸浮視窗)
-function smartUpdateInput(elementId, newValue) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-
-    // A. 更新背後的表格內容
-    el.value = newValue;
-    el.dispatchEvent(new Event('input', { bubbles: true })); // 觸發自動存檔
-
-    // B. 如果剛好懸浮視窗正在編輯這一格，同步更新視窗內容
-    if (typeof currentEditingElement !== 'undefined' && 
-        currentEditingElement && 
-        currentEditingElement.id === elementId) {
-        
-        const modalTextarea = document.getElementById('modal-textarea');
-        const modal = document.getElementById('outline-editor-modal');
-        
-        if (modal && modal.style.display !== 'none' && modalTextarea) {
-            modalTextarea.value = newValue;
-        }
-    }
-}
-
-// ==========================================
-// === 核心邏輯 A: 填入敘事大綱 (通用版) ===
-// ==========================================
-function fillNarrativeOutlineUniversal(ocrRows) {
-    const structure = document.getElementById("structure").value; // 'fourPart' or 'threeLine'
+// === 核心邏輯 1: 填入敘事大綱 (V2 終極修復版) ===
+function fillNarrativeOutline(ocrRows) {
+    const structure = document.getElementById("structure").value;
     
-    // 建立映射表：OCR 的 Part 名稱 -> 神思的 ID Index
     let mapping = [];
     if (structure === "fourPart") {
         mapping = [
@@ -17031,107 +17369,106 @@ function fillNarrativeOutlineUniversal(ocrRows) {
         ];
     }
 
-    let matchCount = 0;
-
     ocrRows.forEach(row => {
-        // 清理 OCR 標題 (移除換行與空白)
         let rawPartName = row.part ? row.part.replace(/\n/g, " ").trim() : "";
         
-        // 尋找匹配 (例如 OCR 回傳 "承段" 或 "結構段二")
         const match = mapping.find(m => rawPartName.includes(m.key));
         
         if (match) {
-            // 神思的 ID 規則： structure + "Focus"/"Plot" + Index
             const focusId = `${structure}Focus${match.idIndex}`;
             const plotId = `${structure}Plot${match.idIndex}`;
             
-            // ★ 關鍵映射：
-            // OCR 的 col1 -> 神思 Focus (結構段重點)
-            // OCR 的 col2 -> 神思 Plot (情節大要)
-            // OCR 的 col3 (如有) -> 忽略
-            smartUpdateInput(focusId, row.col1 || "");
-            smartUpdateInput(plotId, row.col2 || "");
-            matchCount++;
+            let finalCol1 = row.col1;
+            const finalCol2 = row.col2;
+
+            // --- ★★★ 內容救援邏輯 (針對「起 TEST」被合併的情況) ★★★ ---
+            // 如果中間欄(col1)是空的，但標題(part)比關鍵字長很多，代表內容被吃到標題裡了
+            if ((!finalCol1 || finalCol1.trim() === "") && rawPartName.length > match.key.length) {
+                // 移除關鍵字 (例如 "起") 和常見標點，剩下的就是內容
+                // 例如 "起 TEST" -> 移除 "起" -> " TEST" -> trim -> "TEST"
+                let rescuedContent = rawPartName.replace(match.key, "").replace(/[:：]/g, "").trim();
+                
+                if (rescuedContent.length > 0) {
+                    console.log(`[OCR修復] 從標題 "${rawPartName}" 中救回內容: "${rescuedContent}"`);
+                    finalCol1 = rescuedContent;
+                }
+            }
+            // -------------------------------------------------------
+
+            // 使用智能更新函式 (解決點擊該格失效的問題)
+            smartUpdateInput(focusId, finalCol1 || "");
+            smartUpdateInput(plotId, finalCol2 || "");
         }
     });
-
-    if (matchCount > 0) {
-        // 成功提示 (可選)
-        // alert(`已成功填入 ${matchCount} 個段落！`);
-    }
+    alert("敘事大綱已填入！");
 }
 
-// ==========================================
-// === 核心邏輯 B: 填入議論大綱 (通用版) ===
-// ==========================================
-function fillArgumentOutlineUniversal(ocrRows) {
+// === 核心邏輯 2: 填入議論大綱 (V2 終極修復版) ===
+function fillArgumentOutline(ocrRows) {
     const table = document.getElementById("argumentOutlineTable");
     if (!table) return;
 
-    // 1. 分類 OCR 資料
-    // 尋找起、合，以及中間的論點段落
-    const startRow = ocrRows.find(r => r.part.includes("起") || r.part.includes("引論"));
-    const endRow = ocrRows.find(r => r.part.includes("合") || r.part.includes("結論") || r.part.includes("總結"));
+    const startRow = ocrRows.find(r => r.part.includes("起"));
+    const endRow = ocrRows.find(r => r.part.includes("合"));
     
-    // 找出中間的結構段 (過濾掉起、合，保留含有「段」、「論點」或數字的行)
     const bodyRows = ocrRows.filter(r => 
-        !r.part.includes("起") && !r.part.includes("引論") &&
-        !r.part.includes("合") && !r.part.includes("結論") && !r.part.includes("總結") &&
-        (r.part.includes("段") || r.part.includes("論點") || /\d/.test(r.part) || /[一二三四]/.test(r.part))
+        !r.part.includes("起") && 
+        !r.part.includes("合") && 
+        (r.part.includes("段") || r.part.includes("一") || r.part.includes("二") || r.part.includes("三") || r.part.includes("四") || r.part.includes("論點"))
     );
 
-    // 2. 填寫「起」 (神思 ID 固定為 argumentPoint0 / argumentEvidence0)
+    // --- 填寫「起」---
     if (startRow) {
-        // OCR col1 -> 論點, col2 -> 論據
-        smartUpdateInput("argumentPoint0", startRow.col1 || "");
-        smartUpdateInput("argumentEvidence0", startRow.col2 || "");
+        smartUpdateInput("argumentPoint0", startRow.col1);
+        smartUpdateInput("argumentEvidence0", startRow.col2);
     }
 
-    // 3. 動態新增結構段 (如果 OCR 的段落比目前表格多)
-    // 神思預設通常有 3 個中間段 (ID 1, 2, 3)
-    let currentRows = table.rows.length; 
-    let currentBodyCount = 0;
-    
-    // 計算目前有多少個結構段 (排除頭尾)
-    for(let i=1; i<table.rows.length-1; i++) {
-        if(table.rows[i].cells[0].innerText.includes("結構段")) currentBodyCount++;
-    }
+    // --- 動態新增結構段 ---
+    const neededBodyCount = bodyRows.length;
+    let currentRows = table.rows.length;
+    let currentBodyCount = currentRows - 3; 
+    if (currentBodyCount < 0) currentBodyCount = 0;
 
-    // 如果 OCR 辨識出的中間段落比現有的多，自動點擊「新增」按鈕
-    if (bodyRows.length > currentBodyCount) {
+    if (neededBodyCount > currentBodyCount) {
         const addBtn = document.querySelector('button[onclick="addArgumentStructureSegment()"]');
         if (addBtn) {
-            const rowsToAdd = bodyRows.length - currentBodyCount;
-            console.log(`OCR 偵測到 ${bodyRows.length} 段，目前只有 ${currentBodyCount} 段，自動新增 ${rowsToAdd} 行...`);
-            for (let i = 0; i < rowsToAdd; i++) {
-                addArgumentStructureSegment(); // 呼叫神思原有的新增函式
+            for (let i = 0; i < (neededBodyCount - currentBodyCount); i++) {
+                addArgumentStructureSegment();
             }
         }
     }
 
-    // 4. 填寫「結構段」(ID 從 1 開始遞增)
+    // --- 填寫「結構段」---
     bodyRows.forEach((row, i) => {
-        const targetIndex = i + 1; // ID 從 1 開始 (0 是起)
-        smartUpdateInput(`argumentPoint${targetIndex}`, row.col1 || "");
+        const targetIndex = i + 1; 
+        
+        // 嘗試救援邏輯 (避免議論大綱也發生吃字)
+        let finalCol1 = row.col1;
+        if ((!finalCol1 || finalCol1.trim() === "") && row.part.length > 5) { // 假設標題大於5字可能有鬼
+             // 簡單過濾：移除 "結構段"、"一" 等字眼
+             let rescued = row.part.replace(/結構段|論點|[一二三四五六七八九十]/g, "").replace(/[:：]/g, "").trim();
+             if (rescued.length > 0) finalCol1 = rescued;
+        }
+
+        smartUpdateInput(`argumentPoint${targetIndex}`, finalCol1 || "");
         smartUpdateInput(`argumentEvidence${targetIndex}`, row.col2 || "");
     });
 
-    // 5. 填寫「合」 (ID 比較難找，通常是表格最後一行)
+    // --- 填寫「合」---
     if (endRow) {
-        // 重新抓取表格，因為可能剛才新增了行數
+        // 重新獲取最新的表格狀態
         const updatedTable = document.getElementById("argumentOutlineTable");
         const lastRow = updatedTable.rows[updatedTable.rows.length - 1];
-        
-        // 透過 DOM 查找輸入框 (議論表格最後一行是「合」)
         const inputs = lastRow.querySelectorAll('textarea');
+        
         if (inputs.length >= 2) {
-            // 直接賦值並觸發事件
-            inputs[0].value = endRow.col1 || "";
-            inputs[1].value = endRow.col2 || "";
+            // 直接操作 DOM (因為合的 ID 比較難算)，但也嘗試同步 Modal
+            inputs[0].value = endRow.col1;
+            inputs[1].value = endRow.col2;
             inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
             inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
             
-            // 同步懸浮視窗 (如果正在編輯合段)
+            // 如果剛好點擊的是合的格子，手動檢查同步
             if (currentEditingElement === inputs[0]) document.getElementById('modal-textarea').value = endRow.col1;
             if (currentEditingElement === inputs[1]) document.getElementById('modal-textarea').value = endRow.col2;
         }
@@ -19728,20 +20065,26 @@ async function checkStudentLogin() {
 	
 // 2. 輔助函式：更新歡迎文字
 // 2. 輔助函式：更新歡迎文字 (優化顯示版)
+// 2. 輔助函式：更新歡迎文字 (優化顯示版 - 已修改稱呼邏輯)
 function updateWelcomeMessage(profile) {
     let displayStr = '';
     
-    // 如果是老師 (System/Test)，顯示特殊格式
+    // 如果是老師 (Grade 為 System)，顯示「老師」
     if (profile.grade === 'System') {
-        displayStr = `系統測試 - ${profile.name}`;
-    } else {
-        // 如果是學生，顯示正常格式
+        displayStr = `老師 - ${profile.name}`;
+    } 
+    // 如果是特許用家 (Grade 為 Special)，顯示「特許用家」
+    else if (profile.grade === 'Special') {
+        displayStr = `特許用家 - ${profile.name}`;
+    } 
+    else {
+        // 如果是普通學生，顯示正常格式 (班級 班號 - 姓名)
         const numDisplay = profile.number ? `(${profile.number})` : '';
         displayStr = `${profile.grade}${profile.class} ${numDisplay} - ${profile.name}`;
     }
 
     document.getElementById('welcomeText').innerHTML = 
-        `你好，${displayStr} 
+        `您好，${displayStr} 
          <span style="font-size:0.8em; color:#ccc; margin-left:5px;" id="syncStatusIcon"></span>`;
 }
 
@@ -19929,21 +20272,30 @@ document.addEventListener('DOMContentLoaded', initClassNumbers);
 
 
 
-// === 新增：學校電郵登入處理函式 ===
-async function handleSchoolLogin() {
-    // 1. 獲取用戶輸入的資料
-    const manualName = document.getElementById('studentNameInput').value.trim();
-    const grade = document.getElementById('studentGrade').value;
-    const cls = document.getElementById('studentClass').value;
-    const number = document.getElementById('studentNumber').value;
+// === 修改後：學校電郵處理函式 (區分模式) ===
+async function handleSchoolLogin(authMode = 'login') { 
     
-    // 2. 驗證姓名
-    if (!manualName) {
-        alert("請務必填寫您的「中文姓名」才能進行註冊！");
-        document.getElementById('studentNameInput').focus();
-        return;
+    // 1. 準備暫存資料
+    let tempStudentData = { authMode: authMode }; 
+
+    // 2. 只有在「註冊模式」下才檢查輸入框
+    if (authMode === 'register') {
+        const manualName = document.getElementById('studentNameInput').value.trim();
+        const grade = document.getElementById('studentGrade').value;
+        const cls = document.getElementById('studentClass').value;
+        const number = document.getElementById('studentNumber').value;
+        
+        if (!manualName) {
+            alert("請務必填寫您的「中文姓名」才能進行註冊！");
+            document.getElementById('studentNameInput').focus();
+            return;
+        }
+        
+        // 將註冊資料存入物件
+        tempStudentData = { authMode, manualName, grade, cls, number };
     }
 
+    // 3. UI 鎖定 (獲取點擊的按鈕)
     const btn = event ? (event.target.tagName === 'BUTTON' ? event.target : event.target.closest('button')) : null;
     let originalContent = "";
     if (btn) {
@@ -19952,28 +20304,26 @@ async function handleSchoolLogin() {
         btn.disabled = true;
     }
 
-    // 暫存資料
-    const tempStudentData = { manualName, grade, cls, number };
+    // 4. 將資料寫入 Session (跨頁面傳遞)
     sessionStorage.setItem('sansi_temp_student_data', JSON.stringify(tempStudentData));
 
+    // 5. 呼叫 Google 登入
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
-        // ★ 核心修訂：設定持久化，確保登入狀態寫入硬碟
         await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-
-        // 使用 Popup 登入
         const result = await auth.signInWithPopup(provider);
+        
+        // 登入成功，進入處理流程
         await processLoginResult(result.user, btn, originalContent);
 
     } catch (error) {
         console.error("登入錯誤:", error);
-        if (error.code === 'auth/popup-blocked') {
-            alert("⚠️ 登入視窗被瀏覽器阻擋。\n\n請允許此網站顯示彈出式視窗，或嘗試使用 Chrome 瀏覽器。");
-        } else if (error.code !== 'auth/popup-closed-by-user') {
+        if (error.code !== 'auth/popup-closed-by-user') {
             alert("登入發生錯誤：" + error.message);
         }
+        // 恢復按鈕
         if (btn) {
             btn.innerHTML = originalContent;
             btn.disabled = false;
@@ -20011,21 +20361,27 @@ async function findProfileByEmail(targetEmail) {
 
 	
 
-// === 修正版：處理登入結果 (已更換為 Smart Sync) ===
+// === 修正版：處理登入結果 (已修復權限驗證順序) ===
 async function processLoginResult(user, btn, originalContent) {
-    let manualName, grade, cls, number;
+    let manualName, grade, cls, number, authMode = 'login';
+    
     const storedData = sessionStorage.getItem('sansi_temp_student_data');
     if (storedData) {
         const data = JSON.parse(storedData);
-        manualName = data.manualName; grade = data.grade; cls = data.cls; number = data.number;
+        authMode = data.authMode || 'login'; // 確保有預設值
+        if (authMode === 'register') {
+            manualName = data.manualName; grade = data.grade; cls = data.cls; number = data.number;
+        }
     } else {
+        // 如果 Session 遺失，嘗試從畫面獲取 (僅限註冊模式)
         manualName = document.getElementById('studentNameInput')?.value.trim();
         grade = document.getElementById('studentGrade')?.value;
         cls = document.getElementById('studentClass')?.value;
         number = document.getElementById('studentNumber')?.value;
     }
     
-    if (!manualName) {
+    // 如果是註冊模式但沒名字，報錯
+    if (authMode === 'register' && !manualName) {
         alert("資料遺失，請重新輸入姓名。");
         if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
         return;
@@ -20035,6 +20391,7 @@ async function processLoginResult(user, btn, originalContent) {
     let isTeacher = false;
     let isSpecialUser = false;
  
+    // ★★★ 步驟 1：先去資料庫檢查權限 (移到最前面) ★★★
     try {
         const safeEmailKey = email.replace(/\./g, ',');
  
@@ -20047,147 +20404,184 @@ async function processLoginResult(user, btn, originalContent) {
             isTeacher = true;
         } else if (specialSnap.exists() && specialSnap.val() === true) {
             isSpecialUser = true;
-            grade = "Special";
-            cls = "User";
+            if (authMode === 'register') { 
+                grade = "Special"; cls = "User"; 
+            }
         }
         else {
+            // 硬編碼的測試帳號檢查
             const DEBUG_USER = atob('a2VuY2hhbjIwMTQxQGdtYWlsLmNvbQ==');
             if (email === DEBUG_USER) {
                 isTeacher = true;
             }
         }
  
-        if (!isTeacher && !isSpecialUser) {
-            if (!email.endsWith('@ccckyc.edu.hk')) {
-                await auth.signOut();
-                alert("⛔ 驗證失敗！\n此電郵不在允許名單內。");
-                sessionStorage.removeItem('sansi_temp_student_data');
-                if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
-                return;
-            }
-        }
- 
     } catch (err) {
         console.error("權限檢查錯誤:", err);
+        // 如果資料庫連線失敗，但電郵是學校網域，仍允許通過，否則報錯
         if (!email.endsWith('@ccckyc.edu.hk')) {
             alert("系統連線錯誤，無法驗證權限。");
             if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
             return;
         }
     }
+
+    // ★★★ 步驟 2：現在才檢查網域 ★★★
+    // 只有當 (不是學校電郵) 且 (不是老師) 且 (不是特許用戶) 時，才阻擋
+    if (!email.endsWith('@ccckyc.edu.hk') && !isTeacher && !isSpecialUser) {
+         await auth.signOut();
+         alert("⛔ 驗證失敗！\n此電郵不在允許名單內。");
+         sessionStorage.removeItem('sansi_temp_student_data');
+         if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
+         return;
+    }
  
-    if (isTeacher) { grade = "System"; cls = "Test"; number = "99"; alert("👋 老師您好，進入測試班。"); }
+    // 提示訊息
+    if (isTeacher) { 
+        if (authMode === 'register') { grade = "System"; cls = "Test"; number = "99"; }
+        alert("👋 老師您好，進入測試班。"); 
+    }
     if (isSpecialUser) { alert("👋 歡迎特許用家。"); }
  
-    // --- 搜尋舊資料 ---
+    // --- 步驟 3：搜尋舊資料與登入邏輯 ---
     let existingProfile = await findProfileByEmail(email);
     
-    if (!existingProfile) {
+    // 如果索引找不到，嘗試用手動輸入的資料去路徑找 (僅限註冊模式或有輸入資料時)
+    if (!existingProfile && manualName) {
         const inputPath = `students/${grade}/${cls}/${manualName}/profile`;
         try {
             const snap = await database.ref(inputPath).once('value');
             if (snap.exists() && snap.val().email === email) {
                 existingProfile = snap.val();
+                // 修復索引
                 database.ref('email_mapping/' + btoa(email)).set(existingProfile);
             }
         } catch(e) {}
     }
  
     if (existingProfile) {
+        // [情況 A] 帳號已存在
         const oldLocation = `${existingProfile.grade}${existingProfile.class}`;
         const newLocation = `${grade}${cls}`;
         
-        if (oldLocation !== newLocation && !isTeacher && !isSpecialUser) {
+        // 如果是「註冊模式」且發現已有帳號，提示用戶
+        if (authMode === 'register' && !isTeacher && !isSpecialUser) {
             alert(`⚠️ 偵測到此電郵已註冊於【${oldLocation}班】。\n系統將登入您的原有帳號。`);
         }
         
+        // 特殊用戶更新資料邏輯
         if ((isTeacher && (existingProfile.grade !== "System" || existingProfile.class !== "Test")) ||
             (isSpecialUser && (existingProfile.grade !== "Special" || existingProfile.class !== "User"))) {
-             await bindStudentIdentity(grade, cls, number, manualName, email, user.uid);
+             // 如果特殊用戶的班級設定跑掉了，強制更新回去
+             await bindStudentIdentity(grade, cls, number, manualName || existingProfile.name, email, user.uid);
         } else {
+             // 正常登入
              localStorage.setItem('studentProfile', JSON.stringify(existingProfile));
              updateWelcomeMessage(existingProfile);
-             // 登入後載入課業 (不含歷史)
              loadAssignments(existingProfile.grade, existingProfile.class);
         }
         
-        sessionStorage.removeItem('sansi_temp_student_data');
-        document.getElementById('studentIdentityForm').style.display = 'none';
-        document.getElementById('studentCloudPanel').style.display = 'block';
-        monitorPendingAssignments();
-        
-        // ★★★ 修改處：改為呼叫新的省流同步 ★★★
-        await smartSyncHistory();
-        
-        startAutoSyncListener();
+        // 完成登入流程
+        finishLoginUI();
+
     } else {
-        // 新用戶註冊
-        await bindStudentIdentity(grade, cls, number, manualName, email, user.uid);
-        sessionStorage.removeItem('sansi_temp_student_data');
-        
-        // ★★★ 修改處：改為呼叫新的省流同步 ★★★
-        await smartSyncHistory();
-        
-        startAutoSyncListener();
+        // [情況 B] 新用戶
+        if (authMode === 'login') {
+            // 如果是按「登入」進來的，但找不到資料 -> 拒絕
+            await auth.signOut();
+            alert("❌ 系統找不到此帳號的註冊紀錄。\n\n您似乎是新用戶，請切換至「註冊」頁籤進行首次綁定。");
+            switchAuthMode('register');
+            if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
+            return;
+        } else {
+            // 如果是按「註冊」進來的 -> 建立新帳號
+            if (!manualName) {
+                 alert("註冊資料遺失，請重新輸入。");
+                 if (btn) { btn.innerHTML = originalContent; btn.disabled = false; }
+                 return;
+            }
+            await bindStudentIdentity(grade, cls, number, manualName, email, user.uid);
+            finishLoginUI();
+        }
     }
 }
 
-// === 新增：學生登出處理函式 ===
+// 輔助函式：統一處理登入成功的 UI 切換
+async function finishLoginUI() {
+    sessionStorage.removeItem('sansi_temp_student_data');
+    document.getElementById('studentIdentityForm').style.display = 'none';
+    document.getElementById('studentCloudPanel').style.display = 'block';
+    
+    // 啟動各項監聽
+    monitorPendingAssignments();
+    await smartSyncHistory();
+    startAutoSyncListener();
+}
+// === 新增：學生登出處理函式 (已修復按鈕重置問題) ===
+// === 修正版：學生登出處理函式 (強制重置雙按鈕狀態) ===
 async function handleStudentLogout() {
-    if (!confirm("確定要登出學生帳號嗎？\n(登出後下次需要重新輸入姓名驗證)")) {
+    if (!confirm("確定要登出帳號嗎？")) {
         return;
     }
 
-	 // ★★★ [新增] OneSignal 標籤移除 ★★★
+    // 1. OneSignal 標籤移除
     if (window.OneSignalDeferred) {
         window.OneSignalDeferred.push(function(OneSignal) {
-            // 移除年級和班別標籤，停止接收該班通知
             OneSignal.User.removeTags(["grade", "class"]);
         });
     }
-    // ★★★ [新增結束] ★★★
 
-
-	 // ★★★ 新增：移除紅點監聽 ★★★
+    // 2. 移除紅點監聽
     if (pendingMonitorRef) {
         pendingMonitorRef.off();
         pendingMonitorRef = null;
     }
     const badge = document.getElementById('notifBadge');
     if(badge) badge.style.display = 'none';
-    // ★★★ 新增結束 ★★★
 
     try {
-        // 1. Firebase 登出
+        // 3. Firebase 登出
         await firebase.auth().signOut();
     } catch (e) {
         console.error("Firebase 登出錯誤 (可忽略):", e);
     }
 
-    // 2. 清除本地學生資料
+    // 4. 清除本地學生資料
     localStorage.removeItem('studentProfile');
     
-    // 3. 清除相關的課業緩存 (這裡使用萬用字元清除該使用者的緩存較難，暫時清除當前頁面狀態即可)
-    // 若您有特定的緩存命名規則，可在這裡一併移除
-
-    // 4. UI 界面重置
+    // 5. UI 界面重置
     document.getElementById('studentCloudPanel').style.display = 'none';
     document.getElementById('studentIdentityForm').style.display = 'block';
     
-    // 重置按鈕狀態
-    const loginBtn = document.querySelector('#studentIdentityForm button');
+    // ==========================================
+    // ★★★ 核心修復：強制重置兩個按鈕 ★★★
+    // ==========================================
+
+    // 重置【登入模式】的按鈕
+    // 我們使用更精確的選擇器：找 id="loginModeContainer" 裡面的 class="btn-action"
+    const loginBtn = document.querySelector('#loginModeContainer .btn-action');
     if (loginBtn) {
         loginBtn.innerHTML = '<i class="fab fa-google"></i> 學校帳號登入';
         loginBtn.disabled = false;
+        loginBtn.style.cursor = 'pointer'; // 確保滑鼠游標恢復
+    }
+
+    // 重置【註冊模式】的按鈕
+    // 同理，找 id="registerModeContainer" 裡面的 class="btn-action"
+    const registerBtn = document.querySelector('#registerModeContainer .btn-action');
+    if (registerBtn) {
+        registerBtn.innerHTML = '<i class="fab fa-google"></i> 學校帳號註冊';
+        registerBtn.disabled = false;
+        registerBtn.style.cursor = 'pointer';
     }
 
     // 重置輸入框 (選擇性)
-    document.getElementById('studentNameInput').value = '';
+    const nameInput = document.getElementById('studentNameInput');
+    if (nameInput) nameInput.value = '';
     
-    // 5. 提示訊息
+    // 6. 提示訊息
     alert("已成功登出！");
 }
-
 	
 // === 修正版：綁定學生資料 (已更換為 Smart Sync) ===
 async function bindStudentIdentity(grade, cls, number, name, email, uid) {
@@ -20999,7 +21393,7 @@ async function generateHistoryReport() {
                 return;
             }
 
-            showLoading("陳SIR 正在生成學習報告...");
+            showLoading("陳Sir正在生成學習報告...");
 
             const prompt = `你現在扮演一位資深的中文科老師「陳SIR」。請根據學生以下的歷史紀錄，生成一份「學習概況報告」。
 
@@ -21193,62 +21587,88 @@ ${promptData}
     <div class="modal-content">
         <span class="close-modal-btn" onclick="closeStudentCloudModal()">&times;</span>
 
-        <!-- 身份設定表單 -->
-        <div id="studentIdentityForm">
-            
-            <!-- 新增：標題與指引區塊 -->
-       <div style="margin-bottom: 20px; border-bottom: 2px dashed #b0bec5; padding-bottom: 15px; text-align: center;">
-    <h3 style="color: #546e7a; margin: 0 0 15px 0; font-size: 1.5em;">註冊帳號</h3>
+<!-- 身份設定表單 -->
+<div id="studentIdentityForm">
     
-    <div style="background-color: #e8ecef; padding: 15px; border-radius: 8px; text-align: center; color: #78909c; font-size: 0.95em; line-height: 1.6;">
-        <div style="font-weight: bold; margin-bottom: 8px;">
-            <i class="fas fa-info-circle"></i> 指引：
-        </div>
-        <div style="text-align: left; margin-top: 5px;">
-            請先輸入您的<strong>中文姓名</strong>，並選擇正確的<strong>年級、班別及班號</strong>，確認無誤後，再點擊下方的「學校帳號登入」按鈕。
+    <!-- === 1. 分頁切換按鈕 (Tabs) === -->
+    <div style="display: flex; justify-content: center; margin-bottom: 25px; border-bottom: 2px solid #eee;">
+        <button id="tabLogin" onclick="switchAuthMode('login')" 
+                style="flex: 1; padding: 10px; background: none; border: none; border-bottom: 3px solid #607d8b; font-weight: bold; color: #455a64; font-size: 1rem; cursor: pointer; transition: all 0.3s;">
+            登入
+        </button>
+        <button id="tabRegister" onclick="switchAuthMode('register')" 
+                style="flex: 1; padding: 10px; background: none; border: none; border-bottom: 3px solid transparent; color: #aaa; font-size: 1rem; cursor: pointer; transition: all 0.3s;">
+            註冊
+        </button>
+    </div>
+
+    <!-- === 2. 登入模式區塊 (預設顯示) === -->
+    <div id="loginModeContainer">
+        <div style="text-align: center; padding: 30px 20px; color: #78909c;">
+            <i class="fas fa-user-circle" style="font-size: 3.5rem; margin-bottom: 15px; color: #b0bec5;"></i>
+            <p style="font-size: 1rem; line-height: 1.6;">
+                歡迎回來！<br>
+                請直接使用學校帳號登入。
+            </p>
+        
+            <!-- 登入按鈕：改為自動寬度 + 膠囊狀 -->
+            <button class="btn-action" onclick="handleSchoolLogin('login')" 
+                    style="width: auto; min-width: 160px; background-color: #607d8b; border: none; padding: 10px 30px; font-size: 1rem; letter-spacing: 1px; box-shadow: 0 3px 8px rgba(96, 125, 139, 0.3); color: white; border-radius: 50px; margin-top: 10px; margin-bottom: 15px;">
+                <i class="fab fa-google"></i> 學校帳號登入
+            </button>
+            
+            <div style="margin-top: 15px;">
+                <span style="color: #aaa; font-size: 0.85rem; cursor: pointer; text-decoration: underline;" onclick="switchAuthMode('register')">
+                    還沒有帳號？點此註冊
+                </span>
+            </div>
         </div>
     </div>
-</div>
 
-            <!-- 新增：姓名輸入欄位 -->
-            <label style="font-weight: bold; color: #455a64;">姓名：</label>
-            <input type="text" id="studentNameInput" class="no-modal-editor" placeholder="請輸入您的中文全名 (例如：陳大文)" 
-                   style="width: 100%; padding: 10px; margin: 5px 0 15px 0; border: 1px solid #cfd8dc; border-radius: 8px; font-size: 1.1em;">
+   <!-- === 3. 註冊模式區塊 (UI 優化版) === -->
+    <div id="registerModeContainer" style="display: none;">
+        
+        <!-- A. 資料輸入區 (增加內距，讓視覺更集中) -->
+        <div style="padding: 5px 10px;">
+            
+            <label style="font-weight: bold; color: #455a64; font-size: 0.95rem; display: block; margin-bottom: 5px;">姓名：</label>
+            <input type="text" id="studentNameInput" class="no-modal-editor" placeholder="請輸入中文全名 (例如：陳大文)" 
+                   style="width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #cfd8dc; border-radius: 8px; font-size: 1rem; box-sizing: border-box;">
 
-            <!--原有的選單 -->
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 15px; margin-bottom: 20px;">
                 <div style="flex: 1;">
-                    <label style="font-weight: bold; color: #455a64;">年級：</label>
-                    <select id="studentGrade" class="no-modal-editor">
+                    <label style="font-weight: bold; color: #455a64; font-size: 0.95rem; display: block; margin-bottom: 5px;">年級：</label>
+                    <select id="studentGrade" class="no-modal-editor" style="width: 100%; padding: 8px; font-size: 1rem; border: 1px solid #cfd8dc; border-radius: 8px;">
                         <option value="1">中一</option><option value="2">中二</option><option value="3">中三</option>
                         <option value="4">中四</option><option value="5">中五</option><option value="6">中六</option>
                     </select>
                 </div>
                 <div style="flex: 1;">
-                    <label style="font-weight: bold; color: #455a64;">班別：</label>
-                    <select id="studentClass" class="no-modal-editor">
+                    <label style="font-weight: bold; color: #455a64; font-size: 0.95rem; display: block; margin-bottom: 5px;">班別：</label>
+                    <select id="studentClass" class="no-modal-editor" style="width: 100%; padding: 8px; font-size: 1rem; border: 1px solid #cfd8dc; border-radius: 8px;">
                         <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
                     </select>
                 </div>
             </div>
 
-            <label style="font-weight: bold; color: #455a64;">班號：</label>
-            <select id="studentNumber" class="no-modal-editor">
+            <label style="font-weight: bold; color: #455a64; font-size: 0.95rem; display: block; margin-bottom: 5px;">班號：</label>
+            <select id="studentNumber" class="no-modal-editor" style="width: 100%; padding: 8px; font-size: 1rem; border: 1px solid #cfd8dc; border-radius: 8px;">
                 <!-- JS 會自動填入選項 -->
             </select>
-
-            <!-- 登入按鈕區塊 -->
-            <div style="margin-top: 25px; padding: 20px; background: #fff; border: 2px solid #607d8b; border-radius: 12px; text-align: center;">
-                <p style="color: #78909c; margin-bottom: 15px; font-size: 0.9em;">
-                    系統將驗證您的 @ccckyc.edu.hk 學校電郵
-                </p>
-                
-                <button class="btn-action" onclick="handleSchoolLogin()" 
-                        style="width: 100%; background-color: #607d8b; border: none; padding: 12px; font-size: 1.1em; letter-spacing: 1px; box-shadow: 0 4px 10px rgba(96, 125, 139, 0.3);">
-                    <i class="fab fa-google"></i> 學校帳號登入
-                </button>
-            </div>
         </div>
+
+        <!-- B. 視覺分隔線 (莫蘭迪色虛線) -->
+        <div style="margin: 25px 10px; border-top: 2px dashed #e0ddd7;"></div>
+
+        <!-- C. 操作按鈕區 (置中 + 膠囊狀) -->
+        <div style="text-align: center;">
+            <button class="btn-action" onclick="handleSchoolLogin('register')" 
+                    style="width: auto; min-width: 180px; background-color: #8fa398; border: none; padding: 12px 35px; font-size: 1rem; font-weight: bold; letter-spacing: 1px; box-shadow: 0 4px 10px rgba(143, 163, 152, 0.4); color: white; border-radius: 50px; margin-bottom: 20px; transition: transform 0.2s;">
+                <i class="fab fa-google"></i> 學校帳號註冊
+            </button>
+        </div>
+    </div>
+</div>
 
        <!-- 登入後顯示區域 -->
 <div id="studentCloudPanel" style="display:none; margin-top:15px;">
@@ -24818,7 +25238,24 @@ function forceOpenBooks() {
 	
 </script>
 
-	
+	<!-- === 莫蘭迪文藝佈告板 === -->
+<div id="morandiNoticeOverlay" class="notice-overlay" style="display: none;">
+    <div class="notice-modal-card">
+        <div class="notice-header">
+            <div class="notice-title-wrapper">
+                <i class="fas fa-feather-alt notice-icon"></i>
+                <span id="noticeTitle" class="notice-title">系統佈告</span>
+            </div>
+            <button class="notice-close-btn" onclick="closeAndMarkNoticeRead()" title="關閉並標記已讀">&times;</button>
+        </div>
+        <div id="noticeBody" class="notice-body">
+            <!-- 內容由 JS 動態載入 -->
+        </div>
+        <div class="notice-footer">
+            <button class="btn-morandi-solid" onclick="closeAndMarkNoticeRead()">我已了解</button>
+        </div>
+    </div>
+</div>
 
 <!-- Live2D 畫布容器 -->
 <canvas id="live2d-canvas"></canvas>
