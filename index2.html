@@ -8031,6 +8031,47 @@ button, .btn, .anime-card, .side-menu-item {
     transform: translateY(-2px);
     box-shadow: 0 6px 15px rgba(143, 163, 152, 0.4);
 }
+
+
+	/* 佈告板智能 iframe 容器 */
+.notice-iframe-container {
+    position: relative;
+    width: 100%;
+    margin: 15px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+    background-color: #f4f3ef;
+    border: 1px solid #e0ddd7;
+}
+
+/* 強制 16:9 顯示 */
+.notice-iframe-container iframe {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: none;
+    display: block;
+}
+
+/* 防封鎖的備用連結列 */
+.notice-link-fallback {
+    background-color: #fdfcf8;
+    padding: 10px 15px;
+    text-align: right;
+    font-size: 0.9rem;
+    border-top: 1px dashed #e0ddd7;
+}
+
+.notice-link-fallback a {
+    color: #8fa398;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+.notice-link-fallback a:hover {
+    color: #d69a92;
+}
 	
 	
 	
@@ -8125,6 +8166,54 @@ async function fetchAndCheckNotices() {
 /**
  * 渲染並顯示佈告視窗
  */
+/**
+ * 智能內容解析器：自動將貼上的純網址轉換為 IFRAME 或圖片預覽
+ */
+function parseNoticeContent(rawText) {
+    if (!rawText) return "";
+    let content = rawText;
+
+    // 1. 如果內容沒有 HTML 標籤（代表老師是在 Sheet 裡打純文字），自動將換行轉換為 <br>
+    if (!/<[a-z][\s\S]*>/i.test(content)) {
+        content = content.replace(/\n/g, '<br>');
+    }
+
+    // 2. 處理 YouTube 影片連結 (自動轉成 embed 格式，避免遭到封鎖)
+    // 支援 youtube.com/watch?v=XXX 及 youtu.be/XXXX 格式
+    const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:&\S*)?/gi;
+    content = content.replace(ytRegex, function(match, videoId) {
+        return `
+        <div class="notice-iframe-container">
+            <iframe src="https://www.youtube.com/embed/${videoId}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen credentialless></iframe>
+        </div>`;
+    });
+
+    // 3. 處理一般的網址連結 (轉換為 iframe 預覽)
+    // 使用正則匹配：前面是空白或 <br> 或字首，接著是 http/https 開頭
+    const urlRegex = /(^|\s|<br>)(https?:\/\/(?!www\.youtube\.com\/embed)[^\s<"']+)/gi;
+    content = content.replace(urlRegex, function(match, prefix, url) {
+        // 如果網址是圖片結尾，直接顯示圖片
+        if (url.match(/\.(jpeg|jpg|gif|png|webp)$/i)) {
+            return `${prefix}<img src="${url}" alt="圖片預覽" style="max-width:100%; height:auto; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.06); margin:15px 0; display:block;">`;
+        }
+        
+        // 其他網址顯示為 iframe，並提供 fallback 連結
+        // (因為有些網站如 Facebook、IG 官方禁止被 iframe 嵌入，所以必須給予點擊前往的按鈕)
+        return `${prefix}
+        <div class="notice-iframe-container">
+            <iframe src="${url}" credentialless loading="lazy"></iframe>
+            <div class="notice-link-fallback">
+                <a href="${url}" target="_blank"><i class="fas fa-external-link-alt"></i> 若無法預覽，請點此在新分頁開啟</a>
+            </div>
+        </div>`;
+    });
+
+    return content;
+}
+
+/**
+ * 渲染並顯示佈告視窗 (已串接智能解析器)
+ */
 function renderNoticeModal(notice) {
     const overlay = document.getElementById('morandiNoticeOverlay');
     const titleEl = document.getElementById('noticeTitle');
@@ -8135,9 +8224,9 @@ function renderNoticeModal(notice) {
     currentShowingNoticeId = notice.ID;
     titleEl.textContent = notice["標題"] || "系統佈告";
     
-    // 直接注入內容（因為包含了 HTML、iframe、img 等混合元素）
-    // CSS 已經做了響應式防護
-    bodyEl.innerHTML = notice["內容"];
+    // ★ 關鍵：經過解析器轉換，將普通網址變成精美的 IFRAME/影片
+    const processedContent = parseNoticeContent(notice["內容"]);
+    bodyEl.innerHTML = processedContent;
 
     // 顯示視窗並觸發動畫
     overlay.style.display = 'flex';
