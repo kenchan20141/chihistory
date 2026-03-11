@@ -7893,14 +7893,16 @@ button, .btn, .anime-card, .side-menu-item {
     background-color: #fffcf6; 
     background-image: 
         linear-gradient(90deg, transparent 48px, rgba(232, 160, 159, 0.3) 48px, rgba(232, 160, 159, 0.3) 50px, transparent 50px),
-        linear-gradient(transparent 39px, rgba(42, 150, 137, 0.08) 39px, rgba(42, 150, 137, 0.08) 40px, transparent 40px);
-    background-size: 100% 100%, 100% 40px;
+        /* ▼ 這裡的 39px 改為 31px，40px 改為 32px ▼ */
+        linear-gradient(transparent 31px, rgba(42, 150, 137, 0.08) 31px, rgba(42, 150, 137, 0.08) 32px, transparent 32px);
+    /* ▼ 這裡的 40px 改為 32px ▼ */
+    background-size: 100% 100%, 100% 32px;
     background-attachment: local; 
     
     width: 90%;
     max-width: 650px;
     max-height: 85vh;
-    border-radius: 4px; /* 紙張的邊角稍微銳利一點更真實 */
+    border-radius: 4px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -7909,7 +7911,6 @@ button, .btn, .anime-card, .side-menu-item {
 
     opacity: 0;
     transform-origin: center bottom;
-    /* 預設的靜態陰影 */
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), inset 0 0 20px rgba(0,0,0,0.02);
 }
 
@@ -8010,12 +8011,14 @@ button, .btn, .anime-card, .side-menu-item {
     flex-grow: 1;
     font-family: 'Noto Serif TC', 'Songti TC', serif;
     color: #333;
-    font-size: 1.05rem; /* ★ 這裡從 1.15rem 縮小為 1.05rem (約 16.8px) */
-    line-height: 40px;  /* ★ 保持 40px 不要動，用以對齊紙張背景的橫線 */
+    font-size: 1.05rem; 
+    /* ▼ 這裡由 40px 縮小為 32px ▼ */
+    line-height: 32px;  
     text-align: justify;
 }
 
-.notice-body p { margin-bottom: 40px; margin-top: 0; }
+/* ▼ 段落間距也同步改為 32px，確保下一段的第一行依然對齊橫線 ▼ */
+.notice-body p { margin-bottom: 32px; margin-top: 0; }
 /* ========================================= */
 /* === 佈告板多媒體內容修復 === */
 /* ========================================= */
@@ -8128,7 +8131,10 @@ button, .btn, .anime-card, .side-menu-item {
         padding-left: 40px; 
         background-image: 
             linear-gradient(90deg, transparent 28px, rgba(232, 160, 159, 0.3) 28px, rgba(232, 160, 159, 0.3) 30px, transparent 30px),
-            linear-gradient(transparent 39px, rgba(42, 150, 137, 0.08) 39px, rgba(42, 150, 137, 0.08) 40px, transparent 40px);
+            /* ▼ 這裡同樣改為 31px 與 32px ▼ */
+            linear-gradient(transparent 31px, rgba(42, 150, 137, 0.08) 31px, rgba(42, 150, 137, 0.08) 32px, transparent 32px);
+        /* ▼ 確保加上這行，強制手機版背景高度也是 32px ▼ */
+        background-size: 100% 100%, 100% 32px; 
     }
     .notice-title { font-size: 1.8rem; }
     .notice-footer { flex-direction: column; gap: 15px; align-items: flex-end; }
