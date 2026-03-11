@@ -8190,6 +8190,9 @@ function isNoticeActive(startDateStr, endDateStr) {
 /**
  * 智能內容解析器 (安全穩健版：完美支援文字、YouTube、連結、圖片混排)
  */
+/**
+ * 智能內容解析器 (安全穩健版：完美支援文字、YouTube、連結、圖片混排，並支援延遲加載防卡頓)
+ */
 function parseNoticeContent(rawText) {
     if (!rawText) return "";
     
@@ -8217,13 +8220,14 @@ function parseNoticeContent(rawText) {
         if (token.startsWith('http://') || token.startsWith('https://')) {
             let url = token;
             
-            // YouTube 影片
+            // YouTube 影片 (轉為 Lazy Load 模式)
             let ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
             if (ytMatch) {
                 let videoId = ytMatch[1];
                 processedHtml += `
-                <div class="notice-iframe-container">
-                    <iframe src="https://www.youtube.com/embed/${videoId}" allowfullscreen credentialless></iframe>
+                <div class="notice-iframe-container" style="display:flex; align-items:center; justify-content:center; min-height:200px; position:relative;">
+                    <i class="fas fa-spinner fa-spin" style="color:#8fa398; font-size:2rem; position:absolute; z-index:1;"></i>
+                    <iframe data-src="https://www.youtube.com/embed/${videoId}" class="lazy-iframe" allowfullscreen credentialless style="opacity:0; transition:opacity 0.5s; position:relative; z-index:2; width:100%; height:100%;"></iframe>
                 </div>`;
                 continue;
             }
@@ -8234,11 +8238,12 @@ function parseNoticeContent(rawText) {
                 continue;
             }
 
-            // 一般網址
+            // 一般網址 (轉為 Lazy Load 模式)
             processedHtml += `
-            <div class="notice-iframe-container">
-                <iframe src="${url}" credentialless loading="lazy"></iframe>
-                <div class="notice-link-fallback">
+            <div class="notice-iframe-container" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:200px; position:relative;">
+                <i class="fas fa-spinner fa-spin" style="color:#8fa398; font-size:2rem; position:absolute; top:50%; transform:translateY(-50%); z-index:1;"></i>
+                <iframe data-src="${url}" class="lazy-iframe" credentialless style="opacity:0; transition:opacity 0.5s; position:relative; z-index:2; width:100%; flex-grow:1;"></iframe>
+                <div class="notice-link-fallback" style="position:relative; z-index:3; width:100%; box-sizing:border-box;">
                     <a href="${url}" target="_blank" style="color: #8fa398; text-decoration: none; font-weight: bold; transition: color 0.3s;"><i class="fas fa-external-link-alt"></i> 若無法預覽，請點此在新分頁開啟</a>
                 </div>
             </div>`;
@@ -8256,6 +8261,7 @@ function parseNoticeContent(rawText) {
 
     return processedHtml;
 }
+
 
 /**
  * 初始化並抓取佈告資料 (收集所有未讀通告)
@@ -8305,6 +8311,19 @@ function renderNoticeModal() {
 
     if (!overlay || !titleEl || !bodyEl || activeNotices.length === 0) return;
 
+    // 觸發載入 Iframe 的輔助函數
+    const loadIframes = () => {
+        const iframes = bodyEl.querySelectorAll('iframe.lazy-iframe');
+        iframes.forEach(iframe => {
+            if (iframe.getAttribute('data-src')) {
+                iframe.src = iframe.getAttribute('data-src');
+                iframe.removeAttribute('data-src');
+                // 載入完成後淡入顯示，蓋住背後的 Loading 圈圈
+                iframe.onload = () => { iframe.style.opacity = '1'; };
+            }
+        });
+    };
+
     // 內部函式：更新內容
     const updateContent = () => {
         const notice = activeNotices[currentNoticeIndex];
@@ -8340,15 +8359,17 @@ function renderNoticeModal() {
             updateContent();
             // 換完內容後，再次淡入
             bodyEl.style.opacity = '1';
+            // 換頁不用等飛入動畫，直接稍微延遲載入 iframe 即可
+            setTimeout(loadIframes, 100);
         }, 200);
     } else {
-        // 初次開啟視窗
-        updateContent();
+        // 初次開啟視窗 (防卡頓邏輯)
         
+        // 1. 先顯示外層並移除退場動畫 class
         overlay.style.display = 'flex';
-        card.classList.remove('hide-anim'); // 清除可能殘留的退場動畫 class
+        card.classList.remove('hide-anim'); 
         
-        // 隱藏貓咪
+        // 2. 隱藏貓咪
         const catCanvas = document.getElementById('live2d-canvas');
         const catBubble = document.getElementById('catSpeechBubble');
         if (catCanvas) {
@@ -8363,10 +8384,19 @@ function renderNoticeModal() {
 
         if (navigator.vibrate) navigator.vibrate([20, 40, 20]); 
         
-        // 強制重繪以觸發 CSS Animation
-        void overlay.offsetWidth; 
-        overlay.classList.add('show');
-        document.body.style.overflow = 'hidden';
+        // 3. 填充內容 (此時尚未開始動畫，僅是 DOM 變更)
+        updateContent();
+        
+        // 4. 使用 double requestAnimationFrame 分離渲染與動畫啟動，避免掉幀
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                overlay.classList.add('show');
+                document.body.style.overflow = 'hidden';
+                
+                // 5. 確保在飛入動畫 (1.2s) 結束後，才開始載入耗資源的 iframe，保持彈出流暢
+                setTimeout(loadIframes, 1200); 
+            });
+        });
     }
 }
 
