@@ -7887,15 +7887,15 @@ button, .btn, .anime-card, .side-menu-item {
 }
 
 /* 核心：練習簿紙張質感 */
+/* 核心：練習簿紙張質感 (格線大幅調淡) */
 .notice-modal-card {
-    background-color: #fffcf6; /* 泛黃的紙張底色 */
-    
-    /* 繪製左側紅線與橫向格線 (40px 一格) */
+    background-color: #fffcf6; 
+    /* 紅線透明度降至 0.3，橫格線透明度降至 0.08，呈現淡淡的水印感 */
     background-image: 
-        linear-gradient(90deg, transparent 48px, #e8a09f 48px, #e8a09f 50px, transparent 50px),
-        linear-gradient(transparent 39px, rgba(42, 150, 137, 0.2) 39px, rgba(42, 150, 137, 0.2) 40px, transparent 40px);
+        linear-gradient(90deg, transparent 48px, rgba(232, 160, 159, 0.3) 48px, rgba(232, 160, 159, 0.3) 50px, transparent 50px),
+        linear-gradient(transparent 39px, rgba(42, 150, 137, 0.08) 39px, rgba(42, 150, 137, 0.08) 40px, transparent 40px);
     background-size: 100% 100%, 100% 40px;
-    background-attachment: local; /* 讓格線跟隨內容滾動 */
+    background-attachment: local; 
     
     width: 90%;
     max-width: 650px;
@@ -7907,8 +7907,6 @@ button, .btn, .anime-card, .side-menu-item {
     transform: translateY(30px) scale(0.95);
     transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
     overflow: hidden;
-    
-    /* 為了避開左側的紅線，增加左內邊距 */
     padding-left: 65px;
     box-sizing: border-box;
 }
@@ -7930,7 +7928,6 @@ button, .btn, .anime-card, .side-menu-item {
     gap: 12px;
 }
 
-/* 「佈告板」大標題 */
 .notice-title {
     font-family: 'Noto Serif TC', 'Songti TC', serif;
     font-size: 2.2rem;
@@ -7945,29 +7942,12 @@ button, .btn, .anime-card, .side-menu-item {
     font-size: 1rem;
 }
 
-/* 公告的獨立小標題 */
 .notice-sub-title {
     font-family: 'Noto Serif TC', serif;
     font-size: 1.3rem;
     color: #2A9689;
     margin: 10px 25px 10px 0;
     font-weight: bold;
-}
-
-.notice-close-btn {
-    background: transparent;
-    border: none;
-    font-size: 2.5rem;
-    color: #bcaaa4;
-    cursor: pointer;
-    line-height: 1;
-    transition: all 0.3s ease;
-    padding: 0;
-}
-
-.notice-close-btn:hover {
-    color: #d9534f;
-    transform: rotate(90deg);
 }
 
 .notice-body {
@@ -7977,16 +7957,13 @@ button, .btn, .anime-card, .side-menu-item {
     font-family: 'Noto Serif TC', 'Songti TC', serif;
     color: #333;
     font-size: 1.15rem;
-    
-    /* 嚴格對齊格線 */
     line-height: 40px; 
     text-align: justify;
 }
 
-/* 確保段落之間的距離是 40px 的倍數，保持格線不跑版 */
 .notice-body p { margin-bottom: 40px; margin-top: 0; }
 .notice-body img { max-width: 100%; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: 20px 0; display: block; }
-.notice-body iframe { width: 100%; aspect-ratio: 16 / 9; border: none; border-radius: 4px; margin: 20px 0; }
+.notice-body iframe { width: 100%; aspect-ratio: 16 / 9; border: none; border-radius: 4px; margin: 20px 0; background-color: #f0f0f0; }
 
 .notice-footer {
     padding: 15px 25px 20px 0;
@@ -7995,50 +7972,56 @@ button, .btn, .anime-card, .side-menu-item {
     align-items: center;
 }
 
-/* 多通告導航 UI */
-.notice-nav-group {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.notice-nav-btn {
-    background-color: #f0ede6;
-    border: 1px solid #dcd6c8;
-    color: #5d4037;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+/* 新增：按鈕樣式 */
+.btn-morandi-outline {
+    background-color: transparent;
+    color: #888;
+    border: 1px solid #ccc;
+    padding: 8px 20px;
+    border-radius: 50px;
+    font-size: 0.95rem;
+    font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
-    display: flex;
-    justify-content: center;
-    align-items: center;
 }
 
-.notice-nav-btn:hover:not(:disabled) {
+.btn-morandi-outline:hover {
+    background-color: #f0f0f0;
+    color: #555;
+}
+
+.btn-morandi-solid {
     background-color: #8fa398;
     color: white;
-    border-color: #8fa398;
-}
-
-.notice-nav-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
-
-.notice-counter {
-    font-family: 'Courier New', monospace;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 50px;
+    font-size: 0.95rem;
     font-weight: bold;
-    color: #888;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(143, 163, 152, 0.3);
+    transition: all 0.2s;
 }
+
+.btn-morandi-solid:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.05);
+    box-shadow: 0 6px 12px rgba(143, 163, 152, 0.4);
+}
+
+/* 多通告導航 UI */
+.notice-nav-group { display: flex; align-items: center; gap: 15px; }
+.notice-nav-btn { background-color: #f0ede6; border: 1px solid #dcd6c8; color: #5d4037; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; transition: all 0.2s; display: flex; justify-content: center; align-items: center; }
+.notice-nav-btn:hover:not(:disabled) { background-color: #8fa398; color: white; border-color: #8fa398; }
+.notice-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.notice-counter { font-family: 'Courier New', monospace; font-weight: bold; color: #888; }
 
 @media (max-width: 600px) {
     .notice-modal-card {
-        padding-left: 40px; /* 手機版紅線往左靠 */
+        padding-left: 40px; 
         background-image: 
-            linear-gradient(90deg, transparent 28px, #e8a09f 28px, #e8a09f 30px, transparent 30px),
-            linear-gradient(transparent 39px, rgba(42, 150, 137, 0.2) 39px, rgba(42, 150, 137, 0.2) 40px, transparent 40px);
+            linear-gradient(90deg, transparent 28px, rgba(232, 160, 159, 0.3) 28px, rgba(232, 160, 159, 0.3) 30px, transparent 30px),
+            linear-gradient(transparent 39px, rgba(42, 150, 137, 0.08) 39px, rgba(42, 150, 137, 0.08) 40px, transparent 40px);
     }
     .notice-title { font-size: 1.8rem; }
     .notice-footer { flex-direction: column; gap: 15px; align-items: flex-end; }
@@ -8056,28 +8039,23 @@ button, .btn, .anime-card, .side-menu-item {
 // === 智能佈告板系統 (完整版：含內容解析、多通告切換、選擇性儲存) ===
 // =========================================
 
-// ★ 請替換成你第一步發佈的 Apps Script 網址
+// =========================================
+// === 智能佈告板系統 (多通告獨立紀錄 + YouTube 修復版) ===
+// =========================================
+
 const NOTICE_API_URL = "https://script.google.com/macros/s/AKfycbyC0fIhN8juwOtGy-WLm9hqgrDN817JnyroLnMkapMvf4hzLEF7LEp06sjXDdX246_0/exec"; 
 
-// 存放所有符合條件（日期內且未讀）的通告
 let activeNotices = []; 
-// 目前正在顯示的通告索引
 let currentNoticeIndex = 0; 
 
-/**
- * 取得本地已讀清單
- */
 function getReadNotices() {
     const stored = localStorage.getItem('sansi_read_notices');
     return stored ? JSON.parse(stored) : [];
 }
 
-/**
- * 檢查日期是否在發佈範圍內
- */
 function isNoticeActive(startDateStr, endDateStr) {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // 歸零時間，只比對日期
+    today.setHours(0, 0, 0, 0); 
 
     let isAfterStart = true;
     let isBeforeEnd = true;
@@ -8090,7 +8068,7 @@ function isNoticeActive(startDateStr, endDateStr) {
 
     if (endDateStr) {
         const endDate = new Date(endDateStr);
-        endDate.setHours(23,59,59,999); // 結束日期的最後一刻
+        endDate.setHours(23,59,59,999); 
         isBeforeEnd = today <= endDate;
     }
 
@@ -8098,19 +8076,22 @@ function isNoticeActive(startDateStr, endDateStr) {
 }
 
 /**
- * 智能內容解析器：自動將貼上的純網址轉換為 IFRAME 或圖片預覽
+ * 修復版：精準識別 YouTube (包含 embed) 與一般 iframe
  */
 function parseNoticeContent(rawText) {
     if (!rawText) return "";
     let content = rawText;
 
-    // 1. 如果內容沒有 HTML 標籤（代表老師是在 Sheet 裡打純文字），自動將換行轉換為 <br>
-    if (!/<[a-z][\s\S]*>/i.test(content)) {
-        content = content.replace(/\n/g, '<br>');
+    // 1. 如果老師直接貼上了完整的 <iframe ...> 代碼，我們不破壞它，只處理換行
+    if (content.includes('<iframe')) {
+        if (!content.includes('<br>')) {
+            content = content.replace(/\n/g, '<br>');
+        }
+        return content;
     }
 
-    // 2. 處理 YouTube 影片連結 (自動轉成 embed 格式，避免遭到封鎖)
-    const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:&\S*)?/gi;
+    // 2. 處理各種 YouTube 網址 (一般 watch?v=, 短網址 youtu.be, 或純 embed 網址)
+    const ytRegex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:&\S*)?/gi;
     content = content.replace(ytRegex, function(match, videoId) {
         return `
         <div class="notice-iframe-container">
@@ -8118,30 +8099,23 @@ function parseNoticeContent(rawText) {
         </div>`;
     });
 
-    // 3. 處理一般的網址連結 (轉換為 iframe 預覽)
+    // 3. 處理一般網址 (轉換為點擊連結，如果以圖片結尾則轉換為圖片)
     const urlRegex = /(^|\s|<br>)(https?:\/\/(?!www\.youtube\.com\/embed)[^\s<"']+)/gi;
     content = content.replace(urlRegex, function(match, prefix, url) {
-        // 如果網址是圖片結尾，直接顯示圖片
         if (url.match(/\.(jpeg|jpg|gif|png|webp)$/i)) {
-            return `${prefix}<img src="${url}" alt="圖片預覽" style="max-width:100%; height:auto; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.06); margin:15px 0; display:block;">`;
+            return `${prefix}<img src="${url}" alt="圖片預覽" style="max-width:100%; height:auto; border-radius:8px; margin:15px 0; display:block; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">`;
         }
-        
-        // 其他網址顯示為 iframe，並提供 fallback 連結
-        return `${prefix}
-        <div class="notice-iframe-container">
-            <iframe src="${url}" credentialless loading="lazy"></iframe>
-            <div class="notice-link-fallback">
-                <a href="${url}" target="_blank"><i class="fas fa-external-link-alt"></i> 若無法預覽，請點此在新分頁開啟</a>
-            </div>
-        </div>`;
+        return `${prefix}<a href="${url}" target="_blank" style="color: #8fa398; text-decoration: underline; font-weight: bold;">開啟連結 <i class="fas fa-external-link-alt" style="font-size:0.8em;"></i></a>`;
     });
+
+    // 4. 處理換行符號
+    if (!/<[a-z][\s\S]*>/i.test(content) || content.includes('<a ')) {
+        content = content.replace(/\n/g, '<br>');
+    }
 
     return content;
 }
 
-/**
- * 初始化並抓取佈告資料 (收集所有未讀通告)
- */
 async function fetchAndCheckNotices() {
     try {
         const response = await fetch(NOTICE_API_URL);
@@ -8149,19 +8123,19 @@ async function fetchAndCheckNotices() {
         const notices = await response.json();
 
         const readList = getReadNotices();
-        activeNotices = []; // 清空陣列
+        activeNotices = []; 
 
-        // 遍歷所有佈告，將所有符合「在期限內」且「未點擊不再顯示」的佈告加入清單
         for (let i = 0; i < notices.length; i++) {
             const notice = notices[i];
             if (!notice.ID) continue;
             if (!isNoticeActive(notice["發佈日期"], notice["下架日期"])) continue;
-            if (readList.includes(notice.ID)) continue;
             
-            activeNotices.push(notice);
+            // ★ 如果不在「已讀」清單中，就加入待顯示陣列
+            if (!readList.includes(notice.ID)) {
+                activeNotices.push(notice);
+            }
         }
 
-        // 如果有任何需要顯示的通告，開啟視窗
         if (activeNotices.length > 0) {
             currentNoticeIndex = 0;
             renderNoticeModal();
@@ -8172,9 +8146,6 @@ async function fetchAndCheckNotices() {
     }
 }
 
-/**
- * 渲染並顯示當前索引的佈告
- */
 function renderNoticeModal() {
     const overlay = document.getElementById('morandiNoticeOverlay');
     const titleEl = document.getElementById('noticeTitle');
@@ -8188,13 +8159,10 @@ function renderNoticeModal() {
 
     if (!overlay || !titleEl || !bodyEl || activeNotices.length === 0) return;
 
-    // 取得當前的佈告
     const notice = activeNotices[currentNoticeIndex];
 
-    // 寫入內容
     titleEl.textContent = notice["標題"] || "一般通知";
     
-    // 如果有發佈日期，顯示在標題旁
     if (notice["發佈日期"]) {
         const d = new Date(notice["發佈日期"]);
         dateEl.textContent = `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`;
@@ -8202,23 +8170,17 @@ function renderNoticeModal() {
         dateEl.textContent = "";
     }
     
-    // 呼叫解析器，並注入內容
     bodyEl.innerHTML = parseNoticeContent(notice["內容"]);
 
-    // 處理多通告導航 UI
     if (activeNotices.length > 1) {
         navGroup.style.display = 'flex';
         counterEl.textContent = `${currentNoticeIndex + 1} / ${activeNotices.length}`;
-        
-        // 判斷上一頁/下一頁按鈕是否可用
         prevBtn.disabled = (currentNoticeIndex === 0);
         nextBtn.disabled = (currentNoticeIndex === activeNotices.length - 1);
     } else {
-        // 只有一篇時隱藏導航
         navGroup.style.display = 'none';
     }
 
-    // 顯示視窗並觸發動畫
     if (overlay.style.display === 'none') {
         overlay.style.display = 'flex';
         if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
@@ -8227,13 +8189,9 @@ function renderNoticeModal() {
         document.body.style.overflow = 'hidden';
     }
     
-    // 將內容滾動回頂部
     bodyEl.scrollTop = 0;
 }
 
-/**
- * 導航：上一篇
- */
 function prevNotice() {
     if (currentNoticeIndex > 0) {
         currentNoticeIndex--;
@@ -8241,9 +8199,6 @@ function prevNotice() {
     }
 }
 
-/**
- * 導航：下一篇
- */
 function nextNotice() {
     if (currentNoticeIndex < activeNotices.length - 1) {
         currentNoticeIndex++;
@@ -8252,8 +8207,8 @@ function nextNotice() {
 }
 
 /**
- * 動作 1：暫時關閉 (點擊右上角 X)
- * 不會寫入 LocalStorage，下次重新整理頁面仍會跳出。
+ * 動作 1：稍後再看 (暫時關閉)
+ * 不寫入 DB，下次重新載入網頁時，剛剛沒按「不再顯示」的都會再彈出來。
  */
 function closeNoticeTemporary() {
     const overlay = document.getElementById('morandiNoticeOverlay');
@@ -8262,22 +8217,20 @@ function closeNoticeTemporary() {
         setTimeout(() => {
             overlay.style.display = 'none';
             document.getElementById('noticeBody').innerHTML = ''; 
-            document.body.style.overflow = 'auto'; // 解鎖背景滾動
+            document.body.style.overflow = 'auto'; 
         }, 400); 
     }
 }
 
 /**
- * 動作 2：我已了解，不再顯示 (點擊下方按鈕)
- * 寫入 LocalStorage，並切換到下一篇，若全看完則關閉。
+ * 動作 2：不再顯示 (標記已讀)
+ * 寫入 DB。然後自動切換到下一則，如果沒了就關閉。
  */
 function markCurrentNoticeRead() {
     if (activeNotices.length === 0) return;
 
-    // 1. 取得當前佈告的 ID
+    // 1. 取得當前佈告的 ID 並寫入 LocalStorage
     const currentId = activeNotices[currentNoticeIndex].ID;
-    
-    // 2. 寫入 LocalStorage (永遠不再顯示)
     if (currentId) {
         const readList = getReadNotices();
         if (!readList.includes(currentId)) {
@@ -8286,27 +8239,22 @@ function markCurrentNoticeRead() {
         }
     }
 
-    // 3. 將此佈告從 activeNotices 陣列中移除
+    // 2. 從待看清單中剔除這一則
     activeNotices.splice(currentNoticeIndex, 1);
 
-    // 4. 判斷後續動作
+    // 3. 判斷後續：還有沒看的嗎？
     if (activeNotices.length > 0) {
-        // 如果移除後，目前的索引超出了陣列範圍（例如刪除了最後一個），則退回一步
+        // 如果剛刪除的是最後一筆，索引需退回 1 格
         if (currentNoticeIndex >= activeNotices.length) {
             currentNoticeIndex = activeNotices.length - 1;
         }
-        // 重新渲染下一篇
         renderNoticeModal();
     } else {
-        // 陣列空了，代表全看完了，關閉視窗
+        // 全部都標記為「不再顯示」了，關閉視窗
         closeNoticeTemporary();
     }
 }
 
-// =========================================
-// === 自動啟動機制 ===
-// 頁面載入完成後延遲 2.5 秒執行，避免阻擋主要資源與動畫
-// =========================================
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         fetchAndCheckNotices();
@@ -25370,8 +25318,7 @@ function forceOpenBooks() {
                 <span class="notice-title">佈告板</span>
                 <span id="noticeDate" class="notice-date"></span>
             </div>
-            <!-- 這裡的 X 只是「暫時關閉」，下次重整還會出現 -->
-            <button class="notice-close-btn" onclick="closeNoticeTemporary()" title="暫時關閉">&times;</button>
+            <!-- 移除右上角的 X 關閉鍵，迫使用家使用底部的明確選項 -->
         </div>
         
         <h2 id="noticeTitle" class="notice-sub-title">系統佈告</h2>
@@ -25388,12 +25335,10 @@ function forceOpenBooks() {
                 <button id="noticeNextBtn" class="notice-nav-btn" onclick="nextNotice()"><i class="fas fa-chevron-right"></i></button>
             </div>
             
-            <!-- 右側：確認按鈕 -->
-            <div>
-                <!-- 點擊此按鈕才會真正寫入 LocalStorage，永遠不再顯示此篇 -->
-                <button class="btn-morandi-solid" onclick="markCurrentNoticeRead()" style="background-color: #d69a92; box-shadow: 0 4px 10px rgba(214, 154, 146, 0.3);">
-                    <i class="fas fa-check-double"></i> 我已了解，不再顯示
-                </button>
+            <!-- 右側：明確的選擇按鈕 -->
+            <div style="display: flex; gap: 10px; margin-left: auto;">
+                <button class="btn-morandi-outline" onclick="closeNoticeTemporary()">稍後再看</button>
+                <button class="btn-morandi-solid" onclick="markCurrentNoticeRead()">不再顯示</button>
             </div>
         </div>
     </div>
