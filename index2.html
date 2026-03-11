@@ -7880,9 +7880,7 @@ button, .btn, .anime-card, .side-menu-item {
     align-items: center;
     pointer-events: none; 
     transition: background-color 0.8s ease, backdrop-filter 0.8s ease; 
-    
-    /* ★ 核心 1：設定 3D 透視距離，讓裡面的元素有前後空間感 */
-    perspective: 1200px; 
+    perspective: 1500px; /* 拉大透視距離，讓形變更自然 */
 }
 
 .notice-overlay.show {
@@ -7902,66 +7900,72 @@ button, .btn, .anime-card, .side-menu-item {
     width: 90%;
     max-width: 650px;
     max-height: 85vh;
-    border-radius: 8px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15), inset 0 0 40px rgba(0,0,0,0.02);
+    border-radius: 4px; /* 紙張的邊角稍微銳利一點更真實 */
     display: flex;
     flex-direction: column;
     overflow: hidden;
     padding-left: 65px;
     box-sizing: border-box;
 
-    /* 初始狀態：隱藏，並在 CSS 動畫接管前保持這個狀態 */
     opacity: 0;
-    
-    /* ★ 核心 2：設定變形的中心點，讓紙張感覺是從下方「拋」上來的 */
     transform-origin: center bottom;
+    /* 預設的靜態陰影 */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), inset 0 0 20px rgba(0,0,0,0.02);
 }
 
-/* ★ 佈告板進場動畫：紙張飛入 */
+/* 佈告板進場動畫：柔軟紙張飛入 */
 .notice-overlay.show .notice-modal-card {
-    /* 1.2秒，使用特殊的貝茲曲線模擬紙張受空氣阻力減速的感覺 */
-    animation: paper-fly-in 1.2s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+    animation: soft-paper-fly 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* ★ 退場狀態：紙張飄落 */
+/* 退場狀態：柔軟紙張飄落 */
 .notice-modal-card.hide-anim {
-    animation: paper-drift-out 0.8s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards;
+    animation: soft-paper-drop 0.8s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards;
 }
 
 /* ==============================================
-   === 3D 紙張飛翔 Keyframes 動畫定義 ===
+   === 柔軟紙張飛翔 Keyframes 動畫定義 ===
    ============================================== */
 
-@keyframes paper-fly-in {
+@keyframes soft-paper-fly {
     0% {
         opacity: 0;
-        /* 從畫面下方深處 (250px) 起步 */
-        /* 往後仰倒 30度 (rotateX) */
-        /* 稍微向右傾斜 5度 (rotateZ) 產生不對稱的自然感 */
-        /* 縮小 0.8 倍營造距離感 */
-        transform: translateY(250px) translateZ(-200px) rotateX(30deg) rotateZ(5deg) scale(0.8);
+        /* 初始狀態：在畫面下方，受到極大風阻，紙張呈現極度扭曲 (skew) 與後仰 */
+        transform: translateY(300px) translateZ(-300px) rotateX(45deg) rotateY(-10deg) skewX(5deg) skewY(-5deg) scale(0.7);
+        /* 陰影遠離紙張且模糊，模擬在半空中的感覺 */
+        box-shadow: -20px 50px 60px rgba(0, 0, 0, 0.2), inset 15px 15px 30px rgba(255,255,255,0.5);
     }
     40% {
         opacity: 1;
-        /* 飛到半空中，翻轉過衝 (Overshoot) 一點點，模擬物理慣性 */
-        transform: translateY(-20px) translateZ(50px) rotateX(-5deg) rotateZ(-2deg) scale(1.02);
+        /* 飛越視覺中心：風阻改變，紙張向反方向微微彎曲 (負的 skew) 營造拍打感 */
+        transform: translateY(-30px) translateZ(80px) rotateX(-10deg) rotateY(5deg) skewX(-2deg) skewY(2deg) scale(1.05);
+        /* 陰影收緊，因為紙張快要貼到屏幕上了 */
+        box-shadow: 10px 15px 30px rgba(0, 0, 0, 0.15), inset -5px -5px 15px rgba(0,0,0,0.03);
+    }
+    70% {
+        /* 落地反彈：紙張接觸到平面，邊角還在震動 */
+        transform: translateY(5px) translateZ(0px) rotateX(2deg) rotateY(-1deg) skewX(0.5deg) skewY(-0.5deg) scale(0.99);
     }
     100% {
         opacity: 1;
-        /* 完美平躺，緩緩降落在眼前 */
-        transform: translateY(0) translateZ(0) rotateX(0deg) rotateZ(0deg) scale(1);
+        /* 完美平躺，恢復正常矩形 */
+        transform: translateY(0) translateZ(0) rotateX(0deg) rotateY(0deg) skewX(0deg) skewY(0deg) scale(1);
+        /* 最終靜態陰影 */
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), inset 0 0 20px rgba(0,0,0,0.02);
     }
 }
 
-@keyframes paper-drift-out {
+@keyframes soft-paper-drop {
     0% {
         opacity: 1;
-        transform: translateY(0) rotateX(0deg) rotateZ(0deg) scale(1);
+        transform: translateY(0) rotateX(0deg) skewX(0deg) scale(1);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     }
     100% {
         opacity: 0;
-        /* 失去支撐，往前傾倒並向下滑落，模擬紙張飄走 */
-        transform: translateY(150px) translateZ(-100px) rotateX(-20deg) rotateZ(-3deg) scale(0.9);
+        /* 失去支撐，紙張一角先垂下 (skew)，然後整張滑落 */
+        transform: translateY(200px) translateZ(-150px) rotateX(-30deg) rotateY(15deg) skewX(-10deg) scale(0.8);
+        box-shadow: 20px 50px 50px rgba(0, 0, 0, 0.05);
     }
 }
 
@@ -8139,14 +8143,10 @@ button, .btn, .anime-card, .side-menu-item {
 
 
 // =========================================
-// === 智能佈告板系統 (完整版：含內容解析、多通告切換、選擇性儲存) ===
+// === 智能佈告板系統 (完美無報錯版) ===
 // =========================================
 
-// =========================================
-// === 智能佈告板系統 (完整終極版) ===
-// =========================================
-
-// ★ 請替換成你第一步發佈的 Apps Script 網址
+// ★ API 網址
 const NOTICE_API_URL = "https://script.google.com/macros/s/AKfycbyC0fIhN8juwOtGy-WLm9hqgrDN817JnyroLnMkapMvf4hzLEF7LEp06sjXDdX246_0/exec"; 
 
 // 存放所有符合條件（日期內且未讀）的通告
@@ -8188,44 +8188,36 @@ function isNoticeActive(startDateStr, endDateStr) {
 }
 
 /**
- * 智能內容解析器 (安全穩健版：完美支援文字、YouTube、連結、圖片混排，並修正顏色)
+ * 智能內容解析器 (安全穩健版：完美支援文字、YouTube、連結、圖片混排)
  */
 function parseNoticeContent(rawText) {
     if (!rawText) return "";
     
-    // 如果老師直接貼上了純 HTML iframe (且沒有換行)，不予破壞
     if (rawText.includes('<iframe') && !rawText.includes('\n')) {
         return rawText;
     }
 
-    // 1. 統一換行符號
     let text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    
-    // 2. 將文本按空白字符分割 (保留換行符號作為獨立標記)
     let tokens = text.split(/([ \t]+|\n)/);
     let processedHtml = "";
 
-    // 遍歷所有片段
     for (let i = 0; i < tokens.length; i++) {
         let token = tokens[i];
 
-        // 處理換行：轉換為 <br>
         if (token === '\n') {
             processedHtml += '<br>';
             continue;
         }
         
-        // 處理空白格：保留
         if (token.trim() === '') {
             processedHtml += token;
             continue;
         }
 
-        // 檢查是否為網址
         if (token.startsWith('http://') || token.startsWith('https://')) {
             let url = token;
             
-            // 情況 A：YouTube 影片
+            // YouTube 影片
             let ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
             if (ytMatch) {
                 let videoId = ytMatch[1];
@@ -8236,28 +8228,27 @@ function parseNoticeContent(rawText) {
                 continue;
             }
 
-            // 情況 B：圖片連結
+            // 圖片連結
             if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
                 processedHtml += `<img src="${url}" alt="圖片預覽" style="max-width:100%; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.1); margin:15px 0; display:block;">`;
                 continue;
             }
 
-            // 情況 C：一般網址 (轉換為 iframe 預覽 + 備用連結，並設定為莫蘭迪綠)
+            // 一般網址
             processedHtml += `
             <div class="notice-iframe-container">
                 <iframe src="${url}" credentialless loading="lazy"></iframe>
                 <div class="notice-link-fallback">
-                    <a href="${url}" target="_blank" style="color: #8fa398; text-decoration: none; font-weight: bold; transition: color 0.3s;"><i class="fas fa-external-link-alt"></i>開啟</a>
+                    <a href="${url}" target="_blank" style="color: #8fa398; text-decoration: none; font-weight: bold; transition: color 0.3s;"><i class="fas fa-external-link-alt"></i> 若無法預覽，請點此在新分頁開啟</a>
                 </div>
             </div>`;
             continue;
         }
 
-        // 如果不是網址，就是普通文字，直接加入
         processedHtml += token;
     }
 
-    // 3. 【清理多餘的換行】
+    // 清理多餘的換行
     processedHtml = processedHtml.replace(/(?:<br>\s*)+<div class="notice-iframe-container">/gi, '<div class="notice-iframe-container">');
     processedHtml = processedHtml.replace(/<\/div>\s*(?:<br>\s*)+/gi, '</div>');
     processedHtml = processedHtml.replace(/(?:<br>\s*)+<img/gi, '<img');
@@ -8276,9 +8267,8 @@ async function fetchAndCheckNotices() {
         const notices = await response.json();
 
         const readList = getReadNotices();
-        activeNotices = []; // 清空陣列
+        activeNotices = []; 
 
-        // 遍歷所有佈告，將符合「在期限內」且「未讀」的佈告加入清單
         for (let i = 0; i < notices.length; i++) {
             const notice = notices[i];
             if (!notice.ID) continue;
@@ -8288,7 +8278,6 @@ async function fetchAndCheckNotices() {
             activeNotices.push(notice);
         }
 
-        // 如果有任何需要顯示的通告，開啟視窗
         if (activeNotices.length > 0) {
             currentNoticeIndex = 0;
             renderNoticeModal();
@@ -8300,10 +8289,7 @@ async function fetchAndCheckNotices() {
 }
 
 /**
- * 渲染並顯示當前索引的佈告 (開啟時隱藏貓咪)
- */
-/**
- * 渲染並顯示當前索引的佈告 (加入翻頁重繪邏輯)
+ * 渲染並顯示當前索引的佈告 (加入淡入淡出切換特效)
  */
 function renderNoticeModal() {
     const overlay = document.getElementById('morandiNoticeOverlay');
@@ -8319,26 +8305,8 @@ function renderNoticeModal() {
 
     if (!overlay || !titleEl || !bodyEl || activeNotices.length === 0) return;
 
-    // 如果是切換通告，先讓卡片快速淡出再換內容
-    if (overlay.classList.contains('show')) {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(10px)';
-        card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-        
-        setTimeout(() => {
-            updateContent();
-            // 換完內容後，再次淡入
-            card.style.opacity = '1';
-            card.style.transform = 'translateY(0)';
-        }, 300);
-    } else {
-        // 初次開啟，直接更新內容並觸發 CSS 進場動畫
-        updateContent();
-        openWithAnimation();
-    }
-
     // 內部函式：更新內容
-    function updateContent() {
+    const updateContent = () => {
         const notice = activeNotices[currentNoticeIndex];
         titleEl.textContent = notice["標題"] || "一般通知";
         
@@ -8360,18 +8328,31 @@ function renderNoticeModal() {
             navGroup.style.display = 'none';
         }
         bodyEl.scrollTop = 0;
-    }
+    };
 
-    // 內部函式：開啟介面
-    function openWithAnimation() {
+    // 如果視窗已經開啟（代表使用者點擊了上一頁/下一頁）
+    if (overlay.classList.contains('show')) {
+        // 先讓文字區域淡出
+        bodyEl.style.transition = 'opacity 0.2s ease';
+        bodyEl.style.opacity = '0';
+        
+        setTimeout(() => {
+            updateContent();
+            // 換完內容後，再次淡入
+            bodyEl.style.opacity = '1';
+        }, 200);
+    } else {
+        // 初次開啟視窗
+        updateContent();
+        
         overlay.style.display = 'flex';
-        card.classList.remove('hide-anim'); // 清除可能的退場狀態
+        card.classList.remove('hide-anim'); // 清除可能殘留的退場動畫 class
         
         // 隱藏貓咪
         const catCanvas = document.getElementById('live2d-canvas');
         const catBubble = document.getElementById('catSpeechBubble');
         if (catCanvas) {
-            catCanvas.style.transition = 'opacity 0.8s ease'; // 配合遮罩變慢
+            catCanvas.style.transition = 'opacity 0.8s ease'; 
             catCanvas.style.opacity = '0';
             catCanvas.style.pointerEvents = 'none';
         }
@@ -8380,19 +8361,43 @@ function renderNoticeModal() {
             catBubble.style.opacity = '0';
         }
 
-        if (navigator.vibrate) navigator.vibrate([20, 40, 20]); // 震動改輕柔一點
+        if (navigator.vibrate) navigator.vibrate([20, 40, 20]); 
         
-        // 強制重繪觸發動畫
+        // 強制重繪以觸發 CSS Animation
         void overlay.offsetWidth; 
         overlay.classList.add('show');
         document.body.style.overflow = 'hidden';
     }
 }
 
+// =========================================
+// === 【修復】明確定義全域導航函式 ===
+// =========================================
+
+/**
+ * 導航：上一篇
+ */
+window.prevNotice = function() {
+    if (currentNoticeIndex > 0) {
+        currentNoticeIndex--;
+        renderNoticeModal();
+    }
+};
+
+/**
+ * 導航：下一篇
+ */
+window.nextNotice = function() {
+    if (currentNoticeIndex < activeNotices.length - 1) {
+        currentNoticeIndex++;
+        renderNoticeModal();
+    }
+};
+
 /**
  * 動作 1：稍後再看 (觸發文藝退場動畫)
  */
-function closeNoticeTemporary() {
+window.closeNoticeTemporary = function() {
     const overlay = document.getElementById('morandiNoticeOverlay');
     const card = overlay.querySelector('.notice-modal-card');
     
@@ -8403,27 +8408,27 @@ function closeNoticeTemporary() {
         // 2. 遮罩背景開始變透明
         overlay.classList.remove('show');
         
-        // 3. 恢復貓咪顯示 (配合動畫時間緩慢浮現)
+        // 3. 恢復貓咪顯示
         const catCanvas = document.getElementById('live2d-canvas');
         if (catCanvas && localStorage.getItem('sansi_cat_mode') !== 'none') {
             catCanvas.style.transition = 'opacity 0.8s ease';
             catCanvas.style.opacity = '1';
         }
 
-        // 4. 等待動畫結束後 (0.8s)，真正隱藏 DOM
+        // 4. 等待動畫結束後，隱藏 DOM
         setTimeout(() => {
             overlay.style.display = 'none';
-            card.classList.remove('hide-anim'); // 重置卡片狀態
+            card.classList.remove('hide-anim'); 
             document.getElementById('noticeBody').innerHTML = ''; 
             document.body.style.overflow = 'auto'; 
         }, 800); 
     }
-}
+};
 
 /**
  * 動作 2：不再顯示 (標記已讀並處理下一則)
  */
-function markCurrentNoticeRead() {
+window.markCurrentNoticeRead = function() {
     if (activeNotices.length === 0) return;
 
     const currentId = activeNotices[currentNoticeIndex].ID;
@@ -8441,15 +8446,14 @@ function markCurrentNoticeRead() {
         if (currentNoticeIndex >= activeNotices.length) {
             currentNoticeIndex = activeNotices.length - 1;
         }
-        renderNoticeModal(); // renderNoticeModal 內部已寫好平滑切換邏輯
+        renderNoticeModal(); 
     } else {
         closeNoticeTemporary();
     }
-}
+};
 
 // =========================================
 // === 自動啟動機制 ===
-// 頁面載入完成後延遲 2.5 秒執行
 // =========================================
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
